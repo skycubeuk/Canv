@@ -1,6 +1,6 @@
 {
   "name": "canv",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Local-first writing canvas with pluggable AI agents (Anthropic + OpenAI).",
   "license": "MIT",
   "type": "module",
