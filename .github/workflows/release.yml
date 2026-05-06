@@ -73,12 +73,16 @@ jobs:
         run: npm run build
 
       - name: Build and publish macOS artifacts
-        run: npx electron-builder --mac --x64 --arm64 --publish always
+        # An empty CSC_LINK makes electron-builder resolve "" against the
+        # project dir and fail with "<projectDir> not a file". Unset the
+        # signing vars when the corresponding secrets aren't configured so
+        # the build falls back cleanly to an unsigned (ad-hoc) bundle.
+        run: |
+          [ -z "$CSC_LINK" ] && unset CSC_LINK CSC_KEY_PASSWORD
+          [ -z "$APPLE_ID" ] && unset APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID
+          npx electron-builder --mac --x64 --arm64 --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Pass-through signing env vars. When these secrets are added
-          # to the repo, electron-builder will sign and notarize
-          # automatically. Until then, builds are unsigned (ad-hoc).
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
