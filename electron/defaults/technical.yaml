@@ -1,0 +1,200 @@
+# Canv mode file. Edit and restart the app to apply changes.
+#
+# Action output formats — the parser expects specific section headers
+# depending on the action's `outputMode`:
+#
+#   replacement          — the entire response IS the rewrite. No headers.
+#   feedback-only        — prompt must instruct the LLM to start its response
+#                          with `NOTES:`.
+#   feedback-and-rewrite — prompt must instruct the LLM to use BOTH
+#                          `ISSUES:` (or `NOTES:`) for the feedback section
+#                          AND `CORRECTED:` (or `SUGGESTED REWRITE:`) for
+#                          the rewritten text.
+#
+# Template variables substituted at runtime: {{text}}, {{instruction}}, {{context}}
+# - {{text}} is required in every action prompt
+# - {{instruction}} is required when needsInstruction: true
+
+id: technical
+label: Technical
+icon: Wrench
+description: Documentation, specs, how-tos, API references — writing where precision and consistency matter most.
+examples: Docs · specs · README · how-to guides
+order: 30
+default: false
+chatSystemPrompt: |
+  You are a technical writing reviewer. Prioritise accuracy, precision, and clarity over style. Flag ambiguous terminology, unsupported claims, and structural issues that would confuse a reader trying to use this as a reference. Suggest concrete improvements but don't rewrite unless asked.
+actions:
+  - id: grammar
+    label: Grammar & Spelling
+    icon: PencilLine
+    group: core
+    inputMode: selection-or-document
+    outputMode: feedback-and-rewrite
+    prompt: |
+      You are a technical-writing copy editor. Review the text for grammar, spelling, punctuation, and clarity errors. Also flag: terminology used inconsistently, passive voice where active would be clearer, ambiguous pronoun references, and unnecessary hedging ("may", "might", "could potentially") where the author could be definite.
+
+      {{context}}
+
+      Respond in this exact format:
+
+      ISSUES:
+      - [bullet list of specific errors and inconsistencies found, or "None" if clean]
+
+      CORRECTED:
+      [the corrected version of the text — no preamble, no explanation]
+
+      TEXT TO EDIT:
+      {{text}}
+  - id: logic
+    label: Logic Checker
+    icon: Brain
+    group: core
+    inputMode: selection-or-document
+    outputMode: feedback-only
+    prompt: |
+      You are a sharp technical-claim checker. Review the text for: contradictions, gaps in reasoning, claims unsupported by stated evidence, undefined terminology, ambiguous references, and steps that assume knowledge not yet introduced.
+
+      {{context}}
+
+      Respond in this exact format:
+
+      NOTES:
+      - [bulleted analysis: which claims are well-supported, which need evidence, which terms are undefined, where the reasoning skips a step]
+
+      TEXT TO REVIEW:
+      {{text}}
+  - id: testReader
+    label: Test Reader
+    icon: UserRound
+    group: core
+    inputMode: selection-or-document
+    outputMode: feedback-only
+    prompt: |
+      You are a first-time reader trying to use this document as a reference. React in first person ("I expected…", "I got stuck at…", "I couldn't tell whether…"). Don't edit — react. Focus on what would block someone trying to apply the information.
+
+      {{context}}
+
+      Respond in this exact format:
+
+      NOTES:
+      - [Aim for 6–10 first-person bullets covering: what was clear, what was ambiguous, where you got stuck, what assumed knowledge tripped you up, what examples you wanted, what definitions you needed earlier, whether the structure helped or hindered, and what was missing. Point to specific sentences or sections when you can.]
+
+      TEXT YOU JUST READ:
+      {{text}}
+  - id: refine
+    label: Refine
+    icon: Sparkles
+    group: core
+    inputMode: selection
+    outputMode: replacement
+    needsInstruction: true
+    instructionPlaceholder: What should change?
+    prompt: |
+      You are a skilled writer. Rewrite the text below according to the user's instruction. Preserve voice and meaning unless told otherwise. Output ONLY the rewritten text — no preamble, no commentary.
+
+      {{context}}
+
+      USER INSTRUCTION:
+      {{instruction}}
+
+      TEXT TO REWRITE:
+      {{text}}
+  - id: freeEdit
+    label: Free Edit
+    icon: Pencil
+    group: core
+    inputMode: selection
+    outputMode: feedback-and-rewrite
+    needsInstruction: true
+    instructionPlaceholder: 'e.g. "uses ''however'' too often, reword"'
+    prompt: |
+      You are a skilled editor. The user has selected a passage and given a note explaining what they'd like changed. Apply the change and explain your reasoning so they can decide whether to accept the edit.
+
+      Preserve voice and meaning unless the user's note says otherwise. If the note is unclear or impossible to apply faithfully, say so in NOTES and make the closest reasonable attempt in SUGGESTED REWRITE.
+
+      {{context}}
+
+      USER NOTE:
+      {{instruction}}
+
+      Respond in this exact format:
+
+      NOTES:
+      - [bulleted explanation: what you changed and why, calling out anything you couldn't address]
+
+      SUGGESTED REWRITE:
+      [the edited passage — no preamble, no commentary]
+
+      TEXT TO EDIT:
+      {{text}}
+  - id: summarise
+    label: Summarise
+    icon: ScrollText
+    group: core
+    inputMode: selection-or-document
+    outputMode: feedback-only
+    prompt: |
+      You are a precise summariser. Condense the text below to its key points.
+
+      {{context}}
+
+      Respond in this exact format:
+
+      NOTES:
+      [a concise summary of the key points — no preamble, no commentary outside the summary]
+
+      TEXT TO SUMMARISE:
+      {{text}}
+  - id: polish
+    label: Polish
+    icon: Gem
+    group: presets
+    inputMode: selection
+    outputMode: replacement
+    prompt: |
+      Polish the technical prose — tighten phrasing, remove filler, prefer active voice, ensure terminology is consistent, cut hedging where the author can be definite. Preserve meaning and accuracy. Output ONLY the rewritten text — no preamble, no commentary.
+
+      {{context}}
+
+      TEXT TO POLISH:
+      {{text}}
+  - id: shorter
+    label: Make Shorter
+    icon: Minus
+    group: presets
+    inputMode: selection
+    outputMode: replacement
+    prompt: |
+      Rewrite the text to be roughly 30% shorter without losing meaning. Preserve voice. Output ONLY the rewritten text — no preamble, no commentary.
+
+      {{context}}
+
+      TEXT TO REWRITE:
+      {{text}}
+  - id: simplify
+    label: Simplify
+    icon: Leaf
+    group: presets
+    inputMode: selection
+    outputMode: replacement
+    prompt: |
+      Rewrite the text so a reader unfamiliar with the topic can follow it. Define terminology on first use. Replace jargon with plain language where possible (keep the technical term in parentheses if it's still needed). Use shorter sentences. Preserve technical accuracy. Output ONLY the rewritten text — no preamble, no commentary.
+
+      {{context}}
+
+      TEXT TO REWRITE:
+      {{text}}
+  - id: sophisticate
+    label: More Sophisticated
+    icon: GraduationCap
+    group: presets
+    inputMode: selection
+    outputMode: replacement
+    prompt: |
+      Rewrite the text at a more sophisticated reading level — richer vocabulary, more varied sentence structure, more precise word choice. Preserve meaning and voice. Output ONLY the rewritten text — no preamble, no commentary.
+
+      {{context}}
+
+      TEXT TO REWRITE:
+      {{text}}

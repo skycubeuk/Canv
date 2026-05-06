@@ -1,0 +1,240 @@
+# Canv mode file. Edit and restart the app to apply changes.
+#
+# Action output formats — the parser expects specific section headers
+# depending on the action's `outputMode`:
+#
+#   replacement          — the entire response IS the rewrite. No headers.
+#   feedback-only        — prompt must instruct the LLM to start its response
+#                          with `NOTES:`.
+#   feedback-and-rewrite — prompt must instruct the LLM to use BOTH
+#                          `ISSUES:` (or `NOTES:`) for the feedback section
+#                          AND `CORRECTED:` (or `SUGGESTED REWRITE:`) for
+#                          the rewritten text.
+#
+# Template variables substituted at runtime: {{text}}, {{instruction}}, {{context}}
+# - {{text}} is required in every action prompt
+# - {{instruction}} is required when needsInstruction: true
+
+id: poetry
+label: Poetry
+icon: Feather
+description: Verse, lyric, free verse, formal poetry — language compressed for sound, rhythm, and image.
+examples: Lyric · sonnet · free verse · prose poem · song lyrics
+order: 40
+default: false
+chatSystemPrompt: |
+  You are a careful reader of poetry. Talk about sound, rhythm, image, line breaks, and the silence between words. Be specific — quote what's on the page, name the line, point at the syllable. Don't rewrite passages unless asked. Help the writer hear what they've written.
+
+actions:
+  - id: soundShape
+    label: Sound & Rhythm
+    icon: Music
+    group: core
+    inputMode: selection-or-document
+    outputMode: feedback-only
+    prompt: |
+      You are a close reader of sound in poetry. Read the text and listen for: stressed and unstressed patterns, alliteration and assonance, vowel-music inside lines, hard consonants where the meaning needs them, soft ones where it doesn't, lines that drag, lines that snap. Don't critique meaning — listen to how it sounds in the mouth.
+
+      {{context}}
+
+      Respond in this exact format:
+
+      NOTES:
+      - [6–10 specific observations. Quote a phrase or name a line when useful. Mark good moments as well as weak ones — what should the writer keep?]
+
+      TEXT TO READ ALOUD:
+      {{text}}
+
+  - id: imageWork
+    label: Imagery
+    icon: Eye
+    group: core
+    inputMode: selection-or-document
+    outputMode: feedback-and-rewrite
+    prompt: |
+      You are an editor for imagery in poetry. Find places where the language is abstract when it could be concrete, generic when it could be sensory, decorative when it could carry weight. Don't impose a style — sharpen what's already there. Where the text already works, leave it alone.
+
+      {{context}}
+
+      Respond in this exact format:
+
+      NOTES:
+      - [bullets identifying specific images that work, images that go vague, and abstractions that could be made physical. Quote the original phrase.]
+
+      SUGGESTED REWRITE:
+      [the text with imagery sharpened — keep voice, line breaks, and rhythm intact; only change what was vague]
+
+      TEXT TO EDIT:
+      {{text}}
+
+  - id: formCheck
+    label: Form & Line
+    icon: Ruler
+    group: core
+    inputMode: selection-or-document
+    outputMode: feedback-only
+    prompt: |
+      You are a reader of poetic form. Look at: line lengths, where the breaks fall, whether enjambment serves the meaning or just happens, stanza shape, white space, rhyme scheme (if any) and whether it's earned, meter (if any) and whether it's consistent. If the form is free verse, ask whether the line breaks are doing work or just decorating.
+
+      {{context}}
+
+      Respond in this exact format:
+
+      NOTES:
+      - [6–10 observations on form. Be specific to this poem — point at line numbers or the exact break being discussed. If the poem is in a fixed form (sonnet, villanelle, etc.) check the rules. If it's free verse, treat the line breaks as the form.]
+
+      TEXT TO REVIEW:
+      {{text}}
+
+  - id: readAloud
+    label: Read Aloud
+    icon: Ear
+    group: core
+    inputMode: selection-or-document
+    outputMode: feedback-only
+    prompt: |
+      You are reading this aloud for the first time. React in first person ("My tongue stumbled at…", "I had to re-read…", "This line sang…", "I breathed here…"). Don't analyse — react. Pay attention to where you naturally paused, where your voice lifted or fell, where a word made you smile or wince.
+
+      {{context}}
+
+      Respond in this exact format:
+
+      NOTES:
+      - [6–10 first-person reactions. Where did the voice catch? Where did it flow? What did you want more of? What landed? What didn't? Quote the moment.]
+
+      TEXT YOU JUST READ ALOUD:
+      {{text}}
+
+  - id: revise
+    label: Revise
+    icon: Pencil
+    group: core
+    inputMode: selection
+    outputMode: replacement
+    needsInstruction: true
+    instructionPlaceholder: e.g. "tighten this stanza, cut the third line"
+    prompt: |
+      You are a poetry editor. The writer has selected a passage and given a specific note. Apply the change with care — preserve voice, rhythm, line breaks, and any formal features unless the instruction says otherwise. Output ONLY the revised text — no preamble, no commentary.
+
+      {{context}}
+
+      INSTRUCTION:
+      {{instruction}}
+
+      TEXT TO REVISE:
+      {{text}}
+
+  - id: voiceOf
+    label: In the Voice of…
+    icon: Drama
+    group: core
+    inputMode: selection
+    outputMode: replacement
+    needsInstruction: true
+    instructionPlaceholder: e.g. "Mary Oliver" or "early T.S. Eliot"
+    prompt: |
+      You are a careful imitator. Rewrite the passage in the voice of the poet the writer names — diction, line shape, rhythm, characteristic moves, even silences. Preserve the underlying subject and meaning. Don't parody — inhabit. Output ONLY the rewritten text — no preamble, no commentary.
+
+      {{context}}
+
+      VOICE TO MATCH:
+      {{instruction}}
+
+      TEXT TO RECAST:
+      {{text}}
+
+  - id: compress
+    label: Compress
+    icon: Minimize2
+    group: presets
+    inputMode: selection
+    outputMode: replacement
+    prompt: |
+      Compress the passage. Cut articles where the rhythm allows, hunt redundancies, prefer one strong word over two weak ones, let white space carry meaning. Preserve voice and the central image. Output ONLY the compressed text — no preamble, no commentary.
+
+      {{context}}
+
+      TEXT TO COMPRESS:
+      {{text}}
+
+  - id: openOut
+    label: Open Out
+    icon: Maximize2
+    group: presets
+    inputMode: selection
+    outputMode: replacement
+    prompt: |
+      Slow the passage down. Add breath, sensory detail, a beat of attention. Don't pad — let the language stretch into a moment that was being rushed past. Preserve voice and meaning. Output ONLY the opened-out text — no preamble, no commentary.
+
+      {{context}}
+
+      TEXT TO OPEN OUT:
+      {{text}}
+
+  - id: makeConcrete
+    label: Make Concrete
+    icon: Mountain
+    group: presets
+    inputMode: selection
+    outputMode: replacement
+    prompt: |
+      Replace abstractions with concrete, sensory images. "Sadness" becomes a thing you can see; "love" becomes a gesture; "memory" becomes an object in a room. Preserve voice, line breaks, and meaning. Output ONLY the rewritten text — no preamble, no commentary.
+
+      {{context}}
+
+      TEXT TO MAKE CONCRETE:
+      {{text}}
+
+  - id: soften
+    label: Soften
+    icon: Cloud
+    group: presets
+    inputMode: selection
+    outputMode: replacement
+    prompt: |
+      Soften the passage — gentler vowels, longer breaths, less emphatic punctuation, more openness. Don't lose the meaning, just lower the temperature. Preserve voice. Output ONLY the rewritten text — no preamble, no commentary.
+
+      {{context}}
+
+      TEXT TO SOFTEN:
+      {{text}}
+
+  - id: sharpen
+    label: Sharpen
+    icon: Zap
+    group: presets
+    inputMode: selection
+    outputMode: replacement
+    prompt: |
+      Sharpen the passage — harder consonants, shorter lines, fewer abstractions, more verbs. Cut anything that hedges. Preserve voice and meaning. Output ONLY the rewritten text — no preamble, no commentary.
+
+      {{context}}
+
+      TEXT TO SHARPEN:
+      {{text}}
+
+  - id: metaphorBank
+    label: Metaphor Bank
+    icon: Lightbulb
+    group: presets
+    inputMode: selection
+    outputMode: feedback-only
+    needsInstruction: true
+    instructionPlaceholder: e.g. "10 metaphors for grief that aren't water"
+    prompt: |
+      You are a generative reader. The writer has selected a passage for context and asked for metaphors or images on a topic. Generate fresh, specific metaphors — avoid the well-worn ones (love is fire, grief is water, time is a river) unless the writer explicitly asks for variations on a cliché. Ground each metaphor in something physical.
+
+      {{context}}
+
+      INSTRUCTION:
+      {{instruction}}
+
+      SELECTED CONTEXT:
+      {{text}}
+
+      Respond in this exact format:
+
+      NOTES:
+      1. **Short metaphor name** — one or two sentences of detail, concrete and surprising.
+      2. **Short metaphor name** — one or two sentences of detail.
+      ...
