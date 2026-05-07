@@ -6,6 +6,7 @@ import {
   type DirNode,
   type FsEvent,
   type WorkspaceKind,
+  type WriteResult,
 } from '../lib/fs'
 import type { RemoteStatus } from '../lib/fs'
 import type { OpenTab, PinnedEntry, EditorGroupId, EditorGroupState } from '../types/workspace'
@@ -110,6 +111,13 @@ export interface WorkspaceApi {
   /** Set the focused group. */
   setActiveGroupId: (groupId: EditorGroupId) => void
   saveTab: (rel: string, html: string, sourceGroupId?: EditorGroupId) => void
+  /**
+   * Write a file from a tool/agent path. Suppresses the watcher's "changed on
+   * disk" prompt for our own write and refreshes any open tabs to the new
+   * content. Use instead of raw `fs.writeFile` when the write originates from
+   * an in-app source that bypasses the editor (e.g. the `edit_file` tool).
+   */
+  writeFileFromTool: (rel: string, content: string, expectedMtimeMs?: number) => Promise<WriteResult>
   flushAll: () => Promise<void>
   pin: (rel: string) => Promise<void>
   unpin: (rel: string) => Promise<void>
@@ -267,6 +275,40 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
       }
     }
   }, [setDirty, onToast])
+
+  const writeFileFromTool = useCallback(async (
+    rel: string,
+    content: string,
+    expectedMtimeMs?: number,
+  ): Promise<WriteResult> => {
+    // Drop any in-flight debounced editor save for this path — the tool's
+    // content supersedes whatever was queued, and the queued save would race
+    // with this write and re-trigger the conflict prompt.
+    const pendingTimer = saveTimers.current.get(rel)
+    if (pendingTimer) {
+      clearTimeout(pendingTimer)
+      saveTimers.current.delete(rel)
+    }
+    pendingMarkdown.current.delete(rel)
+    lastWriterGroupRef.current.delete(rel)
+
+    const result = await getFs().writeFile(rel, content, expectedMtimeMs)
+    // Mark this mtime as "our own write" so the chokidar 'change' event that
+    // follows is suppressed in the watcher subscription below.
+    recentWrites.current.set(rel, { mtimeMs: result.mtimeMs, ts: Date.now() })
+    // Refresh any open tabs of this file so their CodeMirror buffers re-sync.
+    setEditorGroups((prev) =>
+      prev.map((g) => ({
+        ...g,
+        openTabs: g.openTabs.map((t) => {
+          if (!isMarkdownTab(t) || t.relPath !== rel) return t
+          return { ...t, mtimeMs: result.mtimeMs, loadedMarkdown: content }
+        }),
+      })),
+    )
+    setDirty(rel, false)
+    return result
+  }, [setDirty])
 
   const saveTab = useCallback((rel: string, markdown: string, sourceGroupId?: EditorGroupId) => {
     pendingMarkdown.current.set(rel, markdown)
@@ -1053,6 +1095,7 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
     moveTab,
     setActiveGroupId,
     saveTab,
+    writeFileFromTool,
     flushAll,
     pin,
     unpin,
@@ -1066,5 +1109,5 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
     reloadTabFromDisk,
     remoteStatus,
     reconnect,
-  }), [ready, available, root, kind, tree, treeTruncated, editorGroups, activeGroupId, activeTabKey, activeMarkdownRel, allOpenKeys, dirtySet, pinned, pickWorkspace, openRemote, closeWorkspace, openTab, closeTab, setActiveTab, openSettingsTab, openDiffTab, closeTabByKey, setActiveTabByKey, splitRight, moveTab, setActiveGroupId, saveTab, flushAll, pin, unpin, createFile, createFolder, renameOp, remove, refreshTree, conflict, resolveConflict, reloadTabFromDisk, remoteStatus, reconnect])
+  }), [ready, available, root, kind, tree, treeTruncated, editorGroups, activeGroupId, activeTabKey, activeMarkdownRel, allOpenKeys, dirtySet, pinned, pickWorkspace, openRemote, closeWorkspace, openTab, closeTab, setActiveTab, openSettingsTab, openDiffTab, closeTabByKey, setActiveTabByKey, splitRight, moveTab, setActiveGroupId, saveTab, writeFileFromTool, flushAll, pin, unpin, createFile, createFolder, renameOp, remove, refreshTree, conflict, resolveConflict, reloadTabFromDisk, remoteStatus, reconnect])
 }

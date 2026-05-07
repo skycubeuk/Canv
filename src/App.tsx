@@ -837,7 +837,11 @@ PLANNING. For any task that will take 3 or more tool calls, call \`set_todos\` B
           systemPreamble,
           toolBudget: settings.chatToolBudget,
           toolCtx: {
-            fs: getFs(),
+            // Wrap fs.writeFile so tool-driven writes record the mtime in the
+            // workspace's own-write window — otherwise chokidar's 'change'
+            // event surfaces a "file changed on disk" conflict for our own
+            // edit. Also keeps any open tabs' editor buffers in sync.
+            fs: { ...getFs(), writeFile: workspace.writeFileFromTool },
             activeDocPath: workspace.activeMarkdownRel ?? null,
             getEditorContent: (path) => {
               if (path !== workspace.activeMarkdownRel) return null
