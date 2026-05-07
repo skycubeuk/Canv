@@ -6,6 +6,7 @@ import { useModes } from '../../../hooks/useModes'
 import type { Provider, Settings } from '../../../hooks/useSettings'
 import { importBackup } from '../../../lib/backup'
 import { useDialogs } from '../../../lib/dialogs'
+import { AppearanceSection } from '../AppearanceSection'
 
 interface Props {
   settings: Settings
@@ -323,19 +324,9 @@ export function SettingsTab(props: Props) {
     {
       id: 'editor',
       title: 'Editor',
-      keywords: ['editor', 'font', 'size', 'line', 'width', 'theme', 'dark', 'light'],
+      keywords: ['editor', 'line', 'width'],
       body: (
         <div data-testid="typography-controls">
-          <Field label={`Font size: ${settings.fontSize}px`}>
-            <input
-              type="range"
-              min={14}
-              max={24}
-              value={settings.fontSize}
-              onChange={(e) => onUpdate({ fontSize: Number(e.target.value) })}
-              className="w-full"
-            />
-          </Field>
           <Field label="Line width">
             <div className="flex gap-1">
               {(['narrow', 'normal', 'wide'] as const).map((w) => (
@@ -350,24 +341,6 @@ export function SettingsTab(props: Props) {
                   }`}
                 >
                   {w}
-                </button>
-              ))}
-            </div>
-          </Field>
-          <Field label="Theme">
-            <div className="flex gap-1">
-              {(['system', 'light', 'dark'] as const).map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => onUpdate({ theme: t })}
-                  className={`flex-1 px-3 py-1.5 text-sm rounded-md ${
-                    settings.theme === t
-                      ? 'bg-stone-900 text-white dark:bg-neutral-100 dark:text-neutral-900'
-                      : 'bg-stone-100 dark:bg-neutral-800 hover:bg-stone-200 dark:hover:bg-neutral-700'
-                  }`}
-                >
-                  {t}
                 </button>
               ))}
             </div>
@@ -458,6 +431,12 @@ export function SettingsTab(props: Props) {
         />
       </header>
       <div className="flex-1 overflow-y-auto px-6 py-4">
+        <section className="panel-section" data-testid="settings-section-appearance">
+          <AppearanceSection
+            settings={{ theme: settings.theme, accent: settings.accent, fontSize: settings.fontSize }}
+            onUpdate={onUpdate}
+          />
+        </section>
         {filtered.length === 0 ? (
           <p className="text-sm text-stone-500 dark:text-neutral-400">No settings match "{filter}".</p>
         ) : (

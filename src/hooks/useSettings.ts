@@ -31,6 +31,7 @@ export interface Settings {
     headingSkip: boolean
     deadImages: boolean
   }
+  accent: string
 }
 
 const SETTINGS_KEY = 'canv:settings'
@@ -55,6 +56,7 @@ const DEFAULT_SETTINGS: Settings = {
     headingSkip: true,
     deadImages: true,
   },
+  accent: '#6366f1',
 }
 
 function purgeLegacyOnce() {

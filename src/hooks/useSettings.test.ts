@@ -67,3 +67,18 @@ describe('useSettings — streamChunkDelayMs', () => {
     expect(result.current.settings.streamChunkDelayMs).toBe(0)
   })
 })
+
+describe('useSettings — accent', () => {
+  beforeEach(() => { localStorage.clear() })
+
+  it('defaults accent to indigo (#6366f1)', () => {
+    const { result } = renderHook(() => useSettings())
+    expect(result.current.settings.accent).toBe('#6366f1')
+  })
+
+  it('persists a new accent value', () => {
+    const { result } = renderHook(() => useSettings())
+    act(() => { result.current.update({ accent: '#10b981' }) })
+    expect(result.current.settings.accent).toBe('#10b981')
+  })
+})

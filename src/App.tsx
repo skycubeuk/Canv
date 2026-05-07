@@ -56,6 +56,7 @@ import OpenRemoteDialog from './components/dialogs/OpenRemoteDialog'
 import type { RecentRemote } from './lib/fs'
 import { useDockBridge } from './hooks/useDockBridge'
 import type { DockState, DockRun, UserAction } from './lib/dockTypes'
+import { applyAccent, applyTheme, resolveTheme } from './lib/accent'
 
 const MAX_RUNS = 10
 
@@ -77,6 +78,19 @@ function dockSlotForPlacement(bottom: BottomLayout): DockSlot {
 export default function App() {
   const dialogs = useDialogs()
   const { settings, update, modelForAgent } = useSettings()
+
+  useEffect(() => {
+    applyAccent(settings.accent)
+    applyTheme(resolveTheme(settings.theme))
+  }, [settings.accent, settings.theme])
+
+  useEffect(() => {
+    if (settings.theme !== 'system') return
+    const mq = window.matchMedia('(prefers-color-scheme: dark)')
+    const onChange = () => applyTheme(mq.matches ? 'dark' : 'light')
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [settings.theme])
 
   const [profile, setProfile] = useLocalStorage<string | null>('canv:profile', null)
   const { modes, defaultModeId } = useModes()
