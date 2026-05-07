@@ -106,7 +106,7 @@ export function EditorTabs({
       onDragLeave={handleStripDragLeave}
       onDrop={handleStripDrop}
       className={`shrink-0 flex items-stretch justify-between border-b border-default bg-panel ${
-        dragOver ? 'outline outline-2 outline-[color:var(--border-strong)]' : ''
+        dragOver ? 'outline outline-2 outline-[rgb(var(--border-strong))]' : ''
       } ${tabs.length === 0 ? 'h-7' : ''}`}
     >
       <div className="flex items-stretch overflow-x-auto whitespace-nowrap min-w-0">
@@ -145,7 +145,7 @@ export function EditorTabs({
               {dirty && (
                 <span
                   aria-hidden
-                  className="w-1.5 h-1.5 rounded-full bg-[color:var(--text-muted)]"
+                  className="w-1.5 h-1.5 rounded-full bg-[rgb(var(--text-muted))]"
                   title="Unsaved"
                 />
               )}

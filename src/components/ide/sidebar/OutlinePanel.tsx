@@ -97,7 +97,7 @@ function OutlineNodeRow({ node, collapsedIds, onToggle, onJump }: RowProps) {
           </button>
         ) : (
           // TODO(0.7.1): when cursor-tracking is wired, use bg-accent for the active heading.
-          <span aria-hidden className="w-1 h-1 rounded-full bg-[color:var(--text-subtle)] shrink-0" />
+          <span aria-hidden className="w-1 h-1 rounded-full bg-[rgb(var(--text-subtle))] shrink-0" />
         )}
         <button
           type="button"

@@ -262,7 +262,7 @@ export function Bubble({
         onContextMenu={onContextMenu}
         className={`max-w-[85%] px-3 py-2 rounded-lg text-sm whitespace-pre-wrap leading-relaxed ${
           isUser
-            ? 'bg-[color:var(--text-default)] text-[color:var(--bg-app)]'
+            ? 'bg-[rgb(var(--text-default))] text-[rgb(var(--bg-app))]'
             : 'bg-elev text-default'
         }`}
       >

@@ -1843,7 +1843,7 @@ PLANNING. For any task that will take 3 or more tool calls, call \`set_todos\` B
       )}
 
       {toast && (
-        <div className="fixed bottom-7 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-[color:var(--text-default)] text-[color:var(--bg-app)] text-sm rounded-md shadow-lg">
+        <div className="fixed bottom-7 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-[rgb(var(--text-default))] text-[rgb(var(--bg-app))] text-sm rounded-md shadow-lg">
           {toast}
         </div>
       )}

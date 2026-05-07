@@ -479,7 +479,7 @@ const STATUS_PILL: Record<RunRecord['status'], { label: string; className: strin
   refining:  { label: 'Refining',  className: 'bg-purple-900/40 text-purple-300' },
   done:      { label: 'Done',      className: 'bg-green-900/40 text-green-300' },
   error:     { label: 'Error',     className: 'bg-red-900/40 text-red-300' },
-  aborted:   { label: 'Stopped',   className: 'bg-active text-default' },
+  aborted:   { label: 'Stopped',   className: 'bg-neutral-700/60 text-neutral-300' },
 }
 
 export function StatusPill({ status }: { status: RunRecord['status'] }) {

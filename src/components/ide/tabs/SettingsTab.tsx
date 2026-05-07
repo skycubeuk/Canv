@@ -336,7 +336,7 @@ export function SettingsTab(props: Props) {
                   onClick={() => onUpdate({ lineWidth: w })}
                   className={`flex-1 px-3 py-1.5 text-sm rounded-md ${
                     settings.lineWidth === w
-                      ? 'bg-[color:var(--text-default)] text-[color:var(--bg-app)]'
+                      ? 'bg-[rgb(var(--text-default))] text-[rgb(var(--bg-app))]'
                       : 'bg-active hover:bg-hover'
                   }`}
                 >

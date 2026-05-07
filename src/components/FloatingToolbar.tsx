@@ -195,7 +195,7 @@ export function FloatingToolbar(props: Props) {
               <agent.icon aria-hidden className="w-4 h-4" />
             </button>
           ))}
-          {presets.length > 0 && <div className="w-px h-5 bg-[color:var(--border-default)] mx-1" />}
+          {presets.length > 0 && <div className="w-px h-5 bg-[rgb(var(--border-default))] mx-1" />}
           {presets.length > 0 && <div className="relative">
             <button
               type="button"

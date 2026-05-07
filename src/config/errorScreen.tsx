@@ -40,7 +40,7 @@ export function ErrorScreen({ errors, configDir, onReveal }: Props) {
             <h2 className="font-mono text-sm text-default mb-2">
               {file || 'General'}
             </h2>
-            <ul className="bg-elev rounded border border-default divide-y divide-[color:var(--border-default)]">
+            <ul className="bg-elev rounded border border-default divide-y divide-[rgb(var(--border-default))]">
               {errs.map((e, i) => (
                 <li key={i} className="px-4 py-2 text-sm">
                   {e.field && (

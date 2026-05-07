@@ -60,7 +60,7 @@ export function StatusBar(props: Props) {
         </span>
       )}
 
-      <span aria-hidden className="w-px h-3 bg-[color:var(--border-default)]" />
+      <span aria-hidden className="w-px h-3 bg-[rgb(var(--border-default))]" />
 
       <button
         type="button"

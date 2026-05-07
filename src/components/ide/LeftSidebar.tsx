@@ -68,7 +68,7 @@ export function LeftSidebar(props: Props) {
               onClick={() => onSelectTab(t.id)}
               className={`flex-1 px-2 py-2 flex items-center justify-center gap-1.5 border-b-2 ${
                 isActive
-                  ? 'border-border-strong text-default bg-active'
+                  ? 'border-strong text-default bg-active'
                   : 'border-transparent text-muted hover:bg-hover'
               }`}
             >
@@ -93,7 +93,7 @@ export function LeftSidebar(props: Props) {
             <Panel id="sidebarFiles" minSize="20%" className="min-h-0">
               {active.body}
             </Panel>
-            <Separator className="h-px bg-[color:var(--border-default)] hover:bg-border-strong transition-colors cursor-row-resize" />
+            <Separator className="h-px bg-[rgb(var(--border-default))] hover:bg-[rgb(var(--border-strong))] transition-colors cursor-row-resize" />
             <Panel id="sidebarOutline" minSize="15%" maxSize="80%" className="min-h-0">
               {outline}
             </Panel>

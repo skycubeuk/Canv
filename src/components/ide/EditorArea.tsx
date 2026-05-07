@@ -98,7 +98,7 @@ function SplitGroups(props: Props) {
           onRunDocAgent={(agent, instruction) => props.onRunDocAgent(g1.id, agent, instruction)}
         />
       </Panel>
-      <Separator className="w-px bg-[color:var(--border-default)] hover:bg-[color:var(--border-strong)] transition-colors cursor-col-resize" />
+      <Separator className="w-px bg-[rgb(var(--border-default))] hover:bg-[rgb(var(--border-strong))] transition-colors cursor-col-resize" />
       <Panel id="g2" minSize="20%" className="h-full min-w-0">
         <EditorGroup
           groupId={g2.id}

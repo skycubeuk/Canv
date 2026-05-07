@@ -1,21 +1,21 @@
 :root {
-  --accent: #6366f1;
-  --accent-soft: color-mix(in oklab, var(--accent) 18%, transparent);
-  --accent-hover: color-mix(in oklab, var(--accent) 80%, white 20%);
-  --accent-fg: #ffffff;
+  --accent: 99 102 241;        /* #6366f1 */
+  --accent-fg: 255 255 255;    /* #ffffff */
+  --accent-soft: color-mix(in oklab, rgb(var(--accent)) 18%, transparent);
+  --accent-hover: color-mix(in oklab, rgb(var(--accent)) 80%, white 20%);
 }
 
 [data-theme="dark"] {
-  --bg-app: #0a0b0d;
-  --bg-panel: #101216;
-  --bg-elev: #15181d;
-  --bg-hover: #1c2027;
-  --bg-active: #232732;
-  --border-default: #1d2027;
-  --border-strong: #2a2e37;
-  --text-default: #e7eaf0;
-  --text-muted: #9aa0ab;
-  --text-subtle: #6b7280;
+  --bg-app: 10 11 13;           /* #0a0b0d */
+  --bg-panel: 16 18 22;         /* #101216 */
+  --bg-elev: 21 24 29;          /* #15181d */
+  --bg-hover: 28 32 39;         /* #1c2027 */
+  --bg-active: 35 39 50;        /* #232732 */
+  --border-default: 29 32 39;   /* #1d2027 */
+  --border-strong: 42 46 55;    /* #2a2e37 */
+  --text-default: 231 234 240;  /* #e7eaf0 */
+  --text-muted: 154 160 171;    /* #9aa0ab */
+  --text-subtle: 107 114 128;   /* #6b7280 */
   --shadow-lg: 0 20px 60px rgba(0,0,0,.5), 0 4px 12px rgba(0,0,0,.4);
   --syntax-string: #c5e3a4;
   --syntax-keyword: #b8a8ff;
@@ -23,16 +23,16 @@
 }
 
 [data-theme="light"] {
-  --bg-app: #ffffff;
-  --bg-panel: #f7f8fa;
-  --bg-elev: #f1f3f6;
-  --bg-hover: #ebedf1;
-  --bg-active: #e1e4ea;
-  --border-default: #e8eaef;
-  --border-strong: #d1d5db;
-  --text-default: #0f172a;
-  --text-muted: #4b5563;
-  --text-subtle: #9ca3af;
+  --bg-app: 255 255 255;         /* #ffffff */
+  --bg-panel: 247 248 250;       /* #f7f8fa */
+  --bg-elev: 241 243 246;        /* #f1f3f6 */
+  --bg-hover: 235 237 241;       /* #ebedf1 */
+  --bg-active: 225 228 234;      /* #e1e4ea */
+  --border-default: 232 234 239; /* #e8eaef */
+  --border-strong: 209 213 219;  /* #d1d5db */
+  --text-default: 15 23 42;      /* #0f172a */
+  --text-muted: 75 85 99;        /* #4b5563 */
+  --text-subtle: 156 163 175;    /* #9ca3af */
   --shadow-lg: 0 20px 50px rgba(15,23,42,.10), 0 4px 12px rgba(15,23,42,.05);
   --syntax-string: #2f7a3a;
   --syntax-keyword: #6f42c1;
