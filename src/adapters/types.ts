@@ -47,7 +47,7 @@ export interface TokenUsage {
   output: number
 }
 
-export type StopReason = 'end_turn' | 'tool_use' | 'max_tokens' | 'stop_sequence'
+export type StopReason = 'end_turn' | 'tool_use' | 'max_tokens' | 'stop_sequence' | 'cancelled'
 
 export interface CompleteResult {
   text: string

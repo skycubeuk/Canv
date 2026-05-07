@@ -58,6 +58,7 @@ export async function runChatTurn(p: RunChatTurnParams): Promise<void> {
   let approveAll = false
 
   for (let round = 0; round < p.toolBudget; round++) {
+    if (p.signal.aborted) return
     const assistantId = `a-${Date.now()}-${Math.random().toString(36).slice(2, 7)}-${round}`
     let assistantMsg: ChatMessage = { id: assistantId, role: 'assistant', content: '', provider: p.provider }
     messages.push(assistantMsg)
@@ -92,15 +93,39 @@ export async function runChatTurn(p: RunChatTurnParams): Promise<void> {
     })
     console.debug('[chatRunner] <<< adapter.complete round', round, 'returned')
 
+    // Always overwrite toolCalls with the adapter's authoritative completed
+    // set. onToolCallStart writes partial entries (input: undefined) for UI
+    // chip rendering during streaming; those partials must NOT persist past
+    // adapter return. If result.toolCalls is empty (e.g. cancelled before any
+    // content_block_stop), the partials are dropped — leaving them in place
+    // produces an open tool_use on the next turn (Anthropic 400 / OpenAI 400).
     assistantMsg = {
       ...assistantMsg,
       content: result.text,
-      ...(result.toolCalls ? { toolCalls: result.toolCalls } : {}),
+      toolCalls: result.toolCalls?.length ? result.toolCalls : undefined,
     }
     messages[messages.length - 1] = assistantMsg
     p.onUpdate(messages)
 
     console.debug('[chatRunner] round', round, 'stopReason=', result.stopReason, 'toolCalls=', result.toolCalls?.length ?? 0, 'textLen=', result.text.length)
+
+    if (result.stopReason === 'cancelled') {
+      const cancelledResults: ToolResult[] = (result.toolCalls ?? []).map((c) => ({
+        id: c.id,
+        content: 'Cancelled by user',
+        isError: true,
+      }))
+      assistantMsg = {
+        ...assistantMsg,
+        content: result.text,
+        stopReason: 'cancelled',
+        ...(result.toolCalls?.length ? { toolCalls: result.toolCalls } : {}),
+        ...(cancelledResults.length ? { toolResults: cancelledResults } : {}),
+      }
+      messages[messages.length - 1] = assistantMsg
+      p.onUpdate(messages)
+      return
+    }
 
     if (result.stopReason !== 'tool_use' || !result.toolCalls?.length) {
       // If the model hit the token limit without finishing a tool call, the
@@ -120,22 +145,59 @@ export async function runChatTurn(p: RunChatTurnParams): Promise<void> {
       return
     }
 
+    if (p.signal.aborted) {
+      const cancelledResults: ToolResult[] = (result.toolCalls ?? []).map((c) => ({
+        id: c.id, content: 'Cancelled by user', isError: true,
+      }))
+      assistantMsg = {
+        ...assistantMsg,
+        stopReason: 'cancelled',
+        ...(cancelledResults.length ? { toolResults: cancelledResults } : {}),
+      }
+      messages[messages.length - 1] = assistantMsg
+      p.onUpdate(messages)
+      return
+    }
+
     const toolResults: ToolResult[] = []
+    let cancelledMidLoop = false
+
     for (const call of result.toolCalls) {
+      if (p.signal.aborted) {
+        toolResults.push({ id: call.id, content: 'Cancelled by user', isError: true })
+        cancelledMidLoop = true
+        continue
+      }
+
       const tool = getTool(call.name)
       if (!tool) {
         toolResults.push({ id: call.id, content: `Unknown tool: ${call.name}`, isError: true })
         continue
       }
       console.debug('[chatRunner] dispatch', call.name, 'id=', call.id, 'mutating=', tool.mutating)
+
       if (tool.mutating) {
-        let decision: ApprovalDecision = approveAll ? 'approve' : await abortableApproval(
-          async () => {
-            const preview = await buildWritePreview(call, p.toolCtx)
-            return p.requestApproval(call, preview)
-          },
-          p.signal,
-        )
+        let decision: ApprovalDecision
+        if (approveAll) {
+          decision = 'approve'
+        } else {
+          try {
+            decision = await abortableApproval(
+              async () => {
+                const preview = await buildWritePreview(call, p.toolCtx)
+                return p.requestApproval(call, preview)
+              },
+              p.signal,
+            )
+          } catch (err) {
+            if ((err as Error).name === 'AbortError' || p.signal.aborted) {
+              toolResults.push({ id: call.id, content: 'Cancelled by user', isError: true })
+              cancelledMidLoop = true
+              continue
+            }
+            throw err
+          }
+        }
         if (decision === 'approve-rest') { approveAll = true; decision = 'approve' }
         if (decision === 'deny') {
           toolResults.push({ id: call.id, content: 'User denied this action', isError: true })
@@ -145,26 +207,45 @@ export async function runChatTurn(p: RunChatTurnParams): Promise<void> {
           const out = await tool.handler(call.input, p.toolCtx)
           toolResults.push({ id: call.id, content: JSON.stringify(out) })
         } catch (e) {
+          if ((e as Error).name === 'AbortError' || p.signal.aborted) {
+            toolResults.push({ id: call.id, content: 'Cancelled by user', isError: true })
+            cancelledMidLoop = true
+            continue
+          }
           const msg = e instanceof Error ? e.message : String(e)
           toolResults.push({ id: call.id, content: msg, isError: true })
         }
         continue
       }
+
+      // Read-only tools.
       try {
         const out = await tool.handler(call.input, p.toolCtx)
         console.debug('[chatRunner] dispatch done', call.name, 'id=', call.id)
         toolResults.push({ id: call.id, content: JSON.stringify(out) })
       } catch (e) {
+        if ((e as Error).name === 'AbortError' || p.signal.aborted) {
+          toolResults.push({ id: call.id, content: 'Cancelled by user', isError: true })
+          cancelledMidLoop = true
+          continue
+        }
         const msg = e instanceof Error ? e.message : String(e)
         toolResults.push({ id: call.id, content: msg, isError: true })
       }
     }
 
-    assistantMsg = { ...assistantMsg, toolResults }
+    assistantMsg = {
+      ...assistantMsg,
+      toolResults,
+      ...(cancelledMidLoop ? { stopReason: 'cancelled' as const } : {}),
+    }
     messages[messages.length - 1] = assistantMsg
     p.onUpdate(messages)
+
+    if (cancelledMidLoop) return
   }
   // Budget exhausted — request a final answer with tools dropped.
+  if (p.signal.aborted) return
   const finaliserId = `a-${Date.now()}-${Math.random().toString(36).slice(2, 7)}-final`
   let finalMsg: ChatMessage = { id: finaliserId, role: 'assistant', content: '', provider: p.provider }
   messages.push(finalMsg)

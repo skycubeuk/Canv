@@ -64,3 +64,43 @@ describe('ChatPanel — tool rendering', () => {
     expect(onDecide).toHaveBeenCalledWith('c1', 'approve')
   })
 })
+
+describe('ChatPanel — stopReason', () => {
+  it('renders a "Stopped" pill on cancelled assistant messages', () => {
+    const messages: ChatMessage[] = [
+      { id: 'u1', role: 'user', content: 'q' },
+      { id: 'a1', role: 'assistant', content: 'partial answer', stopReason: 'cancelled', provider: 'anthropic' },
+    ]
+    render(<ChatPanel {...baseProps} messages={messages} />)
+    expect(screen.getByText('partial answer')).toBeInTheDocument()
+    expect(screen.getByText('Stopped')).toBeInTheDocument()
+  })
+
+  it('does not render the pill on normal assistant messages', () => {
+    const messages: ChatMessage[] = [
+      { id: 'u1', role: 'user', content: 'q' },
+      { id: 'a1', role: 'assistant', content: 'normal answer', provider: 'anthropic' },
+    ]
+    render(<ChatPanel {...baseProps} messages={messages} />)
+    expect(screen.queryByText('Stopped')).not.toBeInTheDocument()
+  })
+
+  it('passes status="cancelled" to chips when tool_result was synthesised by abort', () => {
+    const messages: ChatMessage[] = [
+      { id: 'u1', role: 'user', content: 'q' },
+      {
+        id: 'a1',
+        role: 'assistant',
+        content: '',
+        stopReason: 'cancelled',
+        provider: 'anthropic',
+        toolCalls: [{ id: 'c1', name: 'read_file', input: { path: 'a.md' } }],
+        toolResults: [{ id: 'c1', content: 'Cancelled by user', isError: true }],
+      },
+    ]
+    render(<ChatPanel {...baseProps} messages={messages} />)
+    const root = screen.getByTestId('chip-root')
+    expect(root.className).not.toMatch(/border-red-300/)
+    expect(root.className).toMatch(/opacity-60|line-through/)
+  })
+})

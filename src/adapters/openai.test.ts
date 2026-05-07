@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { openaiAdapter } from './openai'
+import { replaySSE } from '../test/sseReplay'
 
 function dataLines(events: unknown[]): string {
   return events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join('') + 'data: [DONE]\n\n'
@@ -157,5 +158,83 @@ describe('openai — tools', () => {
       { role: 'assistant', content: '', tool_calls: [{ id: 'call_1', type: 'function', function: { name: 'read_file', arguments: '{"path":"a.md"}' } }] },
       { role: 'tool', tool_call_id: 'call_1', content: '{"content":"hi","mtimeMs":1}' },
     ])
+  })
+})
+
+describe('openaiAdapter.complete (streaming, cancelled)', () => {
+  afterEach(() => { vi.unstubAllGlobals() })
+
+  it('returns stopReason="cancelled" with buffered text on mid-stream abort', async () => {
+    const lines: string[] = []
+    for (let i = 0; i < 20; i++) {
+      lines.push(`data: ${JSON.stringify({ choices: [{ index: 0, delta: { content: 'x' } }] })}\n\n`)
+    }
+    lines.push(`data: ${JSON.stringify({ choices: [{ index: 0, delta: {}, finish_reason: 'stop' }], usage: { prompt_tokens: 1, completion_tokens: 20 } })}\n\n`)
+    lines.push(`data: [DONE]\n\n`)
+    const body = lines.join('')
+
+    const ac = new AbortController()
+    vi.stubGlobal('fetch', vi.fn(async () => replaySSE({ body, controller: ac, abortAfterBytes: 150, chunkSize: 32 })))
+
+    const tokens: string[] = []
+    const out = await openaiAdapter.complete({
+      apiKey: 'k', model: 'gpt-5.5',
+      messages: [{ role: 'user', content: 'hi' }],
+      signal: ac.signal,
+      onToken: (t) => tokens.push(t),
+    })
+
+    expect(out.stopReason).toBe('cancelled')
+    expect(out.truncated).toBe(false)
+    expect(out.text.length).toBeGreaterThan(0)
+    expect(out.text.length).toBeLessThan(20)
+    expect(out.text).toBe(tokens.join(''))
+    expect(out.toolCalls).toBeUndefined()
+  })
+
+  it('drops partial tool_calls (unparseable arguments) on abort', async () => {
+    const head: string[] = []
+    head.push(`data: ${JSON.stringify({ choices: [{ index: 0, delta: { content: 'reading…' } }] })}\n\n`)
+    head.push(`data: ${JSON.stringify({ choices: [{ index: 0, delta: { tool_calls: [{ index: 0, id: 'call_partial', type: 'function', function: { name: 'read_file', arguments: '' } }] } }] })}\n\n`)
+    head.push(`data: ${JSON.stringify({ choices: [{ index: 0, delta: { tool_calls: [{ index: 0, function: { arguments: '{"path":' } }] } }] })}\n\n`)
+    const padding = `data: ${JSON.stringify({ choices: [{ index: 0, delta: {} }] })}\n\n`.repeat(40)
+    const body = head.join('') + padding
+
+    const ac = new AbortController()
+    vi.stubGlobal('fetch', vi.fn(async () => replaySSE({ body, controller: ac, abortAfterBytes: head.join('').length + 80, chunkSize: 32 })))
+
+    const out = await openaiAdapter.complete({
+      apiKey: 'k', model: 'gpt-5.5',
+      messages: [{ role: 'user', content: 'hi' }],
+      signal: ac.signal,
+      onToken: () => {},
+    })
+
+    expect(out.stopReason).toBe('cancelled')
+    expect(out.text).toBe('reading…')
+    expect(out.toolCalls).toBeUndefined()
+  })
+
+  it('returns cancelled from non-streaming complete when fetch aborts', async () => {
+    const ac = new AbortController()
+    vi.stubGlobal('fetch', vi.fn(async (_url: unknown, init?: RequestInit) => {
+      return new Promise((_, reject) => {
+        const sig = init?.signal as AbortSignal | undefined
+        sig?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), { once: true })
+        if (sig?.aborted) reject(new DOMException('aborted', 'AbortError'))
+      })
+    }))
+
+    setTimeout(() => ac.abort(), 0)
+
+    const out = await openaiAdapter.complete({
+      apiKey: 'k', model: 'gpt-5.5',
+      messages: [{ role: 'user', content: 'hi' }],
+      signal: ac.signal,
+    })
+
+    expect(out.stopReason).toBe('cancelled')
+    expect(out.text).toBe('')
+    expect(out.toolCalls).toBeUndefined()
   })
 })

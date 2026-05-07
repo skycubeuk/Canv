@@ -31,6 +31,10 @@ export interface ChatMessage {
   toolResults?: ToolResult[]
   /** Marks a system-injected synthetic note (e.g. "(turn cancelled)"). */
   synthetic?: boolean
+  /** Why this message terminated, when it ended on something other than a
+   *  clean end_turn. 'cancelled' means the user clicked Stop; rendered as
+   *  a "Stopped" pill, and used by A3 as the anchor for retry actions. */
+  stopReason?: 'cancelled'
 }
 
 export interface PendingApproval {
@@ -229,8 +233,9 @@ export function Bubble({
                   />
                 )
               }
-              const status: 'running' | 'success' | 'error' =
+              const status: 'running' | 'success' | 'error' | 'cancelled' =
                 !result ? 'running'
+                : result.isError && result.content === 'Cancelled by user' ? 'cancelled'
                 : result.isError ? 'error'
                 : 'success'
               const summary = summariseResult(call.name, result?.content)
@@ -248,6 +253,11 @@ export function Bubble({
           </div>
         )}
         {!message.content && !message.toolCalls && !isUser && <span className="streaming-cursor"> </span>}
+        {message.role === 'assistant' && message.stopReason === 'cancelled' && (
+          <div className="mt-2 inline-flex items-center gap-1 rounded-full border border-stone-300 bg-stone-100 px-2 py-0.5 text-[10px] uppercase tracking-wide text-stone-600 dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
+            Stopped
+          </div>
+        )}
       </div>
     </div>
   )

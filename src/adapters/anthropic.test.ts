@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { anthropicAdapter } from './anthropic'
+import { replaySSE } from '../test/sseReplay'
 
 describe('anthropicAdapter.complete (non-streaming)', () => {
   let originalFetch: typeof globalThis.fetch
@@ -137,5 +138,89 @@ describe('anthropic — tools', () => {
     expect(out.text).toBe('reading…')
     expect(out.stopReason).toBe('tool_use')
     expect(out.toolCalls).toEqual([{ id: 'toolu_1', name: 'read_file', input: { path: 'a.md' } }])
+  })
+})
+
+describe('anthropicAdapter.complete (streaming, cancelled)', () => {
+  afterEach(() => { vi.unstubAllGlobals() })
+
+  it('returns stopReason="cancelled" with buffered text on mid-stream abort', async () => {
+    const events: string[] = []
+    events.push(`event: message_start\ndata: ${JSON.stringify({ message: { usage: { input_tokens: 5 } } })}\n\n`)
+    for (let i = 0; i < 20; i++) {
+      events.push(`event: content_block_delta\ndata: ${JSON.stringify({ index: 0, delta: { type: 'text_delta', text: 'x' } })}\n\n`)
+    }
+    events.push(`event: message_delta\ndata: ${JSON.stringify({ delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 20 } })}\n\n`)
+    const body = events.join('')
+
+    const ac = new AbortController()
+    vi.stubGlobal('fetch', vi.fn(async () => replaySSE({ body, controller: ac, abortAfterBytes: 200, chunkSize: 32 })))
+
+    const tokens: string[] = []
+    const out = await anthropicAdapter.complete({
+      apiKey: 'k', model: 'claude-sonnet-4-6',
+      messages: [{ role: 'user', content: 'hi' }],
+      signal: ac.signal,
+      onToken: (t) => tokens.push(t),
+    })
+
+    expect(out.stopReason).toBe('cancelled')
+    expect(out.truncated).toBe(false)
+    expect(out.text.length).toBeGreaterThan(0)
+    expect(out.text.length).toBeLessThan(20)
+    expect(out.text).toBe(tokens.join(''))
+    expect(out.toolCalls).toBeUndefined()
+  })
+
+  it('drops partial tool_use blocks (no content_block_stop) on abort', async () => {
+    const head: string[] = []
+    head.push(`event: message_start\ndata: ${JSON.stringify({ message: { usage: { input_tokens: 1 } } })}\n\n`)
+    head.push(`event: content_block_start\ndata: ${JSON.stringify({ index: 0, content_block: { type: 'text', text: '' } })}\n\n`)
+    head.push(`event: content_block_delta\ndata: ${JSON.stringify({ index: 0, delta: { type: 'text_delta', text: 'reading…' } })}\n\n`)
+    head.push(`event: content_block_stop\ndata: ${JSON.stringify({ index: 0 })}\n\n`)
+    head.push(`event: content_block_start\ndata: ${JSON.stringify({ index: 1, content_block: { type: 'tool_use', id: 'toolu_partial', name: 'read_file', input: {} } })}\n\n`)
+    head.push(`event: content_block_delta\ndata: ${JSON.stringify({ index: 1, delta: { type: 'input_json_delta', partial_json: '{"path":' } })}\n\n`)
+    const padding = 'event: ping\ndata: {}\n\n'.repeat(40)
+    const body = head.join('') + padding
+
+    const ac = new AbortController()
+    const announced: Array<{ id: string; name: string }> = []
+    vi.stubGlobal('fetch', vi.fn(async () => replaySSE({ body, controller: ac, abortAfterBytes: head.join('').length + 100, chunkSize: 32 })))
+
+    const out = await anthropicAdapter.complete({
+      apiKey: 'k', model: 'claude-sonnet-4-6',
+      messages: [{ role: 'user', content: 'hi' }],
+      signal: ac.signal,
+      onToken: () => {},
+      onToolCallStart: (c) => announced.push(c),
+    })
+
+    expect(out.stopReason).toBe('cancelled')
+    expect(announced).toEqual([{ id: 'toolu_partial', name: 'read_file' }])
+    expect(out.toolCalls).toBeUndefined()
+    expect(out.text).toBe('reading…')
+  })
+
+  it('returns cancelled from non-streaming complete when fetch aborts', async () => {
+    const ac = new AbortController()
+    vi.stubGlobal('fetch', vi.fn(async (_url: unknown, init?: RequestInit) => {
+      return new Promise((_, reject) => {
+        const sig = init?.signal as AbortSignal | undefined
+        sig?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), { once: true })
+        if (sig?.aborted) reject(new DOMException('aborted', 'AbortError'))
+      })
+    }))
+
+    setTimeout(() => ac.abort(), 0)
+
+    const out = await anthropicAdapter.complete({
+      apiKey: 'k', model: 'claude-sonnet-4-6',
+      messages: [{ role: 'user', content: 'hi' }],
+      signal: ac.signal,
+    })
+
+    expect(out.stopReason).toBe('cancelled')
+    expect(out.text).toBe('')
+    expect(out.toolCalls).toBeUndefined()
   })
 })

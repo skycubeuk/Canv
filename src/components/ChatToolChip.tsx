@@ -3,7 +3,7 @@ import { useState } from 'react'
 export interface ChatToolChipProps {
   name: string
   inputPath?: string
-  status: 'running' | 'success' | 'error'
+  status: 'running' | 'success' | 'error' | 'cancelled'
   summary?: string
   result?: string
 }
@@ -29,9 +29,12 @@ export function ChatToolChip({ name, inputPath, status, summary, result }: ChatT
     : summary
       ? `${icon} ${inputPath ?? name} · ${summary}`
       : `${icon} ${inputPath ?? name}`
-  const tone = status === 'error'
-    ? 'border-red-300 bg-red-50 text-red-800 dark:border-red-700/60 dark:bg-red-950/40 dark:text-red-200'
-    : 'border-stone-200 bg-stone-50 text-stone-700 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300'
+  const tone =
+    status === 'cancelled'
+      ? 'border-stone-300 bg-stone-50 text-stone-500 opacity-60 line-through dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-500'
+      : status === 'error'
+        ? 'border-red-300 bg-red-50 text-red-800 dark:border-red-700/60 dark:bg-red-950/40 dark:text-red-200'
+        : 'border-stone-200 bg-stone-50 text-stone-700 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300'
   return (
     <div data-testid="chip-root" className={`my-1 inline-block max-w-full rounded-md border px-2 py-1 text-xs ${tone}`}>
       <button

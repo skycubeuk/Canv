@@ -359,7 +359,7 @@ describe('chatRunner — abort', () => {
     await expect(promise).rejects.toThrow(/abort/i)
   })
 
-  it('cancels pending approval when signal aborts', async () => {
+  it('cancels pending approval when signal aborts (resolves with cancelled tool_result)', async () => {
     const ctrl = new AbortController()
     const fs = makeMockFs({})
     const adapter: LLMAdapter = {
@@ -371,6 +371,7 @@ describe('chatRunner — abort', () => {
         }
       },
     }
+    let final: ChatMessage[] = []
     const promise = runChatTurn({
       ...baseCtx,
       toolCtx: makeCtx({ fs }),
@@ -381,10 +382,366 @@ describe('chatRunner — abort', () => {
       requestApproval: () => new Promise<ApprovalDecision>((_resolve, reject) => {
         ctrl.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
       }),
-      onUpdate: () => {},
+      onUpdate: (m) => { final = [...m] },
     })
     queueMicrotask(() => ctrl.abort())
-    await expect(promise).rejects.toThrow(/abort/i)
+    await promise
+    // Runner resolves cleanly with a cancelled tool_result, NOT a rejection.
+    const asst = final.filter((m) => m.role === 'assistant')[0]
+    expect(asst.stopReason).toBe('cancelled')
+    expect(asst.toolResults).toEqual([{ id: 'c1', content: 'Cancelled by user', isError: true }])
+    // Safety: file was never created.
     await expect(fs.readFile('a.md')).rejects.toThrow(/ENOENT/)
+  })
+})
+
+describe('chatRunner — cancellation', () => {
+  it('handles adapter stopReason="cancelled" with no tool calls (mid-stream abort)', async () => {
+    const adapter: LLMAdapter = {
+      id: 'mock', name: 'Mock', models: ['m'],
+      async complete(p: CompleteParams) {
+        p.onToken?.('hello par')
+        return { text: 'hello par', truncated: false, stopReason: 'cancelled' }
+      },
+    }
+    let final: ChatMessage[] = []
+    await runChatTurn({
+      ...baseCtx,
+      adapter,
+      provider: 'anthropic',
+      history: [{ id: 'u1', role: 'user', content: 'hi', provider: 'anthropic' }],
+      onUpdate: (m) => { final = [...m] },
+    })
+
+    expect(final).toHaveLength(2)
+    expect(final[1]).toMatchObject({
+      role: 'assistant',
+      content: 'hello par',
+      stopReason: 'cancelled',
+    })
+    expect(final[1].toolCalls).toBeUndefined()
+    expect(final[1].toolResults).toBeUndefined()
+  })
+
+  it('drops partial toolCalls announced via onToolCallStart when adapter returns cancelled with no completed toolCalls', async () => {
+    // Reproduces the production bug: model started composing a tool_use,
+    // user clicked Stop before content_block_stop, adapter dropped the
+    // partial. The runner must not leave the announced partial in
+    // assistantMsg.toolCalls — that produces an open tool_use block on the
+    // next turn and a provider 400.
+    const adapter: LLMAdapter = {
+      id: 'mock', name: 'Mock', models: ['m'],
+      async complete(p: CompleteParams) {
+        p.onToken?.('I am about to write a long file…')
+        // Announce a tool_use that will never complete.
+        p.onToolCallStart?.({ id: 'toolu_partial', name: 'create_file' })
+        return { text: 'I am about to write a long file…', truncated: false, stopReason: 'cancelled' }
+      },
+    }
+    let final: ChatMessage[] = []
+    await runChatTurn({
+      ...baseCtx,
+      adapter,
+      provider: 'anthropic',
+      history: [{ id: 'u1', role: 'user', content: 'write me a long file', provider: 'anthropic' }],
+      onUpdate: (m) => { final = [...m] },
+    })
+
+    expect(final).toHaveLength(2)
+    expect(final[1].stopReason).toBe('cancelled')
+    expect(final[1].content).toBe('I am about to write a long file…')
+    // The partial must NOT survive — otherwise the next turn sends an open
+    // tool_use to the provider and gets schema-rejected.
+    expect(final[1].toolCalls).toBeUndefined()
+    expect(final[1].toolResults).toBeUndefined()
+  })
+
+  it('cancelled history round-trips cleanly to the next adapter call (no orphan tool_calls/tool_use)', async () => {
+    // Two-turn integration: cancelled turn 1 with an announced-but-dropped
+    // partial tool_use; turn 2 sends the resulting history back to a mock
+    // adapter and checks the messages it sees are well-formed for both
+    // Anthropic (no open tool_use) and OpenAI (no orphan tool_call).
+    const adapter1: LLMAdapter = {
+      id: 'mock', name: 'Mock', models: ['m'],
+      async complete(p: CompleteParams) {
+        p.onToken?.('thinking…')
+        p.onToolCallStart?.({ id: 'toolu_partial', name: 'create_file' })
+        return { text: 'thinking…', truncated: false, stopReason: 'cancelled' }
+      },
+    }
+    let history: ChatMessage[] = []
+    await runChatTurn({
+      ...baseCtx,
+      adapter: adapter1,
+      provider: 'anthropic',
+      history: [{ id: 'u1', role: 'user', content: 'write a file', provider: 'anthropic' }],
+      onUpdate: (m) => { history = [...m] },
+    })
+
+    let seen: CompleteParams | undefined
+    const adapter2: LLMAdapter = {
+      id: 'mock', name: 'Mock', models: ['m'],
+      async complete(p: CompleteParams) {
+        seen = p
+        return { text: 'ok', truncated: false, stopReason: 'end_turn' }
+      },
+    }
+    await runChatTurn({
+      ...baseCtx,
+      adapter: adapter2,
+      provider: 'anthropic',
+      history: [...history, { id: 'u2', role: 'user', content: 'try again', provider: 'anthropic' }],
+      onUpdate: () => {},
+    })
+
+    // Every assistant message that has tool_calls must be immediately
+    // followed by a tool message whose results match every tool_call id.
+    // Every tool_call must have a defined `input` (Anthropic schema).
+    const msgs = seen!.messages
+    for (let i = 0; i < msgs.length; i++) {
+      const m = msgs[i]
+      if (m.role === 'assistant' && m.toolCalls?.length) {
+        for (const c of m.toolCalls) {
+          expect(c.input).toBeDefined()
+        }
+        const next = msgs[i + 1]
+        expect(next?.role).toBe('tool')
+        const ids = new Set((next as { toolResults: Array<{ id: string }> }).toolResults.map((r) => r.id))
+        for (const c of m.toolCalls) expect(ids.has(c.id)).toBe(true)
+      }
+    }
+  })
+
+  it('synthesises cancelled tool_results when adapter returns cancelled with completed toolCalls', async () => {
+    const adapter: LLMAdapter = {
+      id: 'mock', name: 'Mock', models: ['m'],
+      async complete(_p: CompleteParams) {
+        return {
+          text: 'about to read…',
+          truncated: false,
+          stopReason: 'cancelled',
+          toolCalls: [{ id: 'c1', name: 'read_file', input: { path: 'a.md' } }],
+        }
+      },
+    }
+    let final: ChatMessage[] = []
+    await runChatTurn({
+      ...baseCtx,
+      adapter,
+      provider: 'anthropic',
+      history: [{ id: 'u1', role: 'user', content: 'read a', provider: 'anthropic' }],
+      onUpdate: (m) => { final = [...m] },
+    })
+
+    expect(final).toHaveLength(2)
+    expect(final[1].stopReason).toBe('cancelled')
+    expect(final[1].toolCalls).toEqual([{ id: 'c1', name: 'read_file', input: { path: 'a.md' } }])
+    expect(final[1].toolResults).toEqual([{ id: 'c1', content: 'Cancelled by user', isError: true }])
+  })
+
+  it('synthesises cancelled tool_results when signal aborts after adapter returns tool_use but before dispatch', async () => {
+    const ac = new AbortController()
+    const adapter: LLMAdapter = {
+      id: 'mock', name: 'Mock', models: ['m'],
+      async complete(_p: CompleteParams) {
+        ac.abort()
+        return {
+          text: '', truncated: false, stopReason: 'tool_use',
+          toolCalls: [
+            { id: 'c1', name: 'read_file', input: { path: 'a.md' } },
+            { id: 'c2', name: 'list_dir', input: { path: '/' } },
+          ],
+        }
+      },
+    }
+    let final: ChatMessage[] = []
+    await runChatTurn({
+      ...baseCtx,
+      signal: ac.signal,
+      adapter,
+      provider: 'anthropic',
+      history: [{ id: 'u1', role: 'user', content: 'do stuff', provider: 'anthropic' }],
+      onUpdate: (m) => { final = [...m] },
+    })
+
+    expect(final).toHaveLength(2)
+    expect(final[1].stopReason).toBe('cancelled')
+    expect(final[1].toolCalls).toHaveLength(2)
+    expect(final[1].toolResults).toEqual([
+      { id: 'c1', content: 'Cancelled by user', isError: true },
+      { id: 'c2', content: 'Cancelled by user', isError: true },
+    ])
+  })
+
+  it('synthesises cancelled tool_result when abort fires during approval prompt', async () => {
+    const ac = new AbortController()
+    const fs = makeMockFs({})
+    const adapter: LLMAdapter = {
+      id: 'mock', name: 'Mock', models: ['m'],
+      async complete(p: CompleteParams) {
+        if (p.messages.find((m) => m.role === 'tool')) {
+          return { text: 'follow-up', truncated: false, stopReason: 'end_turn' }
+        }
+        return {
+          text: '', truncated: false, stopReason: 'tool_use',
+          toolCalls: [{ id: 'c1', name: 'create_file', input: { path: 'x.md', content: 'hi' } }],
+        }
+      },
+    }
+    const requestApproval = () => new Promise<ApprovalDecision>(() => {
+      setTimeout(() => ac.abort(), 0)
+    })
+
+    let final: ChatMessage[] = []
+    await runChatTurn({
+      ...baseCtx,
+      toolCtx: makeCtx({ fs }),
+      signal: ac.signal,
+      requestApproval,
+      adapter,
+      provider: 'anthropic',
+      history: [{ id: 'u1', role: 'user', content: 'create x', provider: 'anthropic' }],
+      onUpdate: (m) => { final = [...m] },
+    })
+
+    const asst = final.filter((m) => m.role === 'assistant')[0]
+    expect(asst.stopReason).toBe('cancelled')
+    expect(asst.toolResults).toEqual([{ id: 'c1', content: 'Cancelled by user', isError: true }])
+    // File was not created.
+    await expect(fs.readFile('x.md')).rejects.toThrow(/ENOENT/)
+  })
+
+  it('synthesises cancelled tool_result when abort fires during a read-only tool handler', async () => {
+    const ac = new AbortController()
+    const adapter: LLMAdapter = {
+      id: 'mock', name: 'Mock', models: ['m'],
+      async complete(_p: CompleteParams) {
+        return {
+          text: '', truncated: false, stopReason: 'tool_use',
+          toolCalls: [{ id: 'c1', name: 'read_file', input: { path: 'slow.md' } }],
+        }
+      },
+    }
+    // Need the file present in listDir (read_file handler calls it first to
+    // resolve the entry); only readFile itself hangs.
+    const fs = makeMockFs({ 'slow.md': { content: 'hi', mtimeMs: 1, size: 2, binary: false } })
+    const slowFs = {
+      ...fs,
+      readFile: () => new Promise<never>((_, reject) => {
+        const onAbort = () => reject(new DOMException('aborted', 'AbortError'))
+        ac.signal.addEventListener('abort', onAbort, { once: true })
+      }),
+    }
+    setTimeout(() => ac.abort(), 0)
+
+    let final: ChatMessage[] = []
+    await runChatTurn({
+      ...baseCtx,
+      toolCtx: makeCtx({ fs: slowFs }),
+      signal: ac.signal,
+      adapter,
+      provider: 'anthropic',
+      history: [{ id: 'u1', role: 'user', content: 'read', provider: 'anthropic' }],
+      onUpdate: (m) => { final = [...m] },
+    })
+
+    const asst = final.filter((m) => m.role === 'assistant')[0]
+    expect(asst.stopReason).toBe('cancelled')
+    expect(asst.toolResults).toEqual([{ id: 'c1', content: 'Cancelled by user', isError: true }])
+  })
+
+  it('exits cleanly when signal aborts between rounds (post-tool, pre-next-call)', async () => {
+    const ac = new AbortController()
+    let calls = 0
+    const adapter: LLMAdapter = {
+      id: 'mock', name: 'Mock', models: ['m'],
+      async complete(_p: CompleteParams) {
+        calls++
+        if (calls === 1) {
+          return {
+            text: '', truncated: false, stopReason: 'tool_use',
+            toolCalls: [{ id: 'c1', name: 'read_file', input: { path: 'a.md' } }],
+          }
+        }
+        throw new Error('adapter called after abort')
+      },
+    }
+    const fs = makeMockFs({ 'a.md': { content: 'hi', mtimeMs: 1, size: 2, binary: false } })
+    const onUpdate = (m: ChatMessage[]) => {
+      const last = m[m.length - 1]
+      if (last?.role === 'assistant' && last.toolResults?.length) ac.abort()
+    }
+
+    await runChatTurn({
+      ...baseCtx,
+      toolCtx: makeCtx({ fs }),
+      signal: ac.signal,
+      adapter,
+      provider: 'anthropic',
+      history: [{ id: 'u1', role: 'user', content: 'read', provider: 'anthropic' }],
+      onUpdate,
+    })
+
+    expect(calls).toBe(1)
+  })
+
+  it('produces a history that the next provider call accepts (no orphan tool_use blocks)', async () => {
+    const ac = new AbortController()
+    const adapter1: LLMAdapter = {
+      id: 'mock', name: 'Mock', models: ['m'],
+      async complete(_p: CompleteParams) {
+        return {
+          text: '',
+          truncated: false,
+          stopReason: 'cancelled',
+          toolCalls: [{ id: 'c1', name: 'read_file', input: { path: 'a.md' } }],
+        }
+      },
+    }
+    let history: ChatMessage[] = []
+    await runChatTurn({
+      ...baseCtx,
+      signal: ac.signal,
+      adapter: adapter1,
+      provider: 'anthropic',
+      history: [{ id: 'u1', role: 'user', content: 'q', provider: 'anthropic' }],
+      onUpdate: (m) => { history = [...m] },
+    })
+
+    const asst = history.filter((m) => m.role === 'assistant')[0]
+    expect(asst.toolCalls?.[0].id).toBe('c1')
+    expect(asst.toolResults?.[0].id).toBe('c1')
+
+    let seen: CompleteParams | undefined
+    const adapter2: LLMAdapter = {
+      id: 'mock', name: 'Mock', models: ['m'],
+      async complete(p: CompleteParams) {
+        seen = p
+        return { text: 'ok', truncated: false, stopReason: 'end_turn' }
+      },
+    }
+    await runChatTurn({
+      ...baseCtx,
+      adapter: adapter2,
+      provider: 'anthropic',
+      history: [...history, { id: 'u2', role: 'user', content: 'try again', provider: 'anthropic' }],
+      onUpdate: () => {},
+    })
+
+    const adapterMessages = seen!.messages
+    const toolMsg = adapterMessages.find((m) => m.role === 'tool')
+    expect(toolMsg).toBeDefined()
+    expect((toolMsg as { toolResults: Array<{ id: string; content: string; isError: boolean }> }).toolResults).toEqual([
+      { id: 'c1', content: 'Cancelled by user', isError: true },
+    ])
+    for (let i = 0; i < adapterMessages.length; i++) {
+      const m = adapterMessages[i]
+      if (m.role === 'assistant' && m.toolCalls?.length) {
+        const next = adapterMessages[i + 1]
+        expect(next?.role).toBe('tool')
+        const nextIds = new Set((next as { toolResults: Array<{ id: string }> }).toolResults.map((r) => r.id))
+        for (const c of m.toolCalls) expect(nextIds.has(c.id)).toBe(true)
+      }
+    }
   })
 })

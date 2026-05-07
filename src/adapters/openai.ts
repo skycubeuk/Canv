@@ -45,6 +45,7 @@ export const openaiAdapter: LLMAdapter = {
 
     if (!apiKey) throw new Error('Missing OpenAI API key')
 
+    try {
     const useStream = typeof onToken === 'function'
 
     const body: Record<string, unknown> = {
@@ -119,49 +120,77 @@ export const openaiAdapter: LLMAdapter = {
     let stopReason: 'end_turn' | 'tool_use' | 'max_tokens' | 'stop_sequence' = 'end_turn'
     const callsByIndex = new Map<number, PendingToolCall>()
 
-    while (true) {
-      const { value, done } = await reader.read()
-      if (done) break
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() ?? ''
-      for (const raw of lines) {
-        const line = raw.trim()
-        if (!line || !line.startsWith('data:')) continue
-        const payload = line.slice(5).trim()
-        if (payload === '[DONE]') continue
-        let parsed: unknown
-        try { parsed = JSON.parse(payload) } catch { continue }
-        const p = parsed as { choices?: Array<{ delta?: Record<string, unknown>; finish_reason?: string }>; usage?: unknown }
-        const choice = p.choices?.[0]
-        const delta = choice?.delta
-        if (delta && typeof delta.content === 'string' && delta.content.length) {
-          onToken!(delta.content); full += delta.content
-        }
-        const tcDeltas = delta?.tool_calls as Array<{ index: number; id?: string; function?: { name?: string; arguments?: string } }> | undefined
-        if (tcDeltas) {
-          for (const d of tcDeltas) {
-            let cur = callsByIndex.get(d.index)
-            if (!cur) {
-              cur = { id: d.id ?? '', name: d.function?.name ?? '', argsBuf: '', announced: false }
-              callsByIndex.set(d.index, cur)
-            }
-            if (d.id && !cur.id) cur.id = d.id
-            if (d.function?.name && !cur.name) cur.name = d.function.name
-            if (typeof d.function?.arguments === 'string') cur.argsBuf += d.function.arguments
-            // Fire onToolCallStart once per call as soon as both id and name are known.
-            if (!cur.announced && cur.id && cur.name) {
-              cur.announced = true
-              params.onToolCallStart?.({ id: cur.id, name: cur.name })
+    try {
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() ?? ''
+        for (const raw of lines) {
+          const line = raw.trim()
+          if (!line || !line.startsWith('data:')) continue
+          const payload = line.slice(5).trim()
+          if (payload === '[DONE]') continue
+          let parsed: unknown
+          try { parsed = JSON.parse(payload) } catch { continue }
+          const p = parsed as { choices?: Array<{ delta?: Record<string, unknown>; finish_reason?: string }>; usage?: unknown }
+          const choice = p.choices?.[0]
+          const delta = choice?.delta
+          if (delta && typeof delta.content === 'string' && delta.content.length) {
+            onToken!(delta.content); full += delta.content
+          }
+          const tcDeltas = delta?.tool_calls as Array<{ index: number; id?: string; function?: { name?: string; arguments?: string } }> | undefined
+          if (tcDeltas) {
+            for (const d of tcDeltas) {
+              let cur = callsByIndex.get(d.index)
+              if (!cur) {
+                cur = { id: d.id ?? '', name: d.function?.name ?? '', argsBuf: '', announced: false }
+                callsByIndex.set(d.index, cur)
+              }
+              if (d.id && !cur.id) cur.id = d.id
+              if (d.function?.name && !cur.name) cur.name = d.function.name
+              if (typeof d.function?.arguments === 'string') cur.argsBuf += d.function.arguments
+              // Fire onToolCallStart once per call as soon as both id and name are known.
+              if (!cur.announced && cur.id && cur.name) {
+                cur.announced = true
+                params.onToolCallStart?.({ id: cur.id, name: cur.name })
+              }
             }
           }
+          if (choice?.finish_reason === 'length') { truncated = true; stopReason = 'max_tokens' }
+          else if (choice?.finish_reason === 'tool_calls') stopReason = 'tool_use'
+          else if (choice?.finish_reason === 'stop') stopReason = 'end_turn'
+          const u = parseOpenAIUsage(p.usage)
+          if (u) usageOut = u
         }
-        if (choice?.finish_reason === 'length') { truncated = true; stopReason = 'max_tokens' }
-        else if (choice?.finish_reason === 'tool_calls') stopReason = 'tool_use'
-        else if (choice?.finish_reason === 'stop') stopReason = 'end_turn'
-        const u = parseOpenAIUsage(p.usage)
-        if (u) usageOut = u
       }
+    } catch (err) {
+      if ((err as Error).name === 'AbortError' || signal?.aborted) {
+        try { await reader.cancel() } catch { /* already closed */ }
+        // Cancel-path policy: drop tool calls whose arguments did not parse,
+        // because round-tripping them to the next provider call risks schema
+        // errors and dispatching them is meaningless.
+        const toolCallsOnAbort: Array<{ id: string; name: string; input: unknown }> = []
+        for (const c of callsByIndex.values()) {
+          if (!c.id || !c.name) continue
+          if (!c.argsBuf) {
+            toolCallsOnAbort.push({ id: c.id, name: c.name, input: {} })
+            continue
+          }
+          let parsed: unknown
+          try { parsed = JSON.parse(c.argsBuf) } catch { continue }
+          toolCallsOnAbort.push({ id: c.id, name: c.name, input: parsed })
+        }
+        return {
+          text: full,
+          truncated: false,
+          stopReason: 'cancelled',
+          ...(toolCallsOnAbort.length ? { toolCalls: toolCallsOnAbort } : {}),
+          ...(usageOut ? { tokenUsage: usageOut } : {}),
+        }
+      }
+      throw err
     }
 
     const completedToolCalls = Array.from(callsByIndex.values())
@@ -178,6 +207,12 @@ export const openaiAdapter: LLMAdapter = {
       stopReason,
       ...(completedToolCalls.length ? { toolCalls: completedToolCalls } : {}),
       ...(usageOut ? { tokenUsage: usageOut } : {}),
+    }
+    } catch (err) {
+      if ((err as Error).name === 'AbortError' && signal?.aborted) {
+        return { text: '', truncated: false, stopReason: 'cancelled' }
+      }
+      throw err
     }
   },
 }

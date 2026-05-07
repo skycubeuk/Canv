@@ -26,4 +26,12 @@ describe('ChatToolChip', () => {
     expect(screen.getByTestId('chip-result-body').textContent).toContain('file too large')
     expect(screen.getByTestId('chip-root')).toHaveClass('border-red-300')
   })
+
+  it('renders muted treatment when status is "cancelled"', () => {
+    render(<ChatToolChip name="read_file" inputPath="a.md" status="cancelled" result="Cancelled by user" />)
+    const root = screen.getByTestId('chip-root')
+    expect(root.className).toMatch(/opacity-60|line-through/)
+    expect(root.className).not.toMatch(/border-red-300/)
+    expect(screen.getByText(/a\.md/)).toBeInTheDocument()
+  })
 })
