@@ -295,23 +295,6 @@ export default function App() {
     return () => { cancelled = true }
   }, [workspace.activeGroupId, workspace.activeMarkdownRel])
 
-  // TODO(0.7.0 commit 2): remove this once all dark: classes are migrated to semantic tokens.
-  //                       The newer listener at line ~87 handles data-theme exclusively.
-  // Theme — honour explicit light/dark, or follow the OS when set to 'system'.
-  useEffect(() => {
-    const mql = window.matchMedia('(prefers-color-scheme: dark)')
-    const apply = () => {
-      const isDark =
-        settings.theme === 'dark' || (settings.theme === 'system' && mql.matches)
-      document.documentElement.classList.toggle('dark', isDark)
-    }
-    apply()
-    if (settings.theme === 'system') {
-      mql.addEventListener('change', apply)
-      return () => mql.removeEventListener('change', apply)
-    }
-  }, [settings.theme])
-
   // First-launch profile picker (only after migration / workspace ready).
   const profileBootstrappedRef = useRef(false)
   useEffect(() => {
@@ -1606,7 +1589,7 @@ PLANNING. For any task that will take 3 or more tool calls, call \`set_todos\` B
   // Browser-only build: show a simple banner instead of the workspace UI.
   if (!isElectron()) {
     return (
-      <div className="h-full flex flex-col items-center justify-center text-center px-6 bg-stone-50 dark:bg-neutral-950 text-stone-700 dark:text-neutral-200">
+      <div className="h-full flex flex-col items-center justify-center text-center px-6 bg-app text-default">
         <div className="max-w-md space-y-3">
           <h1 className="text-2xl font-semibold">Canv 0.2 needs the desktop app</h1>
           <p className="text-sm opacity-80">
@@ -1648,7 +1631,7 @@ PLANNING. For any task that will take 3 or more tool calls, call \`set_todos\` B
   return (
     <div className="h-full flex flex-col">
       {workspace.remoteStatus?.state === 'offline' && (
-        <div className="bg-amber-100 dark:bg-amber-900/40 text-amber-900 dark:text-amber-100 px-3 py-1.5 text-sm flex items-center justify-between border-b border-amber-200 dark:border-amber-800">
+        <div className="bg-amber-900/40 text-amber-100 px-3 py-1.5 text-sm flex items-center justify-between border-b border-amber-800">
           <span>Remote workspace offline — attempting to reconnect…</span>
           <button
             type="button"
@@ -1669,15 +1652,7 @@ PLANNING. For any task that will take 3 or more tool calls, call \`set_todos\` B
               git={<GitTab onOpenDiff={handleOpenDiff} />}
               settings={settings}
               onUpdateSettings={update}
-              chatOpen={ideLayout.layout.bottom.visible && ideLayout.layout.bottom.activeTab === 'chat'}
-              onToggleChat={() => {
-                if (ideLayout.layout.bottom.visible && ideLayout.layout.bottom.activeTab === 'chat') {
-                  ideLayout.toggleBottom()
-                } else {
-                  ideLayout.showBottomTab('chat')
-                }
-              }}
-              onOpenSettings={() => openSettingsTab()}
+              workspaceName={workspace.root}
               files={(
                 <FilesTab
                   root={workspace.root}
@@ -1705,7 +1680,7 @@ PLANNING. For any task that will take 3 or more tool calls, call \`set_todos\` B
           sidebarVisible={ideLayout.layout.sidebar.visible}
           sidebarSize={ideLayout.layout.sidebar.size}
           editor={(
-            <main className="h-full flex flex-col min-w-0 overflow-hidden bg-stone-50 dark:bg-neutral-950">
+            <main className="h-full flex flex-col min-w-0 overflow-hidden bg-app">
               <div className="flex-1 min-h-0">
                 <EditorArea
                   workspaceRoot={workspace.root}
@@ -1868,7 +1843,7 @@ PLANNING. For any task that will take 3 or more tool calls, call \`set_todos\` B
       )}
 
       {toast && (
-        <div className="fixed bottom-7 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-stone-900 text-white text-sm rounded-md shadow-lg dark:bg-neutral-100 dark:text-neutral-900">
+        <div className="fixed bottom-7 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-[color:var(--text-default)] text-[color:var(--bg-app)] text-sm rounded-md shadow-lg">
           {toast}
         </div>
       )}
@@ -1890,10 +1865,10 @@ PLANNING. For any task that will take 3 or more tool calls, call \`set_todos\` B
 function EmptyState({ hasWorkspace, onChooseWorkspace }: { hasWorkspace: boolean; onChooseWorkspace: () => void }) {
   return (
     <div className="absolute inset-0 flex items-center justify-center text-center px-6">
-      <div className="max-w-md space-y-3 text-stone-600 dark:text-neutral-400">
+      <div className="max-w-md space-y-3 text-muted">
         {hasWorkspace ? (
           <>
-            <p className="text-base font-medium text-stone-700 dark:text-neutral-200">No file open</p>
+            <p className="text-base font-medium text-default">No file open</p>
             <p className="text-sm">
               Pick a file from the sidebar, or use the New file button to create one. Pin files in the tree to feed
               them to the AI as background context.
@@ -1901,7 +1876,7 @@ function EmptyState({ hasWorkspace, onChooseWorkspace }: { hasWorkspace: boolean
           </>
         ) : (
           <>
-            <p className="text-base font-medium text-stone-700 dark:text-neutral-200">Welcome to Canv 0.2</p>
+            <p className="text-base font-medium text-default">Welcome to Canv 0.2</p>
             <p className="text-sm">Choose a folder on your computer to use as your writing workspace.</p>
             <button type="button" className="btn-primary" onClick={onChooseWorkspace}>
               Choose folder
@@ -1925,10 +1900,10 @@ function ConflictDialog({
   onDismiss: () => void
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/40 dark:bg-black/60 p-4">
-      <div className="max-w-sm w-full bg-white dark:bg-neutral-900 rounded-lg shadow-xl p-5 space-y-3">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="max-w-sm w-full bg-elev rounded-lg shadow-xl p-5 space-y-3">
         <h3 className="text-base font-semibold">File changed on disk</h3>
-        <p className="text-sm text-stone-600 dark:text-neutral-400">
+        <p className="text-sm text-muted">
           "{rel}" was modified outside Canv. Choose what to keep.
         </p>
         <div className="flex gap-2 justify-end pt-2">

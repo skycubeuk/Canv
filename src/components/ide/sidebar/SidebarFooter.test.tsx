@@ -17,89 +17,98 @@ function makeSettings(): Settings {
 }
 
 describe('SidebarFooter', () => {
-  it('renders the current model label, Chat, and Settings buttons', () => {
+  it('renders the workspace name and current model', () => {
     render(
       <SidebarFooter
         settings={makeSettings()}
         onUpdateSettings={vi.fn()}
-        chatOpen={false}
-        onToggleChat={vi.fn()}
-        onOpenSettings={vi.fn()}
+        workspaceName="/home/user/my-project"
       />,
     )
-    expect(screen.getByRole('button', { name: /claude-sonnet-4-6/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /chat/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /settings/i })).toBeInTheDocument()
+    expect(screen.getByText('my-project')).toBeInTheDocument()
+    expect(screen.getByText('claude-sonnet-4-6')).toBeInTheDocument()
   })
 
-  it('calls onToggleChat when the Chat button is clicked', async () => {
-    const onToggleChat = vi.fn()
+  it('renders "No workspace" when workspaceName is null', () => {
+    render(
+      <SidebarFooter
+        settings={makeSettings()}
+        onUpdateSettings={vi.fn()}
+        workspaceName={null}
+      />,
+    )
+    expect(screen.getByText('No workspace')).toBeInTheDocument()
+  })
+
+  it('shows the workspace initial avatar', () => {
+    render(
+      <SidebarFooter
+        settings={makeSettings()}
+        onUpdateSettings={vi.fn()}
+        workspaceName="/home/user/my-project"
+      />,
+    )
+    expect(screen.getByText('M')).toBeInTheDocument()
+  })
+
+  it('opens the provider/model popover on click', async () => {
     const user = userEvent.setup()
     render(
       <SidebarFooter
         settings={makeSettings()}
         onUpdateSettings={vi.fn()}
-        chatOpen={false}
-        onToggleChat={onToggleChat}
-        onOpenSettings={vi.fn()}
+        workspaceName="/home/user/my-project"
       />,
     )
-    await user.click(screen.getByRole('button', { name: /chat/i }))
-    expect(onToggleChat).toHaveBeenCalled()
+    expect(screen.queryByLabelText(/^model$/i)).toBeNull()
+    await user.click(screen.getByTitle('Workspace and model'))
+    expect(screen.getByLabelText(/^model$/i)).toBeInTheDocument()
   })
 
-  it('calls onOpenSettings when the Settings button is clicked', async () => {
-    const onOpenSettings = vi.fn()
+  it('closes the popover on Escape', async () => {
     const user = userEvent.setup()
     render(
       <SidebarFooter
         settings={makeSettings()}
         onUpdateSettings={vi.fn()}
-        chatOpen={false}
-        onToggleChat={vi.fn()}
-        onOpenSettings={onOpenSettings}
+        workspaceName="/home/user/my-project"
       />,
     )
-    await user.click(screen.getByRole('button', { name: /settings/i }))
-    expect(onOpenSettings).toHaveBeenCalled()
+    await user.click(screen.getByTitle('Workspace and model'))
+    expect(screen.getByLabelText(/^model$/i)).toBeInTheDocument()
+    await user.keyboard('{Escape}')
+    expect(screen.queryByLabelText(/^model$/i)).toBeNull()
   })
 
-  it('reflects chatOpen with an aria-pressed=true state on the Chat button', () => {
-    const { rerender } = render(
-      <SidebarFooter
-        settings={makeSettings()}
-        onUpdateSettings={vi.fn()}
-        chatOpen={false}
-        onToggleChat={vi.fn()}
-        onOpenSettings={vi.fn()}
-      />,
+  it('closes the popover on outside click', async () => {
+    const user = userEvent.setup()
+    render(
+      <div>
+        <button>outside</button>
+        <SidebarFooter
+          settings={makeSettings()}
+          onUpdateSettings={vi.fn()}
+          workspaceName="/home/user/my-project"
+        />
+      </div>,
     )
-    expect(screen.getByRole('button', { name: /chat/i })).toHaveAttribute('aria-pressed', 'false')
-    rerender(
-      <SidebarFooter
-        settings={makeSettings()}
-        onUpdateSettings={vi.fn()}
-        chatOpen={true}
-        onToggleChat={vi.fn()}
-        onOpenSettings={vi.fn()}
-      />,
-    )
-    expect(screen.getByRole('button', { name: /chat/i })).toHaveAttribute('aria-pressed', 'true')
+    await user.click(screen.getByTitle('Workspace and model'))
+    expect(screen.getByLabelText(/^model$/i)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'outside' }))
+    expect(screen.queryByLabelText(/^model$/i)).toBeNull()
   })
 
-  it('opens the model dropdown and lets the user pick a different model', async () => {
+  it('calls onUpdateSettings with new model when user picks from dropdown', async () => {
     const onUpdateSettings = vi.fn()
     const user = userEvent.setup()
     render(
       <SidebarFooter
         settings={makeSettings()}
         onUpdateSettings={onUpdateSettings}
-        chatOpen={false}
-        onToggleChat={vi.fn()}
-        onOpenSettings={vi.fn()}
+        workspaceName="/home/user/my-project"
       />,
     )
-    await user.click(screen.getByRole('button', { name: /claude-sonnet-4-6/i }))
+    await user.click(screen.getByTitle('Workspace and model'))
     const modelSelect = screen.getByLabelText(/^model$/i) as HTMLSelectElement
     await user.selectOptions(modelSelect, modelSelect.options[1].value)
     expect(onUpdateSettings).toHaveBeenCalledWith(
@@ -109,42 +118,5 @@ describe('SidebarFooter', () => {
         }),
       }),
     )
-  })
-
-  it('closes the model dropdown on Escape', async () => {
-    const user = userEvent.setup()
-    render(
-      <SidebarFooter
-        settings={makeSettings()}
-        onUpdateSettings={vi.fn()}
-        chatOpen={false}
-        onToggleChat={vi.fn()}
-        onOpenSettings={vi.fn()}
-      />,
-    )
-    await user.click(screen.getByRole('button', { name: /claude-sonnet-4-6/i }))
-    expect(screen.getByLabelText(/^model$/i)).toBeInTheDocument()
-    await user.keyboard('{Escape}')
-    expect(screen.queryByLabelText(/^model$/i)).toBeNull()
-  })
-
-  it('closes the model dropdown on outside click', async () => {
-    const user = userEvent.setup()
-    render(
-      <div>
-        <button>outside</button>
-        <SidebarFooter
-          settings={makeSettings()}
-          onUpdateSettings={vi.fn()}
-          chatOpen={false}
-          onToggleChat={vi.fn()}
-          onOpenSettings={vi.fn()}
-        />
-      </div>,
-    )
-    await user.click(screen.getByRole('button', { name: /claude-sonnet-4-6/i }))
-    expect(screen.getByLabelText(/^model$/i)).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'outside' }))
-    expect(screen.queryByLabelText(/^model$/i)).toBeNull()
   })
 })

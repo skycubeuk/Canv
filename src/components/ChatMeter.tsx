@@ -47,7 +47,7 @@ export function ChatMeter({ messages, model, overrides, defaults, busy }: Props)
 
   return (
     <div
-      className="border-t border-stone-200 dark:border-neutral-800 bg-stone-50/60 dark:bg-neutral-900/60 px-3 py-1 text-[10px] font-mono text-stone-500 dark:text-neutral-400 flex justify-between"
+      className="border-t border-default bg-panel/60 px-3 py-1 text-[10px] font-mono text-muted flex justify-between"
       aria-label="chat token and cost meter"
     >
       <span>{turnText}</span>

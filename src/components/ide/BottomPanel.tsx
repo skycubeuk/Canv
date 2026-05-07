@@ -26,9 +26,9 @@ export function BottomPanel({ tabs, activeTab, onSelectTab, onClose, headerRight
     <section
       role="region"
       aria-label="Bottom panel"
-      className="h-full flex flex-col bg-white dark:bg-neutral-900 border-t border-stone-200 dark:border-neutral-800 min-h-0"
+      className="h-full flex flex-col bg-panel border-t border-default min-h-0"
     >
-      <header className="shrink-0 flex items-center border-b border-stone-200 dark:border-neutral-800 text-xs">
+      <header className="shrink-0 flex items-center border-b border-default text-xs">
         {tabs.map((t) => {
           const isActive = t.id === active.id
           return (
@@ -38,14 +38,14 @@ export function BottomPanel({ tabs, activeTab, onSelectTab, onClose, headerRight
               onClick={() => onSelectTab(t.id)}
               className={`px-3 py-1.5 flex items-center gap-1.5 border-b-2 ${
                 isActive
-                  ? 'border-stone-700 dark:border-neutral-200 text-stone-900 dark:text-neutral-100 bg-white dark:bg-neutral-900'
-                  : 'border-transparent text-stone-600 dark:text-neutral-400 hover:bg-stone-100/60 dark:hover:bg-neutral-800/60'
+                  ? 'border-strong text-default bg-panel'
+                  : 'border-transparent text-muted hover:bg-hover'
               }`}
             >
               <t.icon aria-hidden className="w-4 h-4" />
               <span className="font-medium">{t.label}</span>
               {t.badge != null && (
-                <span className="text-stone-400 ml-0.5">({t.badge})</span>
+                <span className="text-subtle ml-0.5">({t.badge})</span>
               )}
             </button>
           )
@@ -56,7 +56,7 @@ export function BottomPanel({ tabs, activeTab, onSelectTab, onClose, headerRight
             <button
               type="button"
               onClick={onClose}
-              className="px-3 py-1.5 text-stone-500 hover:text-stone-900 dark:hover:text-neutral-100"
+              className="px-3 py-1.5 text-muted hover:text-default"
               title="Hide bottom panel (Ctrl+`)"
               aria-label="Hide bottom panel"
             >

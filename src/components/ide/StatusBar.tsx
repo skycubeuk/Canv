@@ -22,18 +22,6 @@ function basenameOrNull(p: string | null): string {
 export function StatusBar(props: Props) {
   const { saveState, profile, workspaceName, kind, wordCount, selectionWordCount, onClickProfile, apiKeyMissing, onClickApiKeyWarning } = props
 
-  const saveContent: string = saveState === 'saved'
-    ? '● Saved'
-    : saveState === 'saving'
-      ? '● Saving…'
-      : '⚠ Conflict'
-  const saveColor =
-    saveState === 'saved'
-      ? 'text-stone-300'
-      : saveState === 'saving'
-      ? 'text-amber-300'
-      : 'text-red-300'
-
   const wordsLabel = selectionWordCount != null
     ? `selection: ${selectionWordCount.toLocaleString()} words`
     : `${wordCount.toLocaleString()} words`
@@ -42,7 +30,7 @@ export function StatusBar(props: Props) {
     <div
       role="status"
       aria-label="Status bar"
-      className="shrink-0 h-6 flex items-center gap-3 px-3 text-[11px] bg-stone-800 text-stone-200 dark:bg-neutral-950 dark:text-neutral-400 border-t border-stone-900 dark:border-neutral-800"
+      className="shrink-0 h-[26px] flex items-center gap-3 px-3 text-[11px] bg-panel text-muted border-t border-default"
     >
       {apiKeyMissing && (
         <button
@@ -55,13 +43,30 @@ export function StatusBar(props: Props) {
         </button>
       )}
 
-      <span className={saveColor}>{saveContent}</span>
+      {saveState === 'saved' ? (
+        <span className="flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#10b981]" aria-hidden />
+          <span>Saved</span>
+        </span>
+      ) : saveState === 'saving' ? (
+        <span className="flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-400" aria-hidden />
+          <span>Saving…</span>
+        </span>
+      ) : (
+        <span className="flex items-center gap-1.5 text-red-300">
+          <span className="w-1.5 h-1.5 rounded-full bg-red-400" aria-hidden />
+          <span>Conflict</span>
+        </span>
+      )}
+
+      <span aria-hidden className="w-px h-3 bg-[color:var(--border-default)]" />
 
       <button
         type="button"
         data-testid="profile-switcher"
         onClick={onClickProfile}
-        className="hover:text-white transition-colors"
+        className="text-muted hover:text-default transition-colors"
         title="Click to change profile"
       >
         {profile.label}
@@ -70,7 +75,7 @@ export function StatusBar(props: Props) {
       {workspaceName && (
         kind?.kind === 'remote' ? (
           <span className="flex items-center gap-1 truncate max-w-[260px]" title={kind.display}>
-            <span className="px-1.5 py-px text-[9px] uppercase tracking-wider rounded bg-amber-200 text-amber-900 dark:bg-amber-700 dark:text-amber-100">remote</span>
+            <span className="px-1.5 py-px text-[9px] uppercase tracking-wider rounded bg-amber-700 text-amber-100">remote</span>
             <span className="truncate">{kind.display}</span>
           </span>
         ) : (

@@ -88,7 +88,7 @@ export function SettingsTab(props: Props) {
                 {keyVisible ? 'Hide' : 'Show'}
               </button>
             </div>
-            <p className="text-xs text-stone-500 mt-1">
+            <p className="text-xs text-muted mt-1">
               Stored in browser localStorage. Calls go directly from your browser to {adapter?.name}.
             </p>
           </Field>
@@ -129,7 +129,7 @@ export function SettingsTab(props: Props) {
               <option value={100}>Slower (100ms)</option>
               <option value={200}>Slowest (200ms)</option>
             </select>
-            <p className="text-xs text-stone-500 mt-1">
+            <p className="text-xs text-muted mt-1">
               Pace streaming output for reading along. Off by default.
             </p>
           </Field>
@@ -151,7 +151,7 @@ export function SettingsTab(props: Props) {
               }
               className="w-full"
             />
-            <p className="text-xs text-stone-500 mt-1">
+            <p className="text-xs text-muted mt-1">
               Bigger selections need a bigger budget. If responses get cut off, raise this.
             </p>
           </Field>
@@ -168,7 +168,7 @@ export function SettingsTab(props: Props) {
               }}
               className="input w-24"
             />
-            <p className="text-xs text-stone-500 mt-1">
+            <p className="text-xs text-muted mt-1">
               How many tool rounds the model may take per chat message before being asked to finalise. Default 10.
             </p>
           </Field>
@@ -181,7 +181,7 @@ export function SettingsTab(props: Props) {
       keywords: ['mode', 'action', 'config', 'yaml', 'edit', 'prompt', 'profile'],
       body: (
         <>
-          <p className="text-sm text-stone-600 dark:text-neutral-400 mb-2">
+          <p className="text-sm text-muted mb-2">
             Edit, add, or remove modes by editing the YAML files in your config folder.
             Restart Canv after editing.
           </p>
@@ -221,7 +221,7 @@ export function SettingsTab(props: Props) {
                       type="button"
                       onClick={() => setOpenModes((prev) => ({ ...prev, [mode.id]: !open }))}
                       aria-expanded={open}
-                      className="w-full flex items-center gap-1 text-sm font-medium mb-2 hover:text-stone-900 dark:hover:text-neutral-100"
+                      className="w-full flex items-center gap-1 text-sm font-medium mb-2 hover:text-default"
                     >
                       {open ? <ChevronDown aria-hidden className="w-3 h-3" /> : <ChevronRight aria-hidden className="w-3 h-3" />}
                       <mode.icon aria-hidden className="w-3.5 h-3.5" />
@@ -268,7 +268,7 @@ export function SettingsTab(props: Props) {
       keywords: ['cost', 'pricing', 'price', 'tokens', 'model', 'override'],
       body: (
         <>
-          <p className="text-xs text-stone-500 dark:text-neutral-400 mb-2">
+          <p className="text-xs text-muted mb-2">
             USD per 1M tokens. Edit to override the default for a model. Reset removes the override.
           </p>
           <div className="space-y-1.5">
@@ -298,7 +298,7 @@ export function SettingsTab(props: Props) {
                     onChange={(e) => setField('input', Number(e.target.value))}
                     aria-label={`${m} input price per 1M`}
                   />
-                  <span className="text-stone-400">in</span>
+                  <span className="text-subtle">in</span>
                   <input
                     type="number"
                     step="0.01"
@@ -308,7 +308,7 @@ export function SettingsTab(props: Props) {
                     onChange={(e) => setField('output', Number(e.target.value))}
                     aria-label={`${m} output price per 1M`}
                   />
-                  <span className="text-stone-400">out</span>
+                  <span className="text-subtle">out</span>
                   {isOverride ? (
                     <button type="button" className="btn-ghost text-xs" onClick={reset} aria-label={`reset ${m} pricing`}>reset</button>
                   ) : (
@@ -336,8 +336,8 @@ export function SettingsTab(props: Props) {
                   onClick={() => onUpdate({ lineWidth: w })}
                   className={`flex-1 px-3 py-1.5 text-sm rounded-md ${
                     settings.lineWidth === w
-                      ? 'bg-stone-900 text-white dark:bg-neutral-100 dark:text-neutral-900'
-                      : 'bg-stone-100 dark:bg-neutral-800 hover:bg-stone-200 dark:hover:bg-neutral-700'
+                      ? 'bg-[color:var(--text-default)] text-[color:var(--bg-app)]'
+                      : 'bg-active hover:bg-hover'
                   }`}
                 >
                   {w}
@@ -373,7 +373,7 @@ export function SettingsTab(props: Props) {
               onChange={handleImportFile}
             />
           </div>
-          <p className="text-xs text-stone-500 mt-2">
+          <p className="text-xs text-muted mt-2">
             Saves all settings, document, history and chat to a JSON file. Includes API keys — keep the file secure.
           </p>
         </>
@@ -385,7 +385,7 @@ export function SettingsTab(props: Props) {
       keywords: ['problems', 'lint', 'broken', 'links', 'front', 'matter', 'heading', 'image'],
       body: (
         <>
-          <p className="text-xs text-stone-500 dark:text-neutral-400 mb-3">
+          <p className="text-xs text-muted mb-3">
             Toggle which structural lint rules run over open files and the workspace.
           </p>
           {([
@@ -419,8 +419,8 @@ export function SettingsTab(props: Props) {
   }, [sections, filter])
 
   return (
-    <div className="h-full flex flex-col bg-white dark:bg-neutral-900 overflow-hidden">
-      <header className="shrink-0 px-6 pt-5 pb-3 border-b border-stone-200 dark:border-neutral-800">
+    <div className="h-full flex flex-col bg-panel overflow-hidden">
+      <header className="shrink-0 px-6 pt-5 pb-3 border-b border-default">
         <h1 className="text-base font-semibold mb-3">Settings</h1>
         <input
           type="search"
@@ -438,7 +438,7 @@ export function SettingsTab(props: Props) {
           />
         </section>
         {filtered.length === 0 ? (
-          <p className="text-sm text-stone-500 dark:text-neutral-400">No settings match "{filter}".</p>
+          <p className="text-sm text-muted">No settings match "{filter}".</p>
         ) : (
           filtered.map((s) => (
             <Section key={s.id} id={s.id} title={s.title}>
@@ -454,7 +454,7 @@ export function SettingsTab(props: Props) {
 function Section({ id, title, children }: { id: string; title: string; children: ReactNode }) {
   return (
     <section className="panel-section" data-testid={`settings-section-${id}`}>
-      <h3 className="text-xs uppercase tracking-wide text-stone-500 dark:text-neutral-400 mb-3">{title}</h3>
+      <h3 className="text-xs uppercase tracking-wide text-muted mb-3">{title}</h3>
       {children}
     </section>
   )

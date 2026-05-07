@@ -92,7 +92,7 @@ export function FileTree(props: Props) {
 
   if (!root) {
     return (
-      <aside className="h-full flex flex-col items-center justify-center text-center px-4 text-sm text-stone-500 dark:text-neutral-400 bg-stone-100 dark:bg-neutral-900 border-r border-stone-200 dark:border-neutral-800">
+      <aside className="h-full flex flex-col items-center justify-center text-center px-4 text-sm text-muted bg-panel border-r border-default">
         <p className="mb-3">No workspace open.</p>
         <button type="button" className="btn-primary" onClick={onChangeWorkspace}>
           Choose folder
@@ -103,7 +103,7 @@ export function FileTree(props: Props) {
 
   if (!tree) {
     return (
-      <aside className="h-full p-4 text-sm text-stone-500 dark:text-neutral-400 bg-stone-100 dark:bg-neutral-900 border-r border-stone-200 dark:border-neutral-800">
+      <aside className="h-full p-4 text-sm text-muted bg-panel border-r border-default">
         Loading…
       </aside>
     )
@@ -149,14 +149,14 @@ export function FileTree(props: Props) {
       return (
         <div key={entry.relPath || '__root__'}>
           <div
-            className="flex items-center gap-1 px-1 py-0.5 text-sm cursor-pointer rounded hover:bg-stone-200/70 dark:hover:bg-neutral-800/70 text-stone-700 dark:text-neutral-300"
+            className="flex items-center gap-1 px-1 py-0.5 text-sm cursor-pointer rounded hover:bg-hover text-default"
             style={{ paddingLeft: indent }}
             onClick={() => toggle(entry.relPath)}
             onContextMenu={(e) => handleContextMenu(e, entry)}
           >
             {isOpen
-              ? <ChevronDown aria-hidden className="w-3 h-3 text-stone-500" />
-              : <ChevronRight aria-hidden className="w-3 h-3 text-stone-500" />}
+              ? <ChevronDown aria-hidden className="w-3 h-3 text-muted" />
+              : <ChevronRight aria-hidden className="w-3 h-3 text-muted" />}
             <Folder aria-hidden className="w-4 h-4" />
             <span className="truncate flex-1">{entry.name || basename(root)}</span>
           </div>
@@ -177,10 +177,10 @@ export function FileTree(props: Props) {
         key={file.relPath}
         className={`group flex items-center gap-1 pr-1 py-0.5 text-sm cursor-pointer rounded ${
           active
-            ? 'bg-stone-200 dark:bg-neutral-800 text-stone-900 dark:text-neutral-100 border-l-2 border-stone-700 dark:border-neutral-300'
+            ? 'bg-active text-default border-l-2 border-strong'
             : open
-              ? 'bg-stone-100 dark:bg-neutral-800/50 text-stone-700 dark:text-neutral-200 hover:bg-stone-200/80 dark:hover:bg-neutral-800/80'
-              : 'text-stone-600 dark:text-neutral-400 hover:bg-stone-200/60 dark:hover:bg-neutral-800/60'
+              ? 'bg-panel text-default hover:bg-hover'
+              : 'text-muted hover:bg-hover'
         }`}
         style={{ paddingLeft: indent + (active ? 0 : 2) }}
         onClick={() => !isRenaming && onOpen(file.relPath)}
@@ -207,7 +207,7 @@ export function FileTree(props: Props) {
         )}
         {!isRenaming && isPinned && (
           <span
-            className="ml-auto inline-flex items-center gap-0.5 px-1 text-xs text-amber-600 dark:text-amber-400 select-none"
+            className="ml-auto inline-flex items-center gap-0.5 px-1 text-xs text-amber-400 select-none"
             title="Pinned — right-click to unpin"
             aria-label={`${file.name} pinned to context`}
           >
@@ -219,8 +219,8 @@ export function FileTree(props: Props) {
   }
 
   return (
-    <aside className="h-full flex flex-col bg-stone-100 dark:bg-neutral-900 border-r border-stone-200 dark:border-neutral-800 overflow-hidden">
-      <div className="shrink-0 px-3 py-2 flex items-center gap-2 border-b border-stone-200 dark:border-neutral-800">
+    <aside className="h-full flex flex-col bg-panel border-r border-default overflow-hidden">
+      <div className="shrink-0 px-3 py-2 flex items-center gap-2 border-b border-default">
         <span className="text-xs uppercase tracking-wide opacity-60 truncate flex-1" title={root}>
           {basename(root) || root}
         </span>
@@ -236,19 +236,19 @@ export function FileTree(props: Props) {
       </div>
       <div className="flex-1 overflow-y-auto py-1">
         {tree.children.length === 0 ? (
-          <div className="px-4 py-3 text-xs text-stone-500 dark:text-neutral-400">
+          <div className="px-4 py-3 text-xs text-muted">
             Empty folder. Use the New file button above to create your first file.
           </div>
         ) : (
           tree.children.map((c) => renderEntry(c, 0))
         )}
         {truncated && (
-          <div className="px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+          <div className="px-3 py-2 text-xs text-amber-400">
             Folder truncated — too many files to display.
           </div>
         )}
         {totalNodes > 1000 && (
-          <div className="px-3 py-2 text-xs text-stone-500 dark:text-neutral-400">
+          <div className="px-3 py-2 text-xs text-muted">
             {totalNodes} entries — large workspaces may feel sluggish.
           </div>
         )}
@@ -301,7 +301,7 @@ function ContextMenu(props: {
       ref={ref}
       tabIndex={-1}
       style={{ left: props.x, top: props.y }}
-      className="fixed z-40 min-w-[180px] bg-white dark:bg-neutral-900 border border-stone-200 dark:border-neutral-800 rounded-md shadow-lg py-1 text-sm"
+      className="fixed z-40 min-w-[180px] bg-elev border border-default rounded-md shadow-lg py-1 text-sm"
       onClick={(e) => e.stopPropagation()}
       onContextMenu={(e) => e.preventDefault()}
     >
@@ -316,7 +316,7 @@ function ContextMenu(props: {
         const someoneElseServed = serveStatus.running && !isThisServed
         return (
           <>
-            <div className="my-1 border-t border-stone-200 dark:border-neutral-800" />
+            <div className="my-1 border-t border-default" />
             <MenuItem
               onClick={() => {
                 const onClose = props.onClose
@@ -345,7 +345,7 @@ function ContextMenu(props: {
           </>
         )
       })()}
-      {isMd && <div className="my-1 border-t border-stone-200 dark:border-neutral-800" />}
+      {isMd && <div className="my-1 border-t border-default" />}
       {isMd && !props.isPinned && (
         <MenuItem onClick={() => { props.onPin(props.target.relPath); props.onClose() }}>
           Pin to context
@@ -356,7 +356,7 @@ function ContextMenu(props: {
           Unpin from context
         </MenuItem>
       )}
-      {props.target.relPath && <div className="my-1 border-t border-stone-200 dark:border-neutral-800" />}
+      {props.target.relPath && <div className="my-1 border-t border-default" />}
       {props.target.relPath && (
         <MenuItem onClick={() => { props.onRename(props.target.relPath); props.onClose() }}>
           Rename
@@ -380,7 +380,7 @@ function ContextMenu(props: {
             })()
           }}
         >
-          <span className="text-red-600 dark:text-red-400">Delete</span>
+          <span className="text-red-400">Delete</span>
         </MenuItem>
       )}
       {props.target.relPath && (
@@ -402,7 +402,7 @@ function MenuItem({ onClick, children }: { onClick: () => void; children: React.
     <button
       type="button"
       onClick={onClick}
-      className="block w-full text-left px-3 py-1.5 hover:bg-stone-100 dark:hover:bg-neutral-800"
+      className="block w-full text-left px-3 py-1.5 hover:bg-hover"
     >
       {children}
     </button>

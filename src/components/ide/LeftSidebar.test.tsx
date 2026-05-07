@@ -38,9 +38,7 @@ function baseProps() {
     git: <div data-testid="git-tab">GIT</div>,
     settings: SETTINGS,
     onUpdateSettings: vi.fn(),
-    chatOpen: false,
-    onToggleChat: vi.fn(),
-    onOpenSettings: vi.fn(),
+    workspaceName: 'test-workspace',
     outlineSize: 40,
     onOutlineSizeChange: vi.fn(),
   }

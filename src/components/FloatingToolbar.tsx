@@ -156,7 +156,7 @@ export function FloatingToolbar(props: Props) {
       ref={ref}
       data-testid="floating-toolbar"
       style={{ top: pos.top, left: pos.left, transform: 'translateX(-50%)' }}
-      className="fixed z-40 bg-white dark:bg-neutral-900 border border-stone-300 dark:border-neutral-700 rounded-lg shadow-lg p-1"
+      className="fixed z-40 bg-elev border border-default rounded-lg shadow-lg p-1"
       onMouseDown={(e) => e.preventDefault()}
     >
       {mode.kind === 'instruction' ? (
@@ -195,20 +195,20 @@ export function FloatingToolbar(props: Props) {
               <agent.icon aria-hidden className="w-4 h-4" />
             </button>
           ))}
-          {presets.length > 0 && <div className="w-px h-5 bg-stone-200 dark:bg-neutral-700 mx-1" />}
+          {presets.length > 0 && <div className="w-px h-5 bg-[color:var(--border-default)] mx-1" />}
           {presets.length > 0 && <div className="relative">
             <button
               type="button"
               title="Quick presets"
               onClick={() => setMode((m) => (m.kind === 'presets' ? { kind: 'idle' } : { kind: 'presets' }))}
-              className={`btn-icon ${mode.kind === 'presets' ? 'bg-stone-200 dark:bg-neutral-800' : ''}`}
+              className={`btn-icon ${mode.kind === 'presets' ? 'bg-active' : ''}`}
             >
               <Zap aria-hidden className="w-4 h-4" />
             </button>
             {mode.kind === 'presets' && (
               <div
                 ref={presetsRef}
-                className={`absolute left-1/2 -translate-x-1/2 bg-white dark:bg-neutral-900 border border-stone-200 dark:border-neutral-800 rounded-lg shadow-lg p-1 min-w-[200px] z-10 ${
+                className={`absolute left-1/2 -translate-x-1/2 bg-elev border border-default rounded-lg shadow-lg p-1 min-w-[200px] z-10 ${
                   presetsAbove ? 'bottom-full mb-1' : 'top-full mt-1'
                 }`}
               >
@@ -217,7 +217,7 @@ export function FloatingToolbar(props: Props) {
                     key={agent.id}
                     type="button"
                     onClick={() => handleClick(agent)}
-                    className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-stone-100 dark:hover:bg-neutral-800 text-left"
+                    className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-hover text-default text-left"
                   >
                     <agent.icon aria-hidden className="w-4 h-4" />
                     <span>{agent.label}</span>

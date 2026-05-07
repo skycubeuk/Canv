@@ -76,8 +76,8 @@ export function SearchTab({ onJumpToMatch }: Props) {
   const regexInvalid = ui.regex && ui.query.length > 0 && !isValidRegex(ui.query)
 
   return (
-    <div className="h-full flex flex-col bg-stone-100 dark:bg-neutral-900">
-      <div className="shrink-0 px-3 py-2 space-y-2 border-b border-stone-200 dark:border-neutral-800">
+    <div className="h-full flex flex-col bg-panel">
+      <div className="shrink-0 px-3 py-2 space-y-2 border-b border-default">
         <div className="flex items-stretch gap-1">
           <input
             type="search"
@@ -92,14 +92,14 @@ export function SearchTab({ onJumpToMatch }: Props) {
             aria-pressed={ui.regex}
             onClick={() => setUi((s) => ({ ...s, regex: !s.regex }))}
             title="Use regular expression"
-            className={`btn-icon px-2 text-xs ${ui.regex ? 'bg-stone-300 dark:bg-neutral-700 text-stone-900 dark:text-neutral-100' : ''}`}
+            className={`btn-icon px-2 text-xs ${ui.regex ? 'bg-active text-default' : ''}`}
           >.*</button>
           <button
             type="button"
             aria-pressed={ui.caseSensitive}
             onClick={() => setUi((s) => ({ ...s, caseSensitive: !s.caseSensitive }))}
             title="Match case"
-            className={`btn-icon px-2 text-xs ${ui.caseSensitive ? 'bg-stone-300 dark:bg-neutral-700 text-stone-900 dark:text-neutral-100' : ''}`}
+            className={`btn-icon px-2 text-xs ${ui.caseSensitive ? 'bg-active text-default' : ''}`}
           >Aa</button>
         </div>
         <input
@@ -111,36 +111,36 @@ export function SearchTab({ onJumpToMatch }: Props) {
           aria-label="Folder scope"
         />
         {regexInvalid && (
-          <p className="text-xs text-red-600 dark:text-red-400">Invalid regular expression.</p>
+          <p className="text-xs text-red-400">Invalid regular expression.</p>
         )}
       </div>
 
       <div className="flex-1 overflow-y-auto py-1 text-xs">
         {!ui.query && (
-          <p className="px-3 py-3 text-stone-500 dark:text-neutral-400">Type to search markdown files.</p>
+          <p className="px-3 py-3 text-muted">Type to search markdown files.</p>
         )}
         {ui.query && busy && (
-          <p className="px-3 py-3 text-stone-500 dark:text-neutral-400">Searching…</p>
+          <p className="px-3 py-3 text-muted">Searching…</p>
         )}
         {ui.query && !busy && result && result.matches.length === 0 && (
-          <p className="px-3 py-3 text-stone-500 dark:text-neutral-400">No matches.</p>
+          <p className="px-3 py-3 text-muted">No matches.</p>
         )}
         {result && result.matches.length > 0 && (
           <ul role="list">
             {grouped.map(([rel, matches]) => (
               <li key={rel}>
-                <div className="px-3 py-1 sticky top-0 bg-stone-100 dark:bg-neutral-900 text-[11px] font-medium text-stone-600 dark:text-neutral-300 border-b border-stone-200 dark:border-neutral-800 truncate">
-                  {rel} <span className="text-stone-400">({matches.length})</span>
+                <div className="px-3 py-1 sticky top-0 bg-panel text-[11px] font-medium text-default border-b border-default truncate">
+                  {rel} <span className="text-subtle">({matches.length})</span>
                 </div>
                 {matches.map((m, i) => (
                   <button
                     key={`${rel}:${m.line}:${m.col}:${i}`}
                     type="button"
                     onClick={() => onJumpToMatch(m, { query: ui.query, regex: ui.regex, caseSensitive: ui.caseSensitive }, i)}
-                    className="block w-full text-left px-3 py-1 hover:bg-stone-200/60 dark:hover:bg-neutral-800/60"
+                    className="block w-full text-left px-3 py-1 hover:bg-hover"
                     title={`Line ${m.line + 1}, column ${m.col + 1}`}
                   >
-                    <span className="text-stone-400 mr-2">{m.line + 1}:{m.col + 1}</span>
+                    <span className="text-subtle mr-2">{m.line + 1}:{m.col + 1}</span>
                     <Snippet match={m} />
                   </button>
                 ))}
@@ -149,7 +149,7 @@ export function SearchTab({ onJumpToMatch }: Props) {
           </ul>
         )}
         {result?.truncated && (
-          <p className="px-3 py-2 text-amber-700 dark:text-amber-400">
+          <p className="px-3 py-2 text-amber-400">
             Showing the first 1,000 matches. Narrow your search to see more.
           </p>
         )}
@@ -171,7 +171,7 @@ function Snippet({ match }: { match: SearchMatch }) {
   const after = match.snippet.slice(idx + match.matchLen)
   return (
     <span className="font-mono">
-      {before}<span className="font-bold text-stone-900 dark:text-neutral-100 bg-amber-200 dark:bg-amber-800/60">{hit}</span>{after}
+      {before}<span className="font-bold text-default bg-amber-800/60">{hit}</span>{after}
     </span>
   )
 }

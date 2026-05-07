@@ -15,7 +15,7 @@ export function OutputTab({ runs }: Props) {
 
   if (runs.length === 0) {
     return (
-      <div className="h-full flex items-center justify-center text-sm text-stone-500 dark:text-neutral-400 px-6 text-center bg-stone-100 dark:bg-neutral-900">
+      <div className="h-full flex items-center justify-center text-sm text-muted px-6 text-center bg-panel">
         Run an agent from the floating toolbar or document toolbar to inspect its raw I/O here.
       </div>
     )
@@ -23,9 +23,9 @@ export function OutputTab({ runs }: Props) {
   if (!active) return null
 
   return (
-    <div className="h-full flex flex-col bg-stone-50 dark:bg-neutral-950 text-xs overflow-hidden">
+    <div className="h-full flex flex-col bg-app text-xs overflow-hidden">
       {/* Toolbar */}
-      <div className="shrink-0 flex items-center gap-2 px-3 py-1.5 border-b border-stone-200 dark:border-neutral-800 bg-stone-100 dark:bg-neutral-900">
+      <div className="shrink-0 flex items-center gap-2 px-3 py-1.5 border-b border-default bg-panel">
         <select
           className="input text-xs"
           value={active.id}
@@ -54,7 +54,7 @@ export function OutputTab({ runs }: Props) {
           <Section title={`Raw messages (${active.rawMessages.length})`}>
             {active.rawMessages.map((m, i) => (
               <div key={i} className="mb-2">
-                <div className="text-[10px] uppercase tracking-wide text-stone-500 dark:text-neutral-500">
+                <div className="text-[10px] uppercase tracking-wide text-muted">
                   {m.role}
                 </div>
                 <pre className="whitespace-pre-wrap break-words">{'content' in m ? m.content : ''}</pre>
@@ -62,10 +62,10 @@ export function OutputTab({ runs }: Props) {
             ))}
           </Section>
         )}
-        <Section title="Response">{active.response || <em className="text-stone-400">(empty)</em>}</Section>
+        <Section title="Response">{active.response || <em className="text-subtle">(empty)</em>}</Section>
         {active.error && (
           <Section title="Error">
-            <span className="text-red-600 dark:text-red-400">{active.error}</span>
+            <span className="text-red-400">{active.error}</span>
           </Section>
         )}
       </div>
@@ -75,7 +75,7 @@ export function OutputTab({ runs }: Props) {
 
 function Meta({ run }: { run: RunRecord }) {
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1 text-[11px] text-stone-600 dark:text-neutral-400">
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1 text-[11px] text-muted">
       <Cell label="Status" value={run.status} />
       <Cell label="Provider" value={run.provider} />
       <Cell label="Model" value={run.model} />
@@ -91,8 +91,8 @@ function Meta({ run }: { run: RunRecord }) {
 function Cell({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col">
-      <span className="text-[10px] uppercase tracking-wide text-stone-500 dark:text-neutral-500">{label}</span>
-      <span className="font-medium text-stone-700 dark:text-neutral-200">{value}</span>
+      <span className="text-[10px] uppercase tracking-wide text-muted">{label}</span>
+      <span className="font-medium text-default">{value}</span>
     </div>
   )
 }
@@ -100,8 +100,8 @@ function Cell({ label, value }: { label: string; value: string }) {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section>
-      <h3 className="text-[11px] font-semibold uppercase tracking-wide text-stone-500 dark:text-neutral-500 mb-1">{title}</h3>
-      <div className="pl-2 border-l border-stone-200 dark:border-neutral-800 text-stone-700 dark:text-neutral-300 whitespace-pre-wrap break-words">
+      <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted mb-1">{title}</h3>
+      <div className="pl-2 border-l border-default text-default whitespace-pre-wrap break-words">
         {children}
       </div>
     </section>
@@ -122,7 +122,7 @@ function CopyButton({ label, text }: { label: string; text: () => string }) {
           // clipboard unavailable
         }
       }}
-      className="px-2 py-0.5 rounded border border-stone-300 dark:border-neutral-700 text-stone-600 dark:text-neutral-400 hover:bg-stone-200 dark:hover:bg-neutral-800"
+      className="px-2 py-0.5 rounded border border-default text-muted hover:bg-hover"
       title={label}
     >
       {copied ? 'Copied' : label}

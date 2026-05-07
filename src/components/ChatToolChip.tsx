@@ -31,10 +31,10 @@ export function ChatToolChip({ name, inputPath, status, summary, result }: ChatT
       : `${icon} ${inputPath ?? name}`
   const tone =
     status === 'cancelled'
-      ? 'border-stone-300 bg-stone-50 text-stone-500 opacity-60 line-through dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-500'
+      ? 'border-default bg-panel text-muted opacity-60 line-through'
       : status === 'error'
-        ? 'border-red-300 bg-red-50 text-red-800 dark:border-red-700/60 dark:bg-red-950/40 dark:text-red-200'
-        : 'border-stone-200 bg-stone-50 text-stone-700 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300'
+        ? 'border-red-700/60 bg-red-950/40 text-red-200'
+        : 'border-default bg-panel text-default'
   return (
     <div data-testid="chip-root" className={`my-1 inline-block max-w-full rounded-md border px-2 py-1 text-xs ${tone}`}>
       <button
@@ -46,7 +46,7 @@ export function ChatToolChip({ name, inputPath, status, summary, result }: ChatT
         <span>{headline}</span>
       </button>
       {open && (result ?? '').length > 0 && (
-        <pre data-testid="chip-result-body" className="mt-1 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-white/40 p-2 text-[11px] dark:bg-black/30">
+        <pre data-testid="chip-result-body" className="mt-1 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-panel/40 p-2 text-[11px]">
           {result}
         </pre>
       )}

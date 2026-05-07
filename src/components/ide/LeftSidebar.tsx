@@ -21,9 +21,7 @@ interface Props {
   git?: ReactNode
   settings: Settings
   onUpdateSettings: (patch: Partial<Settings>) => void
-  chatOpen: boolean
-  onToggleChat: () => void
-  onOpenSettings: () => void
+  workspaceName: string | null
   outline?: ReactNode | null
   outlineSize: number
   onOutlineSizeChange: (size: number) => void
@@ -31,7 +29,7 @@ interface Props {
 
 function ComingSoon({ label }: { label: string }) {
   return (
-    <div className="h-full flex items-center justify-center text-center px-6 text-sm text-stone-500 dark:text-neutral-400 bg-stone-100 dark:bg-neutral-900">
+    <div className="h-full flex items-center justify-center text-center px-6 text-sm text-muted bg-panel">
       <p>{label} arrives in a later milestone.</p>
     </div>
   )
@@ -40,7 +38,7 @@ function ComingSoon({ label }: { label: string }) {
 export function LeftSidebar(props: Props) {
   const {
     activeTab, onSelectTab, files, search, git, settings, onUpdateSettings,
-    chatOpen, onToggleChat, onOpenSettings,
+    workspaceName,
     outline, outlineSize, onOutlineSizeChange,
   } = props
   const tabs: SidebarTabDef[] = [
@@ -58,9 +56,9 @@ export function LeftSidebar(props: Props) {
     <aside
       role="complementary"
       aria-label="Sidebar"
-      className="h-full flex flex-col bg-stone-100 dark:bg-neutral-900 border-r border-stone-200 dark:border-neutral-800"
+      className="h-full flex flex-col bg-panel border-r border-default"
     >
-      <header className="shrink-0 flex border-b border-stone-200 dark:border-neutral-800 text-xs">
+      <header className="shrink-0 flex border-b border-default text-xs">
         {tabs.map((t) => {
           const isActive = t.id === active.id
           return (
@@ -70,8 +68,8 @@ export function LeftSidebar(props: Props) {
               onClick={() => onSelectTab(t.id)}
               className={`flex-1 px-2 py-2 flex items-center justify-center gap-1.5 border-b-2 ${
                 isActive
-                  ? 'border-stone-700 dark:border-neutral-200 text-stone-900 dark:text-neutral-100 bg-white dark:bg-neutral-950'
-                  : 'border-transparent text-stone-600 dark:text-neutral-400 hover:bg-stone-200/60 dark:hover:bg-neutral-800/60'
+                  ? 'border-border-strong text-default bg-active'
+                  : 'border-transparent text-muted hover:bg-hover'
               }`}
             >
               <t.icon aria-hidden className="w-4 h-4" />
@@ -95,7 +93,7 @@ export function LeftSidebar(props: Props) {
             <Panel id="sidebarFiles" minSize="20%" className="min-h-0">
               {active.body}
             </Panel>
-            <Separator className="h-px bg-stone-200 dark:bg-neutral-800 hover:bg-stone-400 transition-colors cursor-row-resize" />
+            <Separator className="h-px bg-[color:var(--border-default)] hover:bg-border-strong transition-colors cursor-row-resize" />
             <Panel id="sidebarOutline" minSize="15%" maxSize="80%" className="min-h-0">
               {outline}
             </Panel>
@@ -107,9 +105,7 @@ export function LeftSidebar(props: Props) {
       <SidebarFooter
         settings={settings}
         onUpdateSettings={onUpdateSettings}
-        chatOpen={chatOpen}
-        onToggleChat={onToggleChat}
-        onOpenSettings={onOpenSettings}
+        workspaceName={workspaceName}
       />
     </aside>
   )

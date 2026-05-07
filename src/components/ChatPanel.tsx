@@ -131,8 +131,8 @@ export function ChatPanel({ messages, busy, provider, model, onSend, onClear, on
 
   return (
     <div className="h-full flex flex-col min-h-0">
-      <div className="px-4 py-2 border-b border-stone-200 dark:border-neutral-800 flex items-center justify-between">
-        <div className="text-xs text-stone-500 dark:text-neutral-400">
+      <div className="px-4 py-2 border-b border-default flex items-center justify-between">
+        <div className="text-xs text-muted">
           {provider} · {model} · the document is shared with this chat
         </div>
         <div className="flex items-center gap-1">
@@ -161,7 +161,7 @@ export function ChatPanel({ messages, busy, provider, model, onSend, onClear, on
 
       <div ref={scrollRef} data-testid="chat-message-list" className="relative flex-1 overflow-y-auto px-4 py-4 space-y-3">
         {messages.length === 0 && (
-          <div className="text-sm text-stone-500 dark:text-neutral-400 text-center py-8">
+          <div className="text-sm text-muted text-center py-8">
             Ask anything about the document.<br />
             Try: <em>"Summarise this in one sentence"</em> or <em>"What's missing from the argument?"</em>
           </div>
@@ -178,7 +178,7 @@ export function ChatPanel({ messages, busy, provider, model, onSend, onClear, on
           <button
             type="button"
             onClick={jumpToLatest}
-            className="sticky bottom-2 left-1/2 -translate-x-1/2 z-10 inline-flex items-center gap-1 rounded-full border border-stone-300 bg-stone-100/95 px-3 py-1 text-[11px] text-stone-700 shadow dark:border-neutral-600 dark:bg-neutral-800/95 dark:text-neutral-200"
+            className="sticky bottom-2 left-1/2 -translate-x-1/2 z-10 inline-flex items-center gap-1 rounded-full border border-default bg-elev/95 px-3 py-1 text-[11px] text-default shadow"
             aria-label="Jump to latest message"
           >
             ↓ jump to latest
@@ -193,7 +193,7 @@ export function ChatPanel({ messages, busy, provider, model, onSend, onClear, on
         busy={busy}
       />
 
-      <div className="border-t border-stone-200 dark:border-neutral-800 p-3">
+      <div className="border-t border-default p-3">
         <div className="flex items-end gap-2">
           <AutoGrowTextarea
             ref={inputRef}
@@ -226,7 +226,7 @@ export function ChatPanel({ messages, busy, provider, model, onSend, onClear, on
             </button>
           )}
         </div>
-        <p className="text-xs text-stone-400 mt-1.5">Enter to send · Shift+Enter for newline</p>
+        <p className="text-xs text-subtle mt-1.5">Enter to send · Shift+Enter for newline</p>
       </div>
     </div>
   )
@@ -262,8 +262,8 @@ export function Bubble({
         onContextMenu={onContextMenu}
         className={`max-w-[85%] px-3 py-2 rounded-lg text-sm whitespace-pre-wrap leading-relaxed ${
           isUser
-            ? 'bg-stone-900 text-white dark:bg-neutral-100 dark:text-neutral-900'
-            : 'bg-stone-100 dark:bg-neutral-800 text-stone-900 dark:text-neutral-100'
+            ? 'bg-[color:var(--text-default)] text-[color:var(--bg-app)]'
+            : 'bg-elev text-default'
         }`}
       >
         {message.content && <span>{message.content}</span>}
@@ -313,7 +313,7 @@ export function Bubble({
         )}
         {!message.content && !message.toolCalls && !isUser && <span className="streaming-cursor"> </span>}
         {message.role === 'assistant' && message.stopReason === 'cancelled' && (
-          <div className="mt-2 inline-flex items-center gap-1 rounded-full border border-stone-300 bg-stone-100 px-2 py-0.5 text-[10px] uppercase tracking-wide text-stone-600 dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
+          <div className="mt-2 inline-flex items-center gap-1 rounded-full border border-default bg-elev px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted">
             Stopped
           </div>
         )}

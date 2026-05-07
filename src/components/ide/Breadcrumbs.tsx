@@ -19,10 +19,10 @@ export function Breadcrumbs({ workspaceName, relPath, diffEntry, onClickFolder }
     return (
       <nav
         aria-label="Breadcrumbs"
-        className="shrink-0 px-3 py-1 text-[11px] text-stone-500 dark:text-neutral-500 border-b border-stone-200 dark:border-neutral-800 flex items-center gap-1 truncate"
+        className="shrink-0 px-3 py-1 text-[11px] text-muted border-b border-default flex items-center gap-1 truncate"
       >
         <GitBranch aria-hidden className="w-3 h-3" />
-        <span className="text-stone-700 dark:text-neutral-300">
+        <span className="text-default">
           Diff: {diffEntry.relPath} ({diffEntry.baseRef})
         </span>
       </nav>
@@ -45,7 +45,7 @@ export function Breadcrumbs({ workspaceName, relPath, diffEntry, onClickFolder }
   return (
     <nav
       aria-label="Breadcrumbs"
-      className="shrink-0 px-3 py-1 text-[11px] text-stone-500 dark:text-neutral-500 border-b border-stone-200 dark:border-neutral-800 flex items-center gap-1 truncate"
+      className="shrink-0 px-3 py-1 text-[11px] text-muted border-b border-default flex items-center gap-1 truncate"
     >
       <span className="opacity-70">{wsLabel}</span>
       {folders.map((f) => (
@@ -53,7 +53,7 @@ export function Breadcrumbs({ workspaceName, relPath, diffEntry, onClickFolder }
           <span aria-hidden>›</span>
           <button
             type="button"
-            className="hover:text-stone-800 dark:hover:text-neutral-300"
+            className="hover:text-default"
             onClick={() => onClickFolder?.(f.rel)}
           >
             {f.name}
@@ -61,7 +61,7 @@ export function Breadcrumbs({ workspaceName, relPath, diffEntry, onClickFolder }
         </span>
       ))}
       <span aria-hidden>›</span>
-      <span className="text-stone-700 dark:text-neutral-300 truncate">{file}</span>
+      <span className="text-default truncate">{file}</span>
     </nav>
   )
 }

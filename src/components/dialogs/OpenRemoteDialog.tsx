@@ -30,26 +30,26 @@ export default function OpenRemoteDialog({ open, recent, onConnect, onClose }: O
 
   return (
     <div role="dialog" aria-label="Open Remote Workspace" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white dark:bg-neutral-900 rounded-lg shadow-xl w-[480px] p-6">
+      <div className="bg-elev rounded-lg shadow-xl w-[480px] p-6">
         <h2 className="text-lg font-semibold mb-3">Open Remote Workspace</h2>
         <input
           autoFocus
           value={value}
           onChange={(e) => setValue(e.target.value)}
           placeholder="user@host:/path/to/workspace"
-          className="w-full border rounded px-3 py-2 mb-3 bg-white dark:bg-neutral-800 dark:border-neutral-700"
+          className="w-full border border-default rounded px-3 py-2 mb-3 bg-elev"
           onKeyDown={(e) => { if (e.key === 'Enter') submit() }}
         />
         {error && <div className="text-sm text-red-600 mb-3">{error}</div>}
         {recent.length > 0 && (
           <div className="mb-3">
-            <div className="text-xs uppercase tracking-wide text-neutral-500 mb-1">Recent</div>
+            <div className="text-xs uppercase tracking-wide text-muted mb-1">Recent</div>
             <ul className="space-y-1">
               {recent.map((r) => (
                 <li key={r.raw}>
                   <button
                     type="button"
-                    className="text-left w-full px-2 py-1 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded"
+                    className="text-left w-full px-2 py-1 hover:bg-hover rounded"
                     onClick={() => setValue(r.raw)}
                   >
                     {r.raw}

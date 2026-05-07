@@ -24,7 +24,7 @@ export function RunsTab(props: Props) {
 
   if (runs.length === 0) {
     return (
-      <div className="h-full flex items-center justify-center text-sm text-stone-500 dark:text-neutral-400 px-6 text-center">
+      <div className="h-full flex items-center justify-center text-sm text-muted px-6 text-center">
         Trigger an agent from the floating toolbar or document toolbar to see results here.
       </div>
     )
@@ -34,7 +34,7 @@ export function RunsTab(props: Props) {
 
   return (
     <div className="h-full flex min-h-0">
-      <div className="w-56 shrink-0 border-r border-stone-200 dark:border-neutral-800 overflow-y-auto py-1">
+      <div className="w-56 shrink-0 border-r border-default overflow-y-auto py-1">
         {runs.map((r) => {
           const isActive = r.id === active.id
           const mode = getModeById(modes, r.modeId) ?? getModeById(modes, defaultModeId)!
@@ -45,8 +45,8 @@ export function RunsTab(props: Props) {
               key={r.id}
               className={`group flex items-center gap-1.5 px-3 py-1.5 cursor-pointer text-xs ${
                 isActive
-                  ? 'bg-stone-100 dark:bg-neutral-800 text-stone-900 dark:text-neutral-100'
-                  : 'text-stone-600 dark:text-neutral-400 hover:bg-stone-100/60 dark:hover:bg-neutral-800/60'
+                  ? 'bg-active text-default'
+                  : 'text-muted hover:bg-hover'
               }`}
               onClick={() => onSelect(r.id)}
             >
@@ -55,12 +55,12 @@ export function RunsTab(props: Props) {
               {r.tokenUsage && (() => {
                 const c = cost(r.tokenUsage, r.model, pricingOverrides, pricingDefaults)
                 return c == null ? null : (
-                  <span className="text-stone-400 dark:text-neutral-500 font-mono text-[10px] ml-1">
+                  <span className="text-subtle font-mono text-[10px] ml-1">
                     ${c.toFixed(3)}
                   </span>
                 )
               })()}
-              <span className="text-stone-400 ml-auto whitespace-nowrap">{timeAgo(r.timestamp)}</span>
+              <span className="text-subtle ml-auto whitespace-nowrap">{timeAgo(r.timestamp)}</span>
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); onClose(r.id) }}

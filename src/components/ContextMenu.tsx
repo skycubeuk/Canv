@@ -50,13 +50,13 @@ export function ContextMenu({ x, y, items, onClose }: Props) {
       role="menu"
       tabIndex={-1}
       style={{ left: pos.left, top: pos.top }}
-      className="fixed z-50 min-w-[180px] bg-white dark:bg-neutral-900 border border-stone-200 dark:border-neutral-800 rounded-md shadow-lg py-1 text-sm"
+      className="fixed z-50 min-w-[180px] bg-elev border border-default rounded-md shadow-lg py-1 text-sm"
       onClick={(e) => e.stopPropagation()}
       onContextMenu={(e) => e.preventDefault()}
     >
       {items.map((item, i) => {
         if ('separator' in item) {
-          return <hr key={`sep-${i}`} className="my-1 border-t border-stone-200 dark:border-neutral-800" />
+          return <hr key={`sep-${i}`} className="my-1 border-t border-default" />
         }
         const disabled = !!item.disabled
         return (
@@ -74,7 +74,7 @@ export function ContextMenu({ x, y, items, onClose }: Props) {
             className={`w-full text-left px-3 py-1.5 ${
               disabled
                 ? 'opacity-40 cursor-default'
-                : 'hover:bg-stone-100 dark:hover:bg-neutral-800'
+                : 'hover:bg-hover'
             }`}
           >
             {item.label}

@@ -29,11 +29,11 @@ export function OutlinePanel(props: OutlinePanelProps) {
   }
 
   return (
-    <div className="h-full flex flex-col bg-stone-100 dark:bg-neutral-900">
+    <div className="h-full flex flex-col bg-panel">
       <button
         type="button"
         onClick={onToggleSectionCollapsed}
-        className="shrink-0 flex items-center gap-1 px-2 py-1.5 text-xs font-semibold uppercase tracking-wide text-stone-600 dark:text-neutral-400 hover:bg-stone-200/60 dark:hover:bg-neutral-800/60 border-b border-stone-200 dark:border-neutral-800"
+        className="shrink-0 flex items-center gap-1 px-3 py-2 text-[10.5px] font-semibold tracking-wider uppercase text-subtle hover:bg-hover border-b border-default"
         aria-expanded={!collapsed}
       >
         {collapsed ? (
@@ -79,7 +79,7 @@ function OutlineNodeRow({ node, collapsedIds, onToggle, onJump }: RowProps) {
   return (
     <div role="treeitem" aria-level={node.level} aria-expanded={hasChildren ? !isCollapsed : undefined}>
       <div
-        className="flex items-center text-xs hover:bg-stone-200/60 dark:hover:bg-neutral-800/60"
+        className="flex items-center text-xs hover:bg-hover"
         style={{ paddingLeft: indent + 4 }}
       >
         {hasChildren ? (
@@ -87,7 +87,7 @@ function OutlineNodeRow({ node, collapsedIds, onToggle, onJump }: RowProps) {
             type="button"
             onClick={() => onToggle(node.id)}
             aria-label={`Toggle ${node.text}`}
-            className="shrink-0 p-0.5 text-stone-500 dark:text-neutral-500"
+            className="shrink-0 p-0.5 text-subtle"
           >
             {isCollapsed ? (
               <ChevronRight aria-hidden className="w-3 h-3" />
@@ -102,7 +102,7 @@ function OutlineNodeRow({ node, collapsedIds, onToggle, onJump }: RowProps) {
           type="button"
           onClick={() => onJump(node.line)}
           title={node.text}
-          className="flex-1 min-w-0 text-left px-1 py-0.5 truncate text-stone-800 dark:text-neutral-200"
+          className="flex-1 min-w-0 text-left px-1 py-0.5 truncate text-muted hover:text-default"
         >
           {node.text}
         </button>

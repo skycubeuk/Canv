@@ -113,29 +113,29 @@ export function MigrationModal({ onComplete }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/40 dark:bg-black/60 p-4">
-      <div className="max-w-lg w-full bg-white dark:bg-neutral-900 rounded-lg shadow-xl p-6 space-y-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="max-w-lg w-full bg-elev rounded-lg shadow-xl p-6 space-y-4">
         <div className="space-y-1">
           <h2 className="text-lg font-semibold">Welcome to Canv 0.2</h2>
-          <p className="text-sm text-stone-600 dark:text-neutral-400">
+          <p className="text-sm text-muted">
             Canv now stores your writing on your computer. Pick a folder to use as your workspace.
             Your existing document and uploaded context files will be replaced — export a backup first.
           </p>
         </div>
         {!electron && (
-          <div className="rounded-md bg-amber-50 dark:bg-amber-950/40 text-amber-900 dark:text-amber-200 px-3 py-2 text-sm">
+          <div className="rounded-md bg-amber-950/40 text-amber-200 px-3 py-2 text-sm">
             File workspaces need the desktop app. Use the button below to export your existing data so
             you can restore it later.
           </div>
         )}
         {error && (
-          <div className="rounded-md bg-red-50 dark:bg-red-950/40 text-red-800 dark:text-red-200 px-3 py-2 text-sm">
+          <div className="rounded-md bg-red-950/40 text-red-200 px-3 py-2 text-sm">
             {error}
           </div>
         )}
         <ol className="space-y-3 text-sm">
           <li className="flex items-start gap-3">
-            <span className={`mt-0.5 inline-flex items-center justify-center w-5 h-5 rounded-full text-xs ${exported ? 'bg-emerald-500 text-white' : 'bg-stone-200 dark:bg-neutral-800'}`}>1</span>
+            <span className={`mt-0.5 inline-flex items-center justify-center w-5 h-5 rounded-full text-xs ${exported ? 'bg-emerald-500 text-white' : 'bg-active'}`}>1</span>
             <div className="flex-1">
               <button
                 type="button"
@@ -149,13 +149,13 @@ export function MigrationModal({ onComplete }: Props) {
                   </span>
                 ) : 'Export backup (.json)'}
               </button>
-              <p className="text-xs text-stone-500 dark:text-neutral-400 mt-1">
+              <p className="text-xs text-muted mt-1">
                 Saves all current Canv data as a JSON file you can keep.
               </p>
             </div>
           </li>
           <li className="flex items-start gap-3">
-            <span className={`mt-0.5 inline-flex items-center justify-center w-5 h-5 rounded-full text-xs ${exported ? 'bg-stone-200 dark:bg-neutral-800' : 'bg-stone-100 dark:bg-neutral-800/60 text-stone-400'}`}>2</span>
+            <span className={`mt-0.5 inline-flex items-center justify-center w-5 h-5 rounded-full text-xs ${exported ? 'bg-active' : 'bg-panel text-subtle'}`}>2</span>
             <div className="flex-1">
               <button
                 type="button"
@@ -165,7 +165,7 @@ export function MigrationModal({ onComplete }: Props) {
               >
                 {busy ? 'Setting up workspace…' : 'Choose workspace folder'}
               </button>
-              <p className="text-xs text-stone-500 dark:text-neutral-400 mt-1">
+              <p className="text-xs text-muted mt-1">
                 Canv will create a Welcome.md and (if your document had content) a copy of your existing doc.
                 Then it clears the old single-document storage.
               </p>

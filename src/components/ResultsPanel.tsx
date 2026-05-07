@@ -94,8 +94,8 @@ export function ResultsPanel(props: Props) {
   const activeRun = !chatActive ? runs.find((r) => r.id === activeId) ?? runs[0] : undefined
 
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-neutral-900 border-l border-stone-200 dark:border-neutral-800">
-      <div className="flex items-center gap-1 overflow-x-auto border-b border-stone-200 dark:border-neutral-800 px-2 py-1.5">
+    <div className="flex flex-col h-full bg-panel border-l border-default">
+      <div className="flex items-center gap-1 overflow-x-auto border-b border-default px-2 py-1.5">
         {chat.enabled && (
           <button
             key={CHAT_TAB_ID}
@@ -103,14 +103,14 @@ export function ResultsPanel(props: Props) {
             onClick={() => onSelect(CHAT_TAB_ID)}
             className={`group flex items-center gap-1.5 px-2.5 py-1 rounded text-xs whitespace-nowrap transition-colors ${
               chatActive
-                ? 'bg-stone-200 dark:bg-neutral-800 text-stone-900 dark:text-neutral-100'
-                : 'hover:bg-stone-100 dark:hover:bg-neutral-800/50 text-stone-600 dark:text-neutral-400'
+                ? 'bg-active text-default'
+                : 'hover:bg-hover text-muted'
             }`}
           >
             <MessageSquare aria-hidden className="w-4 h-4" />
             <span className="font-medium">Chat</span>
             {chat.messages.length > 0 && (
-              <span className="text-stone-400">· {chat.messages.length}</span>
+              <span className="text-subtle">· {chat.messages.length}</span>
             )}
             <span
               role="button"
@@ -137,13 +137,13 @@ export function ResultsPanel(props: Props) {
               onClick={() => onSelect(r.id)}
               className={`group flex items-center gap-1.5 px-2.5 py-1 rounded text-xs whitespace-nowrap transition-colors ${
                 r.id === activeRun?.id
-                  ? 'bg-stone-200 dark:bg-neutral-800 text-stone-900 dark:text-neutral-100'
-                  : 'hover:bg-stone-100 dark:hover:bg-neutral-800/50 text-stone-600 dark:text-neutral-400'
+                  ? 'bg-active text-default'
+                  : 'hover:bg-hover text-muted'
               }`}
             >
               <RunIcon aria-hidden className="w-4 h-4" />
               <span className="font-medium">{r.agentLabel}</span>
-              <span className="text-stone-400">· {timeAgo(r.timestamp)}</span>
+              <span className="text-subtle">· {timeAgo(r.timestamp)}</span>
               <span
                 role="button"
                 tabIndex={0}
@@ -249,12 +249,12 @@ export function RunView({
   return (
     <div className="h-full flex flex-col overflow-hidden">
       <div ref={responseRef} onContextMenu={onResponseContextMenu} className="flex-1 overflow-y-auto">
-      <div className="px-4 py-3 border-b border-stone-200 dark:border-neutral-800 flex items-center justify-between">
-        <div className="text-xs text-stone-500 dark:text-neutral-400 flex items-center gap-2">
+      <div className="px-4 py-3 border-b border-default flex items-center justify-between">
+        <div className="text-xs text-muted flex items-center gap-2">
           <StatusPill status={run.status} />
           <span>{run.provider} · {run.model}</span>
           {refineCount > 0 && (
-            <span className="text-stone-400">· refined {refineCount}×</span>
+            <span className="text-subtle">· refined {refineCount}×</span>
           )}
         </div>
         <div className="flex items-center gap-1">
@@ -274,11 +274,11 @@ export function RunView({
       </div>
 
       {run.sourceText && (
-        <div className="border-b border-stone-200 dark:border-neutral-800">
+        <div className="border-b border-default">
           <button
             type="button"
             onClick={() => setSourceOpen((v) => !v)}
-            className="w-full px-4 py-2 text-left text-xs text-stone-500 dark:text-neutral-400 hover:bg-stone-50 dark:hover:bg-neutral-800/50"
+            className="w-full px-4 py-2 text-left text-xs text-muted hover:bg-hover"
           >
             <span className="inline-flex items-center gap-1">
               {sourceOpen ? <ChevronDown aria-hidden className="w-3 h-3" /> : <ChevronRight aria-hidden className="w-3 h-3" />}
@@ -286,7 +286,7 @@ export function RunView({
             </span>
           </button>
           {sourceOpen && (
-            <div className="px-4 pb-3 text-sm text-stone-600 dark:text-neutral-400 whitespace-pre-wrap font-serif">
+            <div className="px-4 pb-3 text-sm text-muted whitespace-pre-wrap font-serif">
               {run.sourceText}
             </div>
           )}
@@ -294,19 +294,19 @@ export function RunView({
       )}
 
       {run.status === 'error' && (
-        <div className="px-4 py-3 m-3 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded text-sm text-red-700 dark:text-red-300">
+        <div className="px-4 py-3 m-3 bg-red-950/30 border border-red-900 rounded text-sm text-red-300">
           {run.error || 'Something went wrong.'}
         </div>
       )}
 
       {run.status === 'aborted' && (
-        <div className="px-4 py-3 m-3 bg-stone-100 dark:bg-neutral-800/60 border border-stone-300 dark:border-neutral-700 rounded text-sm text-stone-600 dark:text-neutral-400">
+        <div className="px-4 py-3 m-3 bg-elev border border-default rounded text-sm text-muted">
           Stopped. The partial output above is what was streamed before you cancelled.
         </div>
       )}
 
       {run.truncated && run.status !== 'error' && !busy && (
-        <div className="px-4 py-3 m-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900 rounded text-sm text-amber-800 dark:text-amber-200">
+        <div className="px-4 py-3 m-3 bg-amber-950/30 border border-amber-900 rounded text-sm text-amber-200">
           <strong>Response was cut short.</strong> The model hit the output token
           limit before finishing. Raise <em>Max output tokens</em> in settings, or
           split the selection into smaller chunks. The result below is incomplete —
@@ -384,7 +384,7 @@ export function RunView({
                 <Bubble message={{ id: `${run.id}-followup-${i}-user`, role: 'user', content: f.user }} />
                 <Bubble message={{ id: `${run.id}-followup-${i}-assistant`, role: 'assistant', content: f.assistant }} />
                 {(f.tokenUsage || f.elapsedMs != null) && (
-                  <div className="text-[10px] text-stone-400 dark:text-neutral-500 pl-1">
+                  <div className="text-[10px] text-subtle pl-1">
                     {f.tokenUsage && (
                       <span>{f.tokenUsage.input ?? '?'}+{f.tokenUsage.output ?? '?'} tok</span>
                     )}
@@ -400,7 +400,7 @@ export function RunView({
       </div>
 
       {canRefine && run.status !== 'error' && (
-        <div className="border-t border-stone-200 dark:border-neutral-800 px-3 py-2 bg-stone-50 dark:bg-neutral-900/60">
+        <div className="border-t border-default px-3 py-2 bg-panel/60">
           <div className="flex items-end gap-2">
             <AutoGrowTextarea
               ref={refineRef}
@@ -417,7 +417,7 @@ export function RunView({
               disabled={busy}
               minRows={2}
               maxRows={6}
-              className="flex-1 resize-none px-3 py-2 text-sm rounded-md border border-stone-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 focus:outline-none focus:ring-2 focus:ring-stone-400 dark:focus:ring-neutral-600 disabled:opacity-50"
+              className="flex-1 resize-none px-3 py-2 text-sm rounded-md border border-default bg-elev focus:outline-none focus:ring-2 focus:ring-accent disabled:opacity-50"
             />
             <button
               type="button"
@@ -437,8 +437,8 @@ export function RunView({
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="px-4 py-3 border-b border-stone-200 dark:border-neutral-800">
-      <h3 className="text-xs uppercase tracking-wide text-stone-500 dark:text-neutral-400 mb-2">{title}</h3>
+    <div className="px-4 py-3 border-b border-default">
+      <h3 className="text-xs uppercase tracking-wide text-muted mb-2">{title}</h3>
       {children}
     </div>
   )
@@ -448,21 +448,21 @@ function DiffView({ original, updated }: { original: string; updated: string }) 
   const parts = useMemo(() => computeDiff(original, updated), [original, updated])
   return (
     <details className="mt-3">
-      <summary className="text-xs text-stone-500 dark:text-neutral-400 cursor-pointer hover:text-stone-700 dark:hover:text-neutral-300">
+      <summary className="text-xs text-muted cursor-pointer hover:text-default">
         Show diff
       </summary>
-      <div className="mt-2 p-3 bg-stone-50 dark:bg-neutral-800/40 rounded text-sm font-serif whitespace-pre-wrap leading-relaxed">
+      <div className="mt-2 p-3 bg-panel rounded text-sm font-serif whitespace-pre-wrap leading-relaxed">
         {parts.map((p, i) => {
           if (p.added) {
             return (
-              <span key={i} className="bg-green-100 dark:bg-green-900/40 text-green-900 dark:text-green-200">
+              <span key={i} className="bg-green-900/40 text-green-200">
                 {p.value}
               </span>
             )
           }
           if (p.removed) {
             return (
-              <span key={i} className="bg-red-100 dark:bg-red-900/40 text-red-900 dark:text-red-200 line-through">
+              <span key={i} className="bg-red-900/40 text-red-200 line-through">
                 {p.value}
               </span>
             )
@@ -475,11 +475,11 @@ function DiffView({ original, updated }: { original: string; updated: string }) 
 }
 
 const STATUS_PILL: Record<RunRecord['status'], { label: string; className: string }> = {
-  streaming: { label: 'Streaming', className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' },
-  refining:  { label: 'Refining',  className: 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300' },
-  done:      { label: 'Done',      className: 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' },
-  error:     { label: 'Error',     className: 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' },
-  aborted:   { label: 'Stopped',   className: 'bg-stone-200 text-stone-700 dark:bg-neutral-700 dark:text-neutral-300' },
+  streaming: { label: 'Streaming', className: 'bg-blue-900/40 text-blue-300' },
+  refining:  { label: 'Refining',  className: 'bg-purple-900/40 text-purple-300' },
+  done:      { label: 'Done',      className: 'bg-green-900/40 text-green-300' },
+  error:     { label: 'Error',     className: 'bg-red-900/40 text-red-300' },
+  aborted:   { label: 'Stopped',   className: 'bg-active text-default' },
 }
 
 export function StatusPill({ status }: { status: RunRecord['status'] }) {

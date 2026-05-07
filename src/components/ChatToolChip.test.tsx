@@ -24,14 +24,14 @@ describe('ChatToolChip', () => {
   it('renders error expanded by default with red styling', () => {
     render(<ChatToolChip name="read_file" inputPath="big.md" status="error" result="file too large" />)
     expect(screen.getByTestId('chip-result-body').textContent).toContain('file too large')
-    expect(screen.getByTestId('chip-root')).toHaveClass('border-red-300')
+    expect(screen.getByTestId('chip-root')).toHaveClass('border-red-700/60')
   })
 
   it('renders muted treatment when status is "cancelled"', () => {
     render(<ChatToolChip name="read_file" inputPath="a.md" status="cancelled" result="Cancelled by user" />)
     const root = screen.getByTestId('chip-root')
     expect(root.className).toMatch(/opacity-60|line-through/)
-    expect(root.className).not.toMatch(/border-red-300/)
+    expect(root.className).not.toMatch(/border-red-700/)
     expect(screen.getByText(/a\.md/)).toBeInTheDocument()
   })
 })

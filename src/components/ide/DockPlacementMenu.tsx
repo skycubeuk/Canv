@@ -35,8 +35,8 @@ export function DockPlacementMenu({ placement, canPopOut, onChange }: Props) {
             onClick={() => onChange(value)}
             className={`px-1.5 py-1 rounded ${
               isActive
-                ? 'text-stone-900 dark:text-neutral-100 bg-stone-200/70 dark:bg-neutral-700/70'
-                : 'text-stone-500 dark:text-neutral-400 hover:bg-stone-100 dark:hover:bg-neutral-800'
+                ? 'text-default bg-active'
+                : 'text-muted hover:bg-hover'
             }`}
           >
             <Icon aria-hidden className="w-3.5 h-3.5" />

@@ -11,13 +11,13 @@ export function EditorViewModeToggle({ mode, onChange }: Props) {
     onChange(next)
   }
   const cls = (id: ViewMode) =>
-    `px-3 text-xs border-r border-stone-200 dark:border-neutral-800 ${
+    `px-3 text-xs border-r border-default ${
       mode === id
-        ? 'bg-white dark:bg-neutral-950 text-stone-900 dark:text-neutral-100'
-        : 'text-stone-600 dark:text-neutral-400 hover:bg-stone-200/60 dark:hover:bg-neutral-800/60'
+        ? 'bg-app text-default'
+        : 'text-muted hover:bg-hover'
     }`
   return (
-    <div className="shrink-0 flex items-stretch border-l border-stone-200 dark:border-neutral-800">
+    <div className="shrink-0 flex items-stretch border-l border-default">
       <button
         type="button"
         aria-pressed={mode === 'edit'}

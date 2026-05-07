@@ -145,19 +145,19 @@ function PromptDialog({
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onCancel()
       }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/40 dark:bg-black/60 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
     >
       <div
         role="dialog"
         aria-label={opts.title}
-        className="w-full max-w-md rounded-lg border border-stone-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-lg p-4"
+        className="w-full max-w-md rounded-lg border border-default bg-elev shadow-lg p-4"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <h2 className="text-sm font-medium text-stone-900 dark:text-neutral-100 mb-2">
+        <h2 className="text-sm font-medium text-default mb-2">
           {opts.title}
         </h2>
         {opts.message && (
-          <p className="text-xs text-stone-600 dark:text-neutral-400 mb-3">{opts.message}</p>
+          <p className="text-xs text-muted mb-3">{opts.message}</p>
         )}
         <input
           ref={inputRef}
@@ -171,10 +171,10 @@ function PromptDialog({
             }
           }}
           placeholder={opts.placeholder}
-          className="w-full px-3 py-2 text-sm rounded-md border border-stone-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 text-stone-900 dark:text-neutral-100 focus:outline-none focus:ring-2 focus:ring-stone-400 dark:focus:ring-neutral-600"
+          className="w-full px-3 py-2 text-sm rounded-md border border-default bg-elev text-default focus:outline-none focus:ring-2 focus:ring-accent"
         />
         {error && (
-          <p className="mt-2 text-xs text-red-600 dark:text-red-400">{error}</p>
+          <p className="mt-2 text-xs text-red-400">{error}</p>
         )}
         <div className="mt-4 flex items-center justify-end gap-2">
           <button type="button" className="btn-secondary text-sm" onClick={onCancel}>
@@ -230,20 +230,20 @@ function ConfirmDialog({
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onCancel()
       }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/40 dark:bg-black/60 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
     >
       <div
         role="dialog"
         aria-label={opts.title ?? 'Confirm'}
-        className="w-full max-w-md rounded-lg border border-stone-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-lg p-4"
+        className="w-full max-w-md rounded-lg border border-default bg-elev shadow-lg p-4"
         onMouseDown={(e) => e.stopPropagation()}
       >
         {opts.title && (
-          <h2 className="text-sm font-medium text-stone-900 dark:text-neutral-100 mb-2">
+          <h2 className="text-sm font-medium text-default mb-2">
             {opts.title}
           </h2>
         )}
-        <p className="text-sm text-stone-700 dark:text-neutral-300">{opts.message}</p>
+        <p className="text-sm text-default">{opts.message}</p>
         <div className="mt-4 flex items-center justify-end gap-2">
           <button type="button" className="btn-secondary text-sm" onClick={onCancel}>
             {opts.cancelLabel ?? 'Cancel'}

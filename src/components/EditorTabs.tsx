@@ -105,8 +105,8 @@ export function EditorTabs({
       onDragOver={handleStripDragOver}
       onDragLeave={handleStripDragLeave}
       onDrop={handleStripDrop}
-      className={`shrink-0 flex items-stretch justify-between border-b border-stone-200 dark:border-neutral-800 bg-stone-100 dark:bg-neutral-900 ${
-        dragOver ? 'outline outline-2 outline-stone-400 dark:outline-neutral-500' : ''
+      className={`shrink-0 flex items-stretch justify-between border-b border-default bg-panel ${
+        dragOver ? 'outline outline-2 outline-[color:var(--border-strong)]' : ''
       } ${tabs.length === 0 ? 'h-7' : ''}`}
     >
       <div className="flex items-stretch overflow-x-auto whitespace-nowrap min-w-0">
@@ -135,17 +135,17 @@ export function EditorTabs({
                 }
               }}
               title={tabTitle(t)}
-              className={`group flex items-center gap-1.5 px-3 py-1.5 text-xs cursor-pointer border-r border-stone-200 dark:border-neutral-800 select-none ${
+              className={`group flex items-center gap-1.5 px-3 py-1.5 text-xs cursor-pointer border-r border-default select-none ${
                 active
-                  ? 'bg-white dark:bg-neutral-950 text-stone-900 dark:text-neutral-100'
-                  : 'text-stone-600 dark:text-neutral-400 hover:bg-stone-200/60 dark:hover:bg-neutral-800/60'
+                  ? 'bg-app text-default'
+                  : 'text-muted hover:bg-hover'
               }`}
             >
               <span className="flex items-center gap-1 max-w-[180px] truncate">{tabLabel(t)}</span>
               {dirty && (
                 <span
                   aria-hidden
-                  className="w-1.5 h-1.5 rounded-full bg-stone-500 dark:bg-neutral-400"
+                  className="w-1.5 h-1.5 rounded-full bg-[color:var(--text-muted)]"
                   title="Unsaved"
                 />
               )}
@@ -156,7 +156,7 @@ export function EditorTabs({
                   e.stopPropagation()
                   void requestClose(key, dirty)
                 }}
-                className="ml-1 w-4 h-4 inline-flex items-center justify-center rounded text-stone-400 hover:text-stone-700 hover:bg-stone-200 dark:hover:text-neutral-100 dark:hover:bg-neutral-700"
+                className="ml-1 w-4 h-4 inline-flex items-center justify-center rounded text-subtle hover:text-default hover:bg-hover"
               >
                 <X aria-hidden className="w-3 h-3" />
               </button>

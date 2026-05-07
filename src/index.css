@@ -48,11 +48,9 @@
     height: 100%;
   }
   body {
-    @apply bg-stone-50 text-stone-900 antialiased;
+    @apply bg-app text-default antialiased;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  }
-  .dark body {
-    @apply bg-neutral-900 text-neutral-200;
+    font-feature-settings: 'cv11', 'ss01', 'ss03';
   }
 }
 
@@ -61,30 +59,28 @@
     @apply inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md transition-colors;
   }
   .btn-primary {
-    @apply btn bg-stone-900 text-white hover:bg-stone-800 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-neutral-200;
+    @apply btn bg-accent text-accent-fg hover:opacity-90;
   }
   .btn-secondary {
-    @apply btn bg-stone-200 text-stone-900 hover:bg-stone-300 dark:bg-neutral-800 dark:text-neutral-100 dark:hover:bg-neutral-700;
+    @apply btn bg-elev text-default hover:bg-hover border border-default;
   }
   .btn-ghost {
-    @apply btn hover:bg-stone-200 dark:hover:bg-neutral-800;
+    @apply btn text-muted hover:bg-hover;
   }
   .btn-icon {
-    @apply inline-flex items-center justify-center w-8 h-8 rounded-md hover:bg-stone-200 dark:hover:bg-neutral-800 transition-colors;
+    @apply inline-flex items-center justify-center w-8 h-8 rounded-md text-muted hover:bg-hover hover:text-default transition-colors;
   }
-
   .input {
-    @apply w-full px-3 py-2 text-sm rounded-md border border-stone-300 dark:border-neutral-700 bg-white dark:bg-neutral-900 focus:outline-none focus:ring-2 focus:ring-stone-400 dark:focus:ring-neutral-600;
+    @apply w-full px-3 py-2 text-sm rounded-md border border-default bg-elev text-default focus:outline-none focus:ring-2 focus:ring-accent-soft;
   }
-
   .panel-section {
-    @apply px-4 py-3 border-b border-stone-200 dark:border-neutral-800;
+    @apply px-4 py-3 border-b border-default;
   }
 }
 
 .streaming-cursor::after {
   content: '▋';
-  @apply text-stone-400 ml-0.5 animate-pulse;
+  @apply text-subtle ml-0.5 animate-pulse;
 }
 
 /* Force a visible selection on rendered markdown. Without this the browser

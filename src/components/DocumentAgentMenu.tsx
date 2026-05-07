@@ -105,7 +105,7 @@ export function DocumentAgentMenu({ profile, hasMarkdownTab, onRunAgent }: Props
         title={triggerDisabled ? 'Open a document to run agents' : 'Run on document'}
         aria-haspopup="menu"
         aria-expanded={state.kind !== 'closed'}
-        className="inline-flex items-center gap-1 px-3 text-xs text-stone-600 dark:text-neutral-300 hover:bg-stone-200/60 dark:hover:bg-neutral-800/60 disabled:opacity-50 disabled:cursor-not-allowed border-l border-stone-200 dark:border-neutral-800"
+        className="inline-flex items-center gap-1 px-3 text-xs text-muted hover:bg-hover disabled:opacity-50 disabled:cursor-not-allowed border-l border-default"
       >
         <Play aria-hidden className="w-3 h-3" />
         <span className="hidden sm:inline">Run on document</span>
@@ -117,7 +117,7 @@ export function DocumentAgentMenu({ profile, hasMarkdownTab, onRunAgent }: Props
           role="menu"
           data-testid="document-agent-menu"
           tabIndex={-1}
-          className="absolute right-0 top-full mt-1 z-30 min-w-[220px] rounded-md border border-stone-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-md py-1"
+          className="absolute right-0 top-full mt-1 z-30 min-w-[220px] rounded-md border border-default bg-elev shadow-md py-1"
         >
           {documentAgents.map((agent) => (
             <button
@@ -125,7 +125,7 @@ export function DocumentAgentMenu({ profile, hasMarkdownTab, onRunAgent }: Props
               role="menuitem"
               type="button"
               onClick={() => handleAgentClick(agent)}
-              className="w-full text-left flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-stone-100 dark:hover:bg-neutral-800"
+              className="w-full text-left flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-hover"
             >
               <agent.icon aria-hidden className="w-4 h-4" />
               <span>{agent.label}</span>
@@ -138,12 +138,12 @@ export function DocumentAgentMenu({ profile, hasMarkdownTab, onRunAgent }: Props
         <div
           role="menu"
           tabIndex={-1}
-          className="absolute right-0 top-full mt-1 z-30 min-w-[260px] rounded-md border border-stone-200 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-md p-2 flex items-center gap-2"
+          className="absolute right-0 top-full mt-1 z-30 min-w-[260px] rounded-md border border-default bg-elev shadow-md p-2 flex items-center gap-2"
         >
           <button
             type="button"
             onClick={() => { setState({ kind: 'list' }); setInstructionText('') }}
-            className="text-xs text-stone-500 hover:text-stone-900 dark:hover:text-neutral-100"
+            className="text-xs text-muted hover:text-default"
             aria-label="Back to agent list"
           >
             <ArrowLeft aria-hidden className="w-3 h-3" />

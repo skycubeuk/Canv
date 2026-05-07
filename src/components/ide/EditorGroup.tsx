@@ -62,7 +62,7 @@ export function EditorGroup(props: Props) {
 
   return (
     <div
-      className={`h-full flex flex-col min-w-0 bg-stone-50 dark:bg-neutral-950 ${
+      className={`h-full flex flex-col min-w-0 bg-app ${
         isActive ? '' : 'opacity-95'
       }`}
       onMouseDown={() => { if (!isActive) onFocusGroup() }}

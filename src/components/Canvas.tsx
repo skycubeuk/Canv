@@ -128,9 +128,10 @@ export function Canvas({
             style={{ display: viewMode === 'edit' ? 'block' : 'none' }}
           />
           {viewMode === 'preview' && (
+            // TODO(0.7.1): light-theme prose colours — currently always renders prose-invert; light-theme preview will look off.
             <div
               ref={previewRef}
-              className="prose prose-stone dark:prose-invert max-w-none"
+              className="prose prose-invert max-w-none"
               onContextMenu={(e) => {
                 const root = previewRef.current
                 if (!root) return

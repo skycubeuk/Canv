@@ -30,7 +30,7 @@ export function ChatTodoCard({ resultJson }: ChatTodoCardProps) {
   if (parsed === 'empty') return null
   if (parsed === 'malformed') {
     return (
-      <div className="my-1 rounded-md border border-stone-200 bg-stone-50 px-2 py-1 text-xs text-stone-500 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-400">
+      <div className="my-1 rounded-md border border-default bg-panel px-2 py-1 text-xs text-muted">
         Could not render todo list
       </div>
     )
@@ -38,9 +38,9 @@ export function ChatTodoCard({ resultJson }: ChatTodoCardProps) {
   return (
     <div
       data-testid="todo-card"
-      className="my-1 rounded-md border border-stone-200 bg-stone-50 px-2 py-1 text-xs text-stone-700 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300"
+      className="my-1 rounded-md border border-default bg-panel px-2 py-1 text-xs text-default"
     >
-      <div className="mb-1 font-mono text-[11px] uppercase tracking-wide text-stone-500 dark:text-neutral-400">Plan</div>
+      <div className="mb-1 font-mono text-[11px] uppercase tracking-wide text-muted">Plan</div>
       <ul className="flex flex-col gap-0.5">
         {parsed.todos.map((todo, i) => (
           <Item key={i} todo={todo} index={i} />
@@ -69,7 +69,7 @@ function Item({ todo, index }: { todo: TodoItem; index: number }) {
     return (
       <li
         data-testid={`todo-item-${index}`}
-        className="flex items-center gap-1.5 line-through text-stone-400 dark:text-neutral-500"
+        className="flex items-center gap-1.5 line-through text-subtle"
       >
         <span aria-hidden>☑</span>
         <span>{todo.content}</span>
@@ -80,7 +80,7 @@ function Item({ todo, index }: { todo: TodoItem; index: number }) {
   return (
     <li
       data-testid={`todo-item-${index}`}
-      className="flex items-center gap-1.5 text-stone-500 dark:text-neutral-400"
+      className="flex items-center gap-1.5 text-muted"
     >
       <span aria-hidden>☐</span>
       <span>{todo.content}</span>

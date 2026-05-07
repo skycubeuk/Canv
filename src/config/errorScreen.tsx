@@ -23,13 +23,13 @@ export function ErrorScreen({ errors, configDir, onReveal }: Props) {
   })
 
   return (
-    <div className="min-h-screen bg-stone-50 dark:bg-stone-900 text-stone-900 dark:text-stone-100 p-8 overflow-auto">
+    <div className="min-h-screen bg-app text-default p-8 overflow-auto">
       <div className="max-w-3xl mx-auto">
         <header className="flex items-start gap-3 mb-6">
           <AlertTriangle className="w-7 h-7 text-amber-600 flex-shrink-0 mt-1" />
           <div>
             <h1 className="text-xl font-semibold">Canv could not start</h1>
-            <p className="text-sm text-stone-600 dark:text-stone-400 mt-1">
+            <p className="text-sm text-muted mt-1">
               Fix the config files listed below and relaunch the app.
             </p>
           </div>
@@ -37,14 +37,14 @@ export function ErrorScreen({ errors, configDir, onReveal }: Props) {
 
         {fileGroups.map(([file, errs]) => (
           <section key={file || '__general__'} className="mb-6">
-            <h2 className="font-mono text-sm text-stone-700 dark:text-stone-300 mb-2">
+            <h2 className="font-mono text-sm text-default mb-2">
               {file || 'General'}
             </h2>
-            <ul className="bg-white dark:bg-stone-800 rounded border border-stone-200 dark:border-stone-700 divide-y divide-stone-200 dark:divide-stone-700">
+            <ul className="bg-elev rounded border border-default divide-y divide-[color:var(--border-default)]">
               {errs.map((e, i) => (
                 <li key={i} className="px-4 py-2 text-sm">
                   {e.field && (
-                    <code className="text-stone-500 dark:text-stone-400 mr-2">{e.field}:</code>
+                    <code className="text-muted mr-2">{e.field}:</code>
                   )}
                   <span>{e.message}</span>
                 </li>
@@ -54,13 +54,13 @@ export function ErrorScreen({ errors, configDir, onReveal }: Props) {
         ))}
 
         {configDir && (
-          <footer className="mt-8 text-xs text-stone-500 dark:text-stone-400">
+          <footer className="mt-8 text-xs text-muted">
             Config folder:{' '}
-            <code className="text-stone-700 dark:text-stone-300">{configDir}</code>
+            <code className="text-default">{configDir}</code>
             {onReveal && (
               <button
                 onClick={onReveal}
-                className="ml-3 underline hover:text-stone-700 dark:hover:text-stone-200"
+                className="ml-3 underline hover:text-default"
               >
                 Open folder
               </button>

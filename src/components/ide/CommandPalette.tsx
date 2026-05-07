@@ -122,11 +122,11 @@ function PalettePanel(props: Props) {
     <div
       role="dialog"
       aria-label="Command palette"
-      className="fixed inset-0 z-50 flex items-start justify-center pt-[12vh] bg-stone-900/30 dark:bg-black/50"
+      className="fixed inset-0 z-50 flex items-start justify-center pt-[12vh] bg-black/30"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-xl bg-white dark:bg-neutral-900 rounded-lg shadow-2xl border border-stone-200 dark:border-neutral-800 overflow-hidden"
+        className="w-full max-w-xl bg-elev rounded-lg shadow-2xl border border-default overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         <input
@@ -136,11 +136,11 @@ function PalettePanel(props: Props) {
           onChange={(e) => { setQuery(e.target.value); setHighlight(0) }}
           onKeyDown={handleKeyDown}
           placeholder={mode === 'commands' ? 'Type a command…' : 'Open a file by name…'}
-          className="w-full px-4 py-3 text-sm bg-transparent border-b border-stone-200 dark:border-neutral-800 focus:outline-none"
+          className="w-full px-4 py-3 text-sm bg-transparent border-b border-default focus:outline-none"
         />
         <ul className="max-h-[50vh] overflow-y-auto py-1" role="listbox">
           {rows.length === 0 && (
-            <li className="px-4 py-3 text-sm text-stone-500 dark:text-neutral-400">No matches.</li>
+            <li className="px-4 py-3 text-sm text-muted">No matches.</li>
           )}
           {rows.map((row, i) => {
             const isActive = i === highlight
@@ -153,16 +153,16 @@ function PalettePanel(props: Props) {
                 onClick={() => activate(i)}
                 className={`px-4 py-2 cursor-pointer flex items-center gap-3 ${
                   isActive
-                    ? 'bg-stone-100 dark:bg-neutral-800'
-                    : 'hover:bg-stone-50 dark:hover:bg-neutral-800/60'
+                    ? 'bg-active'
+                    : 'hover:bg-hover'
                 }`}
               >
                 <span className="text-sm flex-1 truncate">{row.label}</span>
                 {row.detail && (
-                  <span className="text-xs text-stone-500 dark:text-neutral-400 truncate max-w-[40%]">{row.detail}</span>
+                  <span className="text-xs text-muted truncate max-w-[40%]">{row.detail}</span>
                 )}
                 {row.shortcut && (
-                  <kbd className="text-[10px] px-1.5 py-0.5 rounded border border-stone-300 dark:border-neutral-700 text-stone-600 dark:text-neutral-400">
+                  <kbd className="text-[10px] px-1.5 py-0.5 rounded border border-default text-muted">
                     {row.shortcut}
                   </kbd>
                 )}
