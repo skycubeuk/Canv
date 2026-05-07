@@ -3,6 +3,7 @@ import { useLocalStorage } from './useLocalStorage'
 import type { Mode } from '../config/types'
 import { adapters } from '../adapters'
 import type { ModelPricing } from '../config/pricing'
+import { DEFAULT_ACCENT } from '../lib/accent'
 
 const ALLOWED_DELAYS = [0, 50, 100, 200] as const
 export type StreamChunkDelayMs = (typeof ALLOWED_DELAYS)[number]
@@ -56,7 +57,7 @@ const DEFAULT_SETTINGS: Settings = {
     headingSkip: true,
     deadImages: true,
   },
-  accent: '#6366f1',
+  accent: DEFAULT_ACCENT,
 }
 
 function purgeLegacyOnce() {

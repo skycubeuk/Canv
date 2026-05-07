@@ -19,6 +19,7 @@ export default {
         accent: 'var(--accent)',
         'accent-soft': 'var(--accent-soft)',
         'accent-fg': 'var(--accent-fg)',
+        'accent-hover': 'var(--accent-hover)',
       },
       textColor: {
         default: 'var(--text-default)',
@@ -26,6 +27,7 @@ export default {
         subtle: 'var(--text-subtle)',
         accent: 'var(--accent)',
         'accent-fg': 'var(--accent-fg)',
+        'accent-hover': 'var(--accent-hover)',
       },
       borderColor: {
         default: 'var(--border-default)',
@@ -35,6 +37,11 @@ export default {
       ringColor: {
         accent: 'var(--accent)',
         'accent-soft': 'var(--accent-soft)',
+      },
+      ringOffsetColor: {
+        app: 'var(--bg-app)',
+        panel: 'var(--bg-panel)',
+        elev: 'var(--bg-elev)',
       },
       boxShadow: {
         lg: 'var(--shadow-lg)',

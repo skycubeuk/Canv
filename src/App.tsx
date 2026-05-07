@@ -295,6 +295,8 @@ export default function App() {
     return () => { cancelled = true }
   }, [workspace.activeGroupId, workspace.activeMarkdownRel])
 
+  // TODO(0.7.0 commit 2): remove this once all dark: classes are migrated to semantic tokens.
+  //                       The newer listener at line ~87 handles data-theme exclusively.
   // Theme — honour explicit light/dark, or follow the OS when set to 'system'.
   useEffect(() => {
     const mql = window.matchMedia('(prefers-color-scheme: dark)')

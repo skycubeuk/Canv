@@ -42,4 +42,18 @@ describe('resolveTheme + applyTheme', () => {
     applyTheme('dark')
     expect(document.documentElement.dataset.theme).toBe('dark')
   })
+
+  it('resolves "system" via prefers-color-scheme matchMedia', () => {
+    // jsdom does not implement matchMedia; stub it to return matches: false so "system" → "light".
+    const original = window.matchMedia
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: (query: string) => ({ matches: false, media: query }),
+    })
+    try {
+      expect(resolveTheme('system')).toBe('light')
+    } finally {
+      Object.defineProperty(window, 'matchMedia', { writable: true, value: original })
+    }
+  })
 })

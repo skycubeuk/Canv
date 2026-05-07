@@ -75,8 +75,8 @@ export function AppearanceSection({ settings, onUpdate }: Props) {
         <input
           id="appearance-font-size"
           type="range"
-          min={12}
-          max={22}
+          min={14}
+          max={24}
           step={1}
           value={settings.fontSize}
           onChange={(e) => onUpdate({ fontSize: Number(e.target.value) })}
