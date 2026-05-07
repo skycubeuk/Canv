@@ -29,3 +29,6 @@ release
 docs/superpowers/
 .env.screenshots
 docs/screenshots/.tmp/
+
+# Local milestone planning notes (never committed)
+canv-0.6.0/
