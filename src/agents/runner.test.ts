@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest'
-import { parseAgentResponse } from './runner'
+import { describe, it, expect, vi } from 'vitest'
+import { parseAgentResponse, runAgent } from './runner'
+import type { LLMAdapter } from '../adapters/types'
 
 describe('parseAgentResponse', () => {
   it('replacement agents return the whole response as rewrite, no feedback', () => {
@@ -48,5 +49,20 @@ describe('parseAgentResponse', () => {
     const result = parseAgentResponse(story, raw)
     expect(result.rewrite).toBeUndefined()
     expect(result.feedback).toContain('pacing is uneven')
+  })
+})
+
+describe('runAgent — chunkDelayMs forwarding', () => {
+  it('passes chunkDelayMs through to adapter.complete', async () => {
+    const complete = vi.fn(async () => ({ text: 'ok', truncated: false, stopReason: 'end_turn' as const }))
+    const adapter: LLMAdapter = { id: 'x', name: 'x', models: ['m'], complete }
+    await runAgent({
+      agent: { id: 'a', name: 'a', outputMode: 'replacement', actions: [] } as never,
+      text: 't',
+      promptTemplate: '{{text}}',
+      adapter, apiKey: 'k', model: 'm', maxTokens: 100,
+      chunkDelayMs: 75,
+    })
+    expect(complete).toHaveBeenCalledWith(expect.objectContaining({ chunkDelayMs: 75 }))
   })
 })

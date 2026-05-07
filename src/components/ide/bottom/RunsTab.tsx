@@ -2,6 +2,8 @@ import { X, CircleHelp } from 'lucide-react'
 import { RunView, type RunRecord } from '../../ResultsPanel'
 import { useModes, getModeById, getActionById } from '../../../hooks/useModes'
 import { timeAgo } from '../../../lib/timeAgo'
+import { cost } from '../../../lib/cost'
+import type { ModelPricing } from '../../../config/pricing'
 
 interface Props {
   runs: RunRecord[]
@@ -11,10 +13,13 @@ interface Props {
   onApply: (run: RunRecord, text: string) => void
   onRerun: (run: RunRecord) => void
   onRefine: (run: RunRecord, message: string) => void
+  pricingOverrides: Record<string, ModelPricing>
+  /** Optional override for tests; production uses PRICING. */
+  pricingDefaults?: Record<string, ModelPricing>
 }
 
 export function RunsTab(props: Props) {
-  const { runs, activeId, onSelect, onClose, onApply, onRerun, onRefine } = props
+  const { runs, activeId, onSelect, onClose, onApply, onRerun, onRefine, pricingOverrides, pricingDefaults } = props
   const { modes, defaultModeId } = useModes()
 
   if (runs.length === 0) {
@@ -47,6 +52,14 @@ export function RunsTab(props: Props) {
             >
               <Icon aria-hidden className="w-4 h-4" />
               <span className="font-medium truncate">{r.agentLabel}</span>
+              {r.tokenUsage && (() => {
+                const c = cost(r.tokenUsage, r.model, pricingOverrides, pricingDefaults)
+                return c == null ? null : (
+                  <span className="text-stone-400 dark:text-neutral-500 font-mono text-[10px] ml-1">
+                    ${c.toFixed(3)}
+                  </span>
+                )
+              })()}
               <span className="text-stone-400 ml-auto whitespace-nowrap">{timeAgo(r.timestamp)}</span>
               <button
                 type="button"

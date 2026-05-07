@@ -40,6 +40,10 @@ export interface CompleteParams {
   onToolCallStart?: (call: { id: string; name: string }) => void
   apiKey: string
   tools?: ToolSchema[]
+  /** When > 0, the adapter paces text/tool dispatches by at least this many
+   *  milliseconds between calls. Wire reading still runs at full speed; only
+   *  delivery is slowed. Used by A2.4 slow-mode. */
+  chunkDelayMs?: number
 }
 
 export interface TokenUsage {

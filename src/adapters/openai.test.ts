@@ -238,3 +238,80 @@ describe('openaiAdapter.complete (streaming, cancelled)', () => {
     expect(out.toolCalls).toBeUndefined()
   })
 })
+
+describe('openaiAdapter — slow-mode pacing', () => {
+  let originalFetch: typeof globalThis.fetch
+  beforeEach(() => { originalFetch = globalThis.fetch })
+  afterEach(() => { globalThis.fetch = originalFetch })
+
+  it('paces onToken invocations to at least chunkDelayMs apart', async () => {
+    const sse = [
+      'data: {"choices":[{"delta":{"content":"a"}}]}',
+      '',
+      'data: {"choices":[{"delta":{"content":"b"}}]}',
+      '',
+      'data: {"choices":[{"delta":{"content":"c"},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":3}}',
+      '',
+      'data: [DONE]',
+      '',
+    ].join('\n')
+
+    globalThis.fetch = vi.fn(async () => new Response(sse, {
+      status: 200, headers: { 'Content-Type': 'text/event-stream' },
+    })) as unknown as typeof fetch
+
+    const stamps: number[] = []
+    const { openaiAdapter } = await import('./openai')
+    await openaiAdapter.complete({
+      apiKey: 'k', model: 'gpt-5.5', messages: [{ role: 'user', content: 'x' }],
+      onToken: () => { stamps.push(performance.now()) },
+      chunkDelayMs: 50,
+    })
+    expect(stamps.length).toBe(3)
+    expect(stamps[1] - stamps[0]).toBeGreaterThanOrEqual(45)
+    expect(stamps[2] - stamps[1]).toBeGreaterThanOrEqual(45)
+  })
+
+  it('chunkDelayMs=0 imposes no measurable pacing', async () => {
+    const sse = [
+      'data: {"choices":[{"delta":{"content":"a"}}]}',
+      '',
+      'data: {"choices":[{"delta":{"content":"b"},"finish_reason":"stop"}]}',
+      '',
+      'data: [DONE]',
+      '',
+    ].join('\n')
+    globalThis.fetch = vi.fn(async () => new Response(sse, {
+      status: 200, headers: { 'Content-Type': 'text/event-stream' },
+    })) as unknown as typeof fetch
+    const stamps: number[] = []
+    const { openaiAdapter } = await import('./openai')
+    await openaiAdapter.complete({
+      apiKey: 'k', model: 'gpt-5.5', messages: [{ role: 'user', content: 'x' }],
+      onToken: () => { stamps.push(performance.now()) },
+      chunkDelayMs: 0,
+    })
+    expect(stamps[1] - stamps[0]).toBeLessThan(20)
+  })
+
+  it('abort during paced dispatch returns cancelled with buffered text', async () => {
+    const ac = new AbortController()
+    setTimeout(() => ac.abort(), 30)
+    const sse = Array.from({ length: 8 }, (_, i) =>
+      `data: {"choices":[{"delta":{"content":"x${i}"}}]}\n\n`,
+    ).join('')
+
+    globalThis.fetch = vi.fn(async () => new Response(sse, {
+      status: 200, headers: { 'Content-Type': 'text/event-stream' },
+    })) as unknown as typeof fetch
+
+    const { openaiAdapter } = await import('./openai')
+    const result = await openaiAdapter.complete({
+      apiKey: 'k', model: 'gpt-5.5', messages: [{ role: 'user', content: 'x' }],
+      onToken: () => {},
+      signal: ac.signal,
+      chunkDelayMs: 100,
+    })
+    expect(result.stopReason).toBe('cancelled')
+  })
+})

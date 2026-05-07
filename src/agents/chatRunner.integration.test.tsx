@@ -81,6 +81,7 @@ function Host({ adapter }: { adapter: LLMAdapter }) {
       onStop={() => {}}
       pendingApprovals={noApprovals}
       onApprovalDecide={() => {}}
+      pricingOverrides={{}}
     />
   )
 }

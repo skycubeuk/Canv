@@ -108,22 +108,51 @@ export const openaiAdapter: LLMAdapter = {
       }
     }
 
-    interface PendingToolCall { id: string; name: string; argsBuf: string; announced: boolean }
+    return await readSSE(res, onToken!, params.onToolCallStart, signal, params.chunkDelayMs ?? 0)
+    } catch (err) {
+      if ((err as Error).name === 'AbortError' && signal?.aborted) {
+        return { text: '', truncated: false, stopReason: 'cancelled' }
+      }
+      throw err
+    }
+  },
+}
 
-    const reader = res.body?.getReader()
-    if (!reader) throw new Error('No response body')
-    const decoder = new TextDecoder()
-    let buffer = ''
-    let full = ''
-    let truncated = false
-    let usageOut: { input: number; output: number } | null = null
-    let stopReason: 'end_turn' | 'tool_use' | 'max_tokens' | 'stop_sequence' = 'end_turn'
-    const callsByIndex = new Map<number, PendingToolCall>()
+interface PendingToolCall { id: string; name: string; argsBuf: string; announced: boolean }
 
+async function readSSE(
+  res: Response,
+  onToken: (chunk: string) => void,
+  onToolCallStart: ((call: { id: string; name: string }) => void) | undefined,
+  signal: AbortSignal | undefined,
+  chunkDelayMs: number,
+): Promise<CompleteResult> {
+  const reader = res.body?.getReader()
+  if (!reader) throw new Error('No response body')
+  const decoder = new TextDecoder()
+
+  // Queue holds only text chunks that need paced dispatch.
+  // onToolCallStart is fired immediately from the wire reader (no pacing needed).
+  const queue: string[] = []
+  let wireDone = false
+  let wireError = null as Error | null
+
+  // ----- accumulator state (shared between wire reader and dispatch loop) -----
+  let buffer = ''
+  let full = ''
+  let truncated = false
+  let usageOut: { input: number; output: number } | null = null
+  let stopReason: 'end_turn' | 'tool_use' | 'max_tokens' | 'stop_sequence' = 'end_turn'
+  const callsByIndex = new Map<number, PendingToolCall>()
+
+  const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
+
+  // ----- wire reader coroutine: full speed, no pacing -----
+  const wirePromise = (async () => {
     try {
       while (true) {
         const { value, done } = await reader.read()
-        if (done) break
+        if (done) { wireDone = true; return }
         buffer += decoder.decode(value, { stream: true })
         const lines = buffer.split('\n')
         buffer = lines.pop() ?? ''
@@ -138,7 +167,8 @@ export const openaiAdapter: LLMAdapter = {
           const choice = p.choices?.[0]
           const delta = choice?.delta
           if (delta && typeof delta.content === 'string' && delta.content.length) {
-            onToken!(delta.content); full += delta.content
+            // Push to queue; full += text happens at dispatch time to keep out.text === tokens.join('')
+            queue.push(delta.content)
           }
           const tcDeltas = delta?.tool_calls as Array<{ index: number; id?: string; function?: { name?: string; arguments?: string } }> | undefined
           if (tcDeltas) {
@@ -151,10 +181,10 @@ export const openaiAdapter: LLMAdapter = {
               if (d.id && !cur.id) cur.id = d.id
               if (d.function?.name && !cur.name) cur.name = d.function.name
               if (typeof d.function?.arguments === 'string') cur.argsBuf += d.function.arguments
-              // Fire onToolCallStart once per call as soon as both id and name are known.
+              // Fire onToolCallStart immediately — not paced
               if (!cur.announced && cur.id && cur.name) {
                 cur.announced = true
-                params.onToolCallStart?.({ id: cur.id, name: cur.name })
+                onToolCallStart?.({ id: cur.id, name: cur.name })
               }
             }
           }
@@ -166,53 +196,99 @@ export const openaiAdapter: LLMAdapter = {
         }
       }
     } catch (err) {
-      if ((err as Error).name === 'AbortError' || signal?.aborted) {
-        try { await reader.cancel() } catch { /* already closed */ }
-        // Cancel-path policy: drop tool calls whose arguments did not parse,
-        // because round-tripping them to the next provider call risks schema
-        // errors and dispatching them is meaningless.
-        const toolCallsOnAbort: Array<{ id: string; name: string; input: unknown }> = []
-        for (const c of callsByIndex.values()) {
-          if (!c.id || !c.name) continue
-          if (!c.argsBuf) {
-            toolCallsOnAbort.push({ id: c.id, name: c.name, input: {} })
-            continue
-          }
-          let parsed: unknown
-          try { parsed = JSON.parse(c.argsBuf) } catch { continue }
-          toolCallsOnAbort.push({ id: c.id, name: c.name, input: parsed })
-        }
-        return {
-          text: full,
-          truncated: false,
-          stopReason: 'cancelled',
-          ...(toolCallsOnAbort.length ? { toolCalls: toolCallsOnAbort } : {}),
-          ...(usageOut ? { tokenUsage: usageOut } : {}),
-        }
-      }
-      throw err
+      wireError = err as Error
+      wireDone = true
     }
+  })()
 
-    const completedToolCalls = Array.from(callsByIndex.values())
-      .filter((c) => c.id && c.name)
-      .map((c) => {
-        let input: unknown = {}
-        if (c.argsBuf) { try { input = JSON.parse(c.argsBuf) } catch { input = {} } }
-        return { id: c.id, name: c.name, input }
-      })
+  // ----- dispatch loop: paced -----
+  let lastDispatchAt = 0
 
+  try {
+    while (!wireDone || queue.length > 0) {
+      if (queue.length === 0) {
+        if (signal?.aborted) break
+        // Yield until wire reader pushes more events or completes
+        await Promise.race([wirePromise, sleep(5)])
+        continue
+      }
+      const text = queue.shift()!
+      if (chunkDelayMs > 0) {
+        const elapsed = Date.now() - lastDispatchAt
+        if (elapsed < chunkDelayMs) await sleep(chunkDelayMs - elapsed)
+        // Check abort after sleeping — slow-mode cancellation fires here
+        if (signal?.aborted) throw new DOMException('aborted', 'AbortError')
+      }
+      onToken(text)
+      full += text
+      lastDispatchAt = Date.now()
+    }
+  } catch (err) {
+    if ((err as Error).name === 'AbortError' || signal?.aborted) {
+      try { await reader.cancel() } catch { /* already closed */ }
+      // Cancel-path policy: drop tool calls whose arguments did not parse,
+      // because round-tripping them to the next provider call risks schema
+      // errors and dispatching them is meaningless.
+      const toolCallsOnAbort: Array<{ id: string; name: string; input: unknown }> = []
+      for (const c of callsByIndex.values()) {
+        if (!c.id || !c.name) continue
+        if (!c.argsBuf) {
+          toolCallsOnAbort.push({ id: c.id, name: c.name, input: {} })
+          continue
+        }
+        let parsed: unknown
+        try { parsed = JSON.parse(c.argsBuf) } catch { continue }
+        toolCallsOnAbort.push({ id: c.id, name: c.name, input: parsed })
+      }
+      return {
+        text: full,
+        truncated: false,
+        stopReason: 'cancelled',
+        ...(toolCallsOnAbort.length ? { toolCalls: toolCallsOnAbort } : {}),
+        ...(usageOut ? { tokenUsage: usageOut } : {}),
+      }
+    }
+    throw err
+  }
+
+  // Drain complete — check if abort or wire error drove us here
+  if (signal?.aborted || wireError?.name === 'AbortError') {
+    try { await reader.cancel() } catch { /* already closed */ }
+    const toolCallsOnAbort: Array<{ id: string; name: string; input: unknown }> = []
+    for (const c of callsByIndex.values()) {
+      if (!c.id || !c.name) continue
+      if (!c.argsBuf) {
+        toolCallsOnAbort.push({ id: c.id, name: c.name, input: {} })
+        continue
+      }
+      let parsed: unknown
+      try { parsed = JSON.parse(c.argsBuf) } catch { continue }
+      toolCallsOnAbort.push({ id: c.id, name: c.name, input: parsed })
+    }
     return {
       text: full,
-      truncated,
-      stopReason,
-      ...(completedToolCalls.length ? { toolCalls: completedToolCalls } : {}),
+      truncated: false,
+      stopReason: 'cancelled',
+      ...(toolCallsOnAbort.length ? { toolCalls: toolCallsOnAbort } : {}),
       ...(usageOut ? { tokenUsage: usageOut } : {}),
     }
-    } catch (err) {
-      if ((err as Error).name === 'AbortError' && signal?.aborted) {
-        return { text: '', truncated: false, stopReason: 'cancelled' }
-      }
-      throw err
-    }
-  },
+  }
+
+  if (wireError) throw wireError
+
+  const completedToolCalls = Array.from(callsByIndex.values())
+    .filter((c) => c.id && c.name)
+    .map((c) => {
+      let input: unknown = {}
+      if (c.argsBuf) { try { input = JSON.parse(c.argsBuf) } catch { input = {} } }
+      return { id: c.id, name: c.name, input }
+    })
+
+  return {
+    text: full,
+    truncated,
+    stopReason,
+    ...(completedToolCalls.length ? { toolCalls: completedToolCalls } : {}),
+    ...(usageOut ? { tokenUsage: usageOut } : {}),
+  }
 }

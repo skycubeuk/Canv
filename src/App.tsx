@@ -495,6 +495,7 @@ export default function App() {
           promptTemplate,
           signal: controller.signal,
           onToken,
+          chunkDelayMs: settings.streamChunkDelayMs,
         })
 
         setRuns((prev) =>
@@ -679,6 +680,7 @@ export default function App() {
           maxTokens: settings.maxOutputTokens[settings.provider],
           signal: controller.signal,
           onToken,
+          chunkDelayMs: settings.streamChunkDelayMs,
         })
 
         const assistantText = final || buffer
@@ -862,6 +864,7 @@ PLANNING. For any task that will take 3 or more tool calls, call \`set_todos\` B
           maxTokens: settings.maxOutputTokens[lockedProvider],
           apiKey: settings.apiKeys[lockedProvider],
           signal: controller.signal,
+          chunkDelayMs: settings.streamChunkDelayMs,
         })
       } catch (e) {
         if ((e as { name?: string }).name === 'AbortError') {
@@ -1372,6 +1375,7 @@ PLANNING. For any task that will take 3 or more tool calls, call \`set_todos\` B
             onApply={handleApply}
             onRerun={handleRerun}
             onRefine={refineRun}
+            pricingOverrides={settings.pricingOverrides}
           />
         ),
       },
@@ -1391,6 +1395,7 @@ PLANNING. For any task that will take 3 or more tool calls, call \`set_todos\` B
             onStop={stopChat}
             pendingApprovals={pendingApprovals}
             onApprovalDecide={onApprovalDecide}
+            pricingOverrides={settings.pricingOverrides}
           />
         ),
       },
@@ -1417,7 +1422,7 @@ PLANNING. For any task that will take 3 or more tool calls, call \`set_todos\` B
         render: () => <OutputTab runs={runs} />,
       },
     ]
-  }, [runs, activeTabId, handleCloseTab, handleApply, handleRerun, refineRun, chatMessages, chatBusy, chatProvider, chatModel, sendChat, clearChat, stopChat, pendingApprovals, onApprovalDecide, lintIssuesApi, handleJumpToProblem])
+  }, [runs, activeTabId, handleCloseTab, handleApply, handleRerun, refineRun, chatMessages, chatBusy, chatProvider, chatModel, sendChat, clearChat, stopChat, pendingApprovals, onApprovalDecide, lintIssuesApi, handleJumpToProblem, settings.pricingOverrides])
 
   // ----- Dock pop-out bridge wiring -------------------------------------------------
   // Parse each run on the main side so the popout can render Notes / Rewrite / Diff

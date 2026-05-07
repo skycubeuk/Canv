@@ -50,6 +50,7 @@ export interface RunChatTurnParams {
   maxTokens: number
   apiKey: string
   signal: AbortSignal
+  chunkDelayMs?: number
 }
 
 export async function runChatTurn(p: RunChatTurnParams): Promise<void> {
@@ -70,6 +71,7 @@ export async function runChatTurn(p: RunChatTurnParams): Promise<void> {
       system,
       messages: toAdapterMessages(messages.slice(0, -1)),
       signal: p.signal,
+      chunkDelayMs: p.chunkDelayMs,
       tools: toolSchemas(),
       onToken: (chunk) => {
         assistantMsg = { ...assistantMsg, content: assistantMsg.content + chunk }
@@ -256,6 +258,7 @@ export async function runChatTurn(p: RunChatTurnParams): Promise<void> {
     system: `${system}\n\nYou have used your tool budget — write your final answer without further tool calls.`,
     messages: toAdapterMessages(messages.slice(0, -1)),
     signal: p.signal,
+    chunkDelayMs: p.chunkDelayMs,
     onToken: (chunk) => {
       finalMsg = { ...finalMsg, content: finalMsg.content + chunk }
       messages[messages.length - 1] = finalMsg

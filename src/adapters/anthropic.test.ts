@@ -224,3 +224,98 @@ describe('anthropicAdapter.complete (streaming, cancelled)', () => {
     expect(out.toolCalls).toBeUndefined()
   })
 })
+
+describe('anthropicAdapter — slow-mode pacing', () => {
+  let originalFetch: typeof globalThis.fetch
+  beforeEach(() => { originalFetch = globalThis.fetch })
+  afterEach(() => { globalThis.fetch = originalFetch })
+
+  it('paces onToken invocations to at least chunkDelayMs apart', async () => {
+    // 3 text deltas in a single SSE body. With chunkDelayMs=50, deliveries
+    // should be spaced ≥45ms (timer-jitter tolerance).
+    const sse = [
+      'event: message_start',
+      'data: {"type":"message_start","message":{"usage":{"input_tokens":10}}}',
+      '',
+      'event: content_block_delta',
+      'data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"a"}}',
+      '',
+      'event: content_block_delta',
+      'data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"b"}}',
+      '',
+      'event: content_block_delta',
+      'data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"c"}}',
+      '',
+      'event: message_delta',
+      'data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":3}}',
+      '',
+    ].join('\n')
+
+    globalThis.fetch = vi.fn(async () => new Response(sse, {
+      status: 200, headers: { 'Content-Type': 'text/event-stream' },
+    })) as unknown as typeof fetch
+
+    const stamps: number[] = []
+    const { anthropicAdapter } = await import('./anthropic')
+    await anthropicAdapter.complete({
+      apiKey: 'k', model: 'claude-sonnet-4-6', messages: [{ role: 'user', content: 'x' }],
+      onToken: () => { stamps.push(performance.now()) },
+      chunkDelayMs: 50,
+    })
+
+    expect(stamps.length).toBe(3)
+    expect(stamps[1] - stamps[0]).toBeGreaterThanOrEqual(45)
+    expect(stamps[2] - stamps[1]).toBeGreaterThanOrEqual(45)
+  })
+
+  it('chunkDelayMs=0 imposes no measurable pacing', async () => {
+    const sse = [
+      'event: content_block_delta',
+      'data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"a"}}',
+      '',
+      'event: content_block_delta',
+      'data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"b"}}',
+      '',
+      'event: message_delta',
+      'data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":2}}',
+      '',
+    ].join('\n')
+    globalThis.fetch = vi.fn(async () => new Response(sse, {
+      status: 200, headers: { 'Content-Type': 'text/event-stream' },
+    })) as unknown as typeof fetch
+
+    const stamps: number[] = []
+    const { anthropicAdapter } = await import('./anthropic')
+    await anthropicAdapter.complete({
+      apiKey: 'k', model: 'claude-sonnet-4-6', messages: [{ role: 'user', content: 'x' }],
+      onToken: () => { stamps.push(performance.now()) },
+      chunkDelayMs: 0,
+    })
+    expect(stamps[1] - stamps[0]).toBeLessThan(20)
+  })
+
+  it('abort during paced dispatch returns cancelled with buffered text', async () => {
+    const ac = new AbortController()
+    // Fire abort almost immediately; some dispatches will land before the
+    // sleep yields back, producing a clean cancelled return.
+    setTimeout(() => ac.abort(), 30)
+    const sse = Array.from({ length: 8 }, (_, i) => [
+      'event: content_block_delta',
+      `data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"x${i}"}}`,
+      '',
+    ].flat()).flat().join('\n')
+
+    globalThis.fetch = vi.fn(async () => new Response(sse, {
+      status: 200, headers: { 'Content-Type': 'text/event-stream' },
+    })) as unknown as typeof fetch
+
+    const { anthropicAdapter } = await import('./anthropic')
+    const result = await anthropicAdapter.complete({
+      apiKey: 'k', model: 'claude-sonnet-4-6', messages: [{ role: 'user', content: 'x' }],
+      onToken: () => {},
+      signal: ac.signal,
+      chunkDelayMs: 100,
+    })
+    expect(result.stopReason).toBe('cancelled')
+  })
+})

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useDialogs } from '../lib/dialogs'
 import { AutoGrowTextarea } from './AutoGrowTextarea'
+import { ChatMeter } from './ChatMeter'
+import type { ModelPricing } from '../config/pricing'
 import { useContextMenu, type ContextMenuItem } from '../lib/contextMenu'
 import {
   cutFromTextarea,
@@ -35,6 +37,8 @@ export interface ChatMessage {
    *  clean end_turn. 'cancelled' means the user clicked Stop; rendered as
    *  a "Stopped" pill, and used by A3 as the anchor for retry actions. */
   stopReason?: 'cancelled'
+  /** Token counts reported by the model for this assistant turn. */
+  tokenUsage?: { input: number; output: number }
 }
 
 export interface PendingApproval {
@@ -53,9 +57,10 @@ interface Props {
   onStop: () => void
   pendingApprovals?: Map<string, PendingApproval>
   onApprovalDecide?: (callId: string, decision: ApprovalDecision) => void
+  pricingOverrides: Record<string, ModelPricing>
 }
 
-export function ChatPanel({ messages, busy, provider, model, onSend, onClear, onStop, pendingApprovals, onApprovalDecide }: Props) {
+export function ChatPanel({ messages, busy, provider, model, onSend, onClear, onStop, pendingApprovals, onApprovalDecide, pricingOverrides }: Props) {
   const [input, setInput] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
   const dialogs = useDialogs()
@@ -76,9 +81,46 @@ export function ChatPanel({ messages, busy, provider, model, onSend, onClear, on
     ctxMenu.open(e, items)
   }
 
+  const [followLatest, setFollowLatest] = useState(true)
+  const programmaticScroll = useRef(false)
+
+  // When messages change and we're following, scroll to bottom — and tag the
+  // resulting scroll event so our handler doesn't misread it as user intent.
+  // Only set the programmatic flag when there's real content (scrollHeight > 0),
+  // so jsdom tests that stub geometry after mount aren't blocked by the flag.
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight })
-  }, [messages])
+    const el = scrollRef.current
+    if (!el || !followLatest) return
+    const hasContent = el.scrollHeight > 0
+    if (hasContent) programmaticScroll.current = true
+    el.scrollTo({ top: el.scrollHeight })
+    const t = window.setTimeout(() => { programmaticScroll.current = false }, 80)
+    return () => window.clearTimeout(t)
+  }, [messages, followLatest])
+
+  // Intent detection: user scrolling up past threshold disengages follow;
+  // returning to within 8px of bottom re-engages it.
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const onScroll = () => {
+      if (programmaticScroll.current) return
+      const distance = el.scrollHeight - el.clientHeight - el.scrollTop
+      if (followLatest && distance > 40) setFollowLatest(false)
+      else if (!followLatest && distance <= 8) setFollowLatest(true)
+    }
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => el.removeEventListener('scroll', onScroll)
+  }, [followLatest])
+
+  const jumpToLatest = () => {
+    const el = scrollRef.current
+    if (!el) return
+    programmaticScroll.current = true
+    el.scrollTo({ top: el.scrollHeight })
+    setFollowLatest(true)
+    window.setTimeout(() => { programmaticScroll.current = false }, 80)
+  }
 
   const handleSubmit = () => {
     const text = input.trim()
@@ -117,7 +159,7 @@ export function ChatPanel({ messages, busy, provider, model, onSend, onClear, on
         </div>
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
+      <div ref={scrollRef} data-testid="chat-message-list" className="relative flex-1 overflow-y-auto px-4 py-4 space-y-3">
         {messages.length === 0 && (
           <div className="text-sm text-stone-500 dark:text-neutral-400 text-center py-8">
             Ask anything about the document.<br />
@@ -132,7 +174,24 @@ export function ChatPanel({ messages, busy, provider, model, onSend, onClear, on
             onApprovalDecide={onApprovalDecide}
           />
         ))}
+        {!followLatest && (
+          <button
+            type="button"
+            onClick={jumpToLatest}
+            className="sticky bottom-2 left-1/2 -translate-x-1/2 z-10 inline-flex items-center gap-1 rounded-full border border-stone-300 bg-stone-100/95 px-3 py-1 text-[11px] text-stone-700 shadow dark:border-neutral-600 dark:bg-neutral-800/95 dark:text-neutral-200"
+            aria-label="Jump to latest message"
+          >
+            ↓ jump to latest
+          </button>
+        )}
       </div>
+
+      <ChatMeter
+        messages={messages}
+        model={model}
+        overrides={pricingOverrides}
+        busy={busy}
+      />
 
       <div className="border-t border-stone-200 dark:border-neutral-800 p-3">
         <div className="flex items-end gap-2">

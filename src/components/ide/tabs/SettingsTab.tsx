@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { adapterList } from '../../../adapters'
+import { PRICING, type ModelPricing } from '../../../config/pricing'
 import { useModes } from '../../../hooks/useModes'
 import type { Provider, Settings } from '../../../hooks/useSettings'
 import { importBackup } from '../../../lib/backup'
@@ -114,6 +115,22 @@ export function SettingsTab(props: Props) {
               />
               Enable streaming responses
             </label>
+          </Field>
+
+          <Field label="Stream chunk delay">
+            <select
+              className="input"
+              value={settings.streamChunkDelayMs}
+              onChange={(e) => onUpdate({ streamChunkDelayMs: Number(e.target.value) as 0 | 50 | 100 | 200 })}
+            >
+              <option value={0}>Off</option>
+              <option value={50}>Slow (50ms)</option>
+              <option value={100}>Slower (100ms)</option>
+              <option value={200}>Slowest (200ms)</option>
+            </select>
+            <p className="text-xs text-stone-500 mt-1">
+              Pace streaming output for reading along. Off by default.
+            </p>
           </Field>
 
           <Field label={`Max output tokens: ${settings.maxOutputTokens[provider]}`}>
@@ -242,6 +259,65 @@ export function SettingsTab(props: Props) {
             </div>
           )}
         </div>
+      ),
+    },
+    {
+      id: 'model-pricing',
+      title: 'Model pricing',
+      keywords: ['cost', 'pricing', 'price', 'tokens', 'model', 'override'],
+      body: (
+        <>
+          <p className="text-xs text-stone-500 dark:text-neutral-400 mb-2">
+            USD per 1M tokens. Edit to override the default for a model. Reset removes the override.
+          </p>
+          <div className="space-y-1.5">
+            {(adapter?.models ?? []).map((m) => {
+              const def: ModelPricing = PRICING[m] ?? { input: 0, output: 0 }
+              const ov = settings.pricingOverrides[m]
+              const cur: ModelPricing = ov ?? def
+              const isOverride = !!ov
+              const setField = (field: 'input' | 'output', val: number) => {
+                const next: ModelPricing = { ...cur, [field]: val }
+                onUpdate({ pricingOverrides: { ...settings.pricingOverrides, [m]: next } })
+              }
+              const reset = () => {
+                const rest = { ...settings.pricingOverrides }
+                delete rest[m]
+                onUpdate({ pricingOverrides: rest })
+              }
+              return (
+                <div key={m} className="flex items-center gap-2 text-xs">
+                  <span className="flex-1 font-mono truncate">{m}</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    className="input w-20 text-right"
+                    value={cur.input}
+                    onChange={(e) => setField('input', Number(e.target.value))}
+                    aria-label={`${m} input price per 1M`}
+                  />
+                  <span className="text-stone-400">in</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    className="input w-20 text-right"
+                    value={cur.output}
+                    onChange={(e) => setField('output', Number(e.target.value))}
+                    aria-label={`${m} output price per 1M`}
+                  />
+                  <span className="text-stone-400">out</span>
+                  {isOverride ? (
+                    <button type="button" className="btn-ghost text-xs" onClick={reset} aria-label={`reset ${m} pricing`}>reset</button>
+                  ) : (
+                    <span className="w-12" />
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </>
       ),
     },
     {

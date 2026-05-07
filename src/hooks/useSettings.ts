@@ -2,6 +2,10 @@ import { useCallback, useMemo } from 'react'
 import { useLocalStorage } from './useLocalStorage'
 import type { Mode } from '../config/types'
 import { adapters } from '../adapters'
+import type { ModelPricing } from '../config/pricing'
+
+const ALLOWED_DELAYS = [0, 50, 100, 200] as const
+export type StreamChunkDelayMs = (typeof ALLOWED_DELAYS)[number]
 
 export type Provider = 'anthropic' | 'openai'
 export type Theme = 'light' | 'dark' | 'system'
@@ -19,6 +23,8 @@ export interface Settings {
   streaming: boolean
   maxOutputTokens: Record<Provider, number>
   chatToolBudget: number
+  pricingOverrides: Record<string, ModelPricing>
+  streamChunkDelayMs: StreamChunkDelayMs
   lintRules: {
     brokenLinks: boolean
     frontMatter: boolean
@@ -41,6 +47,8 @@ const DEFAULT_SETTINGS: Settings = {
   streaming: true,
   maxOutputTokens: { anthropic: 8192, openai: 8192 },
   chatToolBudget: 10,
+  pricingOverrides: {},
+  streamChunkDelayMs: 0,
   lintRules: {
     brokenLinks: true,
     frontMatter: true,
@@ -87,6 +95,7 @@ export function useSettings() {
       perAgentModel: { ...DEFAULT_SETTINGS.perAgentModel, ...(settings?.perAgentModel || {}) },
       maxOutputTokens: { ...DEFAULT_SETTINGS.maxOutputTokens, ...(settings?.maxOutputTokens || {}) },
       lintRules: { ...DEFAULT_SETTINGS.lintRules, ...(settings?.lintRules || {}) },
+      pricingOverrides: { ...DEFAULT_SETTINGS.pricingOverrides, ...(settings?.pricingOverrides || {}) },
     }
     for (const provider of Object.keys(m.defaultModel) as Provider[]) {
       const available = adapters[provider]?.models ?? []
@@ -94,6 +103,16 @@ export function useSettings() {
         m.defaultModel[provider] = DEFAULT_SETTINGS.defaultModel[provider]
       }
     }
+    // Clamp out-of-range streamChunkDelayMs from older builds or hand-edited storage.
+    if (!(ALLOWED_DELAYS as readonly number[]).includes(m.streamChunkDelayMs)) {
+      m.streamChunkDelayMs = 0
+    }
+    // pricingOverrides: drop entries whose values are not finite numbers.
+    const cleaned: Record<string, ModelPricing> = {}
+    for (const [k, v] of Object.entries(m.pricingOverrides)) {
+      if (v && Number.isFinite(v.input) && Number.isFinite(v.output)) cleaned[k] = v
+    }
+    m.pricingOverrides = cleaned
     const allKnownModels = new Set(Object.values(adapters).flatMap((a) => a.models))
     const fallbackModel = m.defaultModel[m.provider]
     for (const modeId of Object.keys(m.perAgentModel)) {

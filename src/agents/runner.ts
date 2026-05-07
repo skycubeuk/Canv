@@ -14,6 +14,7 @@ export interface RunAgentParams {
   maxTokens: number
   signal?: AbortSignal
   onToken?: (chunk: string) => void
+  chunkDelayMs?: number
 }
 
 export function buildPrompt(params: {
@@ -62,6 +63,7 @@ export async function runAgent(params: RunAgentParams): Promise<CompleteResult &
     signal: params.signal,
     onToken: params.onToken,
     maxTokens: params.maxTokens,
+    chunkDelayMs: params.chunkDelayMs,
   })
 
   return { ...result, rawMessages: messages }

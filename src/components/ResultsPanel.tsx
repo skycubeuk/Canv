@@ -70,6 +70,7 @@ interface ChatBundle {
   onClear: () => void
   onStop: () => void
   onCloseChat: () => void
+  pricingOverrides: Record<string, import('../config/pricing').ModelPricing>
 }
 
 interface Props {
@@ -169,6 +170,7 @@ export function ResultsPanel(props: Props) {
           onSend={chat.onSend}
           onClear={chat.onClear}
           onStop={chat.onStop}
+          pricingOverrides={chat.pricingOverrides}
         />
       ) : activeRun ? (
         <RunView run={activeRun} onApply={onApply} onRerun={onRerun} onRefine={onRefine} />

@@ -26,6 +26,7 @@ const baseProps = {
   onSend: () => {}, onClear: () => {}, onStop: () => {},
   pendingApprovals: new Map(),
   onApprovalDecide: () => {},
+  pricingOverrides: {},
 }
 
 describe('ChatPanel — tool rendering', () => {
@@ -62,6 +63,28 @@ describe('ChatPanel — tool rendering', () => {
     render(<ChatPanel {...baseProps} messages={messages} pendingApprovals={pending} onApprovalDecide={onDecide} />)
     fireEvent.click(screen.getByRole('button', { name: /^approve$/i }))
     expect(onDecide).toHaveBeenCalledWith('c1', 'approve')
+  })
+})
+
+describe('ChatPanel — meter', () => {
+  it('renders the token meter when there are messages', () => {
+    const messages: ChatMessage[] = [
+      { id: 'u1', role: 'user', content: 'hi' },
+      { id: 'a1', role: 'assistant', content: 'hello', tokenUsage: { input: 100, output: 50 } },
+    ]
+    render(
+      <ChatPanel
+        {...baseProps}
+        messages={messages}
+        pricingOverrides={{}}
+      />,
+    )
+    expect(screen.getByLabelText(/token and cost meter/i)).toBeInTheDocument()
+  })
+
+  it('does not render the meter when there are no messages', () => {
+    render(<ChatPanel {...baseProps} messages={[]} pricingOverrides={{}} />)
+    expect(screen.queryByLabelText(/token and cost meter/i)).not.toBeInTheDocument()
   })
 })
 
@@ -102,5 +125,52 @@ describe('ChatPanel — stopReason', () => {
     const root = screen.getByTestId('chip-root')
     expect(root.className).not.toMatch(/border-red-300/)
     expect(root.className).toMatch(/opacity-60|line-through/)
+  })
+})
+
+describe('ChatPanel — auto-scroll intent', () => {
+  // jsdom doesn't compute layout. Stub the geometry properties on the scroll
+  // container the component reads. We grab it by data-testid added in T5.3.
+  function setGeometry(el: HTMLElement, opts: { scrollTop: number; scrollHeight: number; clientHeight: number }) {
+    Object.defineProperty(el, 'scrollTop', { configurable: true, get: () => opts.scrollTop, set: vi.fn() })
+    Object.defineProperty(el, 'scrollHeight', { configurable: true, get: () => opts.scrollHeight })
+    Object.defineProperty(el, 'clientHeight', { configurable: true, get: () => opts.clientHeight })
+  }
+
+  it('shows the jump-to-latest pill after a user scroll-up of more than 40px', () => {
+    const messages: ChatMessage[] = [
+      { id: 'u1', role: 'user', content: 'hi' },
+      { id: 'a1', role: 'assistant', content: 'hello' },
+    ]
+    render(<ChatPanel {...baseProps} messages={messages} busy={true} />)
+    const list = screen.getByTestId('chat-message-list')
+    // user scrolled up: distanceFromBottom = 100 - 50 - 0 = 50 > 40
+    setGeometry(list, { scrollTop: 0, scrollHeight: 100, clientHeight: 50 })
+    fireEvent.scroll(list)
+    expect(screen.getByRole('button', { name: /jump to latest/i })).toBeInTheDocument()
+  })
+
+  it('hides the pill again when the user scrolls within 8px of the bottom', () => {
+    const messages: ChatMessage[] = [{ id: 'a1', role: 'assistant', content: 'x' }]
+    render(<ChatPanel {...baseProps} messages={messages} busy={true} />)
+    const list = screen.getByTestId('chat-message-list')
+    setGeometry(list, { scrollTop: 0, scrollHeight: 200, clientHeight: 100 })
+    fireEvent.scroll(list)
+    expect(screen.getByRole('button', { name: /jump to latest/i })).toBeInTheDocument()
+    setGeometry(list, { scrollTop: 96, scrollHeight: 200, clientHeight: 100 }) // dist = 4
+    fireEvent.scroll(list)
+    expect(screen.queryByRole('button', { name: /jump to latest/i })).not.toBeInTheDocument()
+  })
+
+  it('clicking the pill scrolls to bottom and hides it', () => {
+    const messages: ChatMessage[] = [{ id: 'a1', role: 'assistant', content: 'x' }]
+    render(<ChatPanel {...baseProps} messages={messages} busy={true} />)
+    const list = screen.getByTestId('chat-message-list')
+    setGeometry(list, { scrollTop: 0, scrollHeight: 200, clientHeight: 100 })
+    fireEvent.scroll(list)
+    const pill = screen.getByRole('button', { name: /jump to latest/i })
+    setGeometry(list, { scrollTop: 100, scrollHeight: 200, clientHeight: 100 }) // dist = 0
+    fireEvent.click(pill)
+    expect(screen.queryByRole('button', { name: /jump to latest/i })).not.toBeInTheDocument()
   })
 })
