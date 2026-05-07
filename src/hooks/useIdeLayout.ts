@@ -27,21 +27,29 @@ export interface EditorLayout {
   sizes: [number, number]
 }
 
+export interface OutlineLayout {
+  size: number
+  collapsed: boolean
+}
+
 export interface IdeLayoutState {
   sidebar: SidebarLayout
   bottom: BottomLayout
   editor: EditorLayout
+  outline: OutlineLayout
 }
 
 export const DEFAULT_IDE_LAYOUT: IdeLayoutState = {
   sidebar: { visible: true, activeTab: 'files', size: 20 },
   bottom: { visible: false, activeTab: 'runs', size: 30, rightSize: 30, placement: 'bottom', lastDockedPlacement: 'bottom' },
   editor: { groupCount: 1, sizes: [50, 50] },
+  outline: { size: 40, collapsed: false },
 }
 
 const SIDEBAR_KEY = 'layout:sidebar'
 const BOTTOM_KEY = 'layout:bottom'
 const EDITOR_KEY = 'layout:editor'
+const OUTLINE_KEY = 'layout:outline'
 
 interface PersistedSlice<T> { value: T }
 
@@ -86,6 +94,8 @@ export interface UseIdeLayoutApi {
   setEditorSizes: (sizes: [number, number]) => void
   setGroupCount: (count: 1 | 2) => void
   setDockPlacement: (placement: DockPlacement) => void
+  setOutlineSize: (size: number) => void
+  toggleOutlineCollapsed: () => void
 }
 
 export function useIdeLayout(root: string | null): UseIdeLayoutApi {
@@ -103,6 +113,9 @@ export function useIdeLayout(root: string | null): UseIdeLayoutApi {
   const [editor, setEditorState] = useState<EditorLayout>(() =>
     readSlice(root, EDITOR_KEY, DEFAULT_IDE_LAYOUT.editor),
   )
+  const [outline, setOutlineState] = useState<OutlineLayout>(() =>
+    readSlice(root, OUTLINE_KEY, DEFAULT_IDE_LAYOUT.outline),
+  )
 
   // Re-load when the workspace root changes.
   useEffect(() => {
@@ -114,11 +127,13 @@ export function useIdeLayout(root: string | null): UseIdeLayoutApi {
       ...readSlice(root, BOTTOM_KEY, DEFAULT_IDE_LAYOUT.bottom),
     }))
     setEditorState(readSlice(root, EDITOR_KEY, DEFAULT_IDE_LAYOUT.editor))
+    setOutlineState(readSlice(root, OUTLINE_KEY, DEFAULT_IDE_LAYOUT.outline))
   }, [root])
 
   useEffect(() => { writeSlice(root, SIDEBAR_KEY, sidebar) }, [root, sidebar])
   useEffect(() => { writeSlice(root, BOTTOM_KEY, bottom) }, [root, bottom])
   useEffect(() => { writeSlice(root, EDITOR_KEY, editor) }, [root, editor])
+  useEffect(() => { writeSlice(root, OUTLINE_KEY, outline) }, [root, outline])
 
   const toggleSidebar = useCallback(() => {
     setSidebarState((s) => ({ ...s, visible: !s.visible }))
@@ -160,6 +175,14 @@ export function useIdeLayout(root: string | null): UseIdeLayoutApi {
     setEditorState((e) => ({ ...e, groupCount: count }))
   }, [])
 
+  const setOutlineSize = useCallback((size: number) => {
+    setOutlineState((s) => ({ ...s, size }))
+  }, [])
+
+  const toggleOutlineCollapsed = useCallback(() => {
+    setOutlineState((s) => ({ ...s, collapsed: !s.collapsed }))
+  }, [])
+
   const setDockPlacement = useCallback((placement: DockPlacement) => {
     setBottomState((s) => {
       const next: BottomLayout = { ...s, placement }
@@ -173,7 +196,7 @@ export function useIdeLayout(root: string | null): UseIdeLayoutApi {
   }, [])
 
   return useMemo<UseIdeLayoutApi>(() => ({
-    layout: { sidebar, bottom, editor },
+    layout: { sidebar, bottom, editor, outline },
     toggleSidebar,
     toggleBottom,
     setSidebarTab,
@@ -185,5 +208,7 @@ export function useIdeLayout(root: string | null): UseIdeLayoutApi {
     setEditorSizes,
     setGroupCount,
     setDockPlacement,
-  }), [sidebar, bottom, editor, toggleSidebar, toggleBottom, setSidebarTab, setBottomTab, showBottomTab, setSidebarSize, setBottomSize, setRightSize, setEditorSizes, setGroupCount, setDockPlacement])
+    setOutlineSize,
+    toggleOutlineCollapsed,
+  }), [sidebar, bottom, editor, outline, toggleSidebar, toggleBottom, setSidebarTab, setBottomTab, showBottomTab, setSidebarSize, setBottomSize, setRightSize, setEditorSizes, setGroupCount, setDockPlacement, setOutlineSize, toggleOutlineCollapsed])
 }

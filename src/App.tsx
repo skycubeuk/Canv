@@ -22,6 +22,9 @@ import { StatusBar } from './components/ide/StatusBar'
 import { FilesTab } from './components/ide/sidebar/FilesTab'
 import { SearchTab } from './components/ide/sidebar/SearchTab'
 import { GitTab } from './components/ide/sidebar/GitTab'
+import { OutlinePanel } from './components/ide/sidebar/OutlinePanel'
+import { useOutline } from './hooks/useOutline'
+import { useFocusedDocText, createLiveDocsChannel } from './hooks/useFocusedDocText'
 import { DiffTab } from './components/ide/tabs/DiffTab'
 import type { SearchMatch } from './lib/searchTypes'
 import { findMatchInDoc } from './lib/findMatchInDoc'
@@ -116,6 +119,8 @@ export default function App() {
   const editorsRef = useRef<Map<string, EditorView>>(new Map())
   // Force a re-render after editor map mutation so consumers (FloatingToolbar) get a fresh editor reference.
   const [editorsBump, bumpEditorRev] = useState(0)
+
+  const liveDocsChannel = useMemo(() => createLiveDocsChannel(), [])
   const bumpEditors = useCallback(() => bumpEditorRev((n) => n + 1), [])
 
   const openSources = useMemo<OpenTabSource[]>(() => {
@@ -239,6 +244,19 @@ export default function App() {
     workspace.openDiffTab(rel, baseRef)
   }, [workspace])
 
+  const handleOutlineJump = useCallback((line: number) => {
+    const view = editorsRef.current.get(editorMapKey(workspace.activeGroupId, workspace.activeMarkdownRel ?? ''))
+    if (!view) return
+    const doc = view.state.doc
+    const safeLine = Math.max(1, Math.min(line, doc.lines))
+    const linePos = doc.line(safeLine).from
+    view.dispatch({
+      selection: { anchor: linePos },
+      effects: EditorView.scrollIntoView(linePos, { y: 'start', yMargin: 8 }),
+    })
+    view.focus()
+  }, [workspace.activeGroupId, workspace.activeMarkdownRel])
+
   // Focus the active group's editor whenever the active group or active
   // markdown rel changes.
   useEffect(() => {
@@ -332,14 +350,31 @@ export default function App() {
   const handleEditorChange = useCallback(
     (groupId: EditorGroupId, rel: string, markdown: string) => {
       workspace.saveTab(rel, markdown, groupId)
+      liveDocsChannel.publish(`${groupId}:${rel}`, markdown)
     },
-    [workspace],
+    [workspace, liveDocsChannel],
   )
 
   const [selectionTick, setSelectionTick] = useState(0)
   const handleEditorSelectionChange = useCallback(() => {
     setSelectionTick((n) => n + 1)
   }, [])
+
+  const focusedRel = workspace.activeMarkdownRel
+  const focusedGroupId = workspace.activeGroupId
+  const focusedKey = focusedRel ? `${focusedGroupId}:${focusedRel}` : null
+
+  const focusedFallbackText = useMemo<string | null>(() => {
+    if (!focusedRel) return null
+    const group = workspace.editorGroups.find((g) => g.id === focusedGroupId)
+    if (!group) return null
+    const tab = group.openTabs.find((t) => t.kind === 'markdown' && t.relPath === focusedRel)
+    if (!tab || tab.kind !== 'markdown') return null
+    return tab.loadedMarkdown
+  }, [focusedGroupId, focusedRel, workspace.editorGroups])
+
+  const focusedDocText = useFocusedDocText(liveDocsChannel, focusedKey, focusedFallbackText)
+  const outlineNodes = useOutline(focusedDocText)
 
   const apiKeyMissing = !settings.apiKeys[settings.provider]
 
@@ -1575,6 +1610,16 @@ PLANNING. For any task that will take 3 or more tool calls, call \`set_todos\` B
     )
   }
 
+  const outlineNode = outlineNodes.length > 0 ? (
+    <OutlinePanel
+      nodes={outlineNodes}
+      resetKey={focusedKey}
+      onJump={handleOutlineJump}
+      collapsed={ideLayout.layout.outline.collapsed}
+      onToggleSectionCollapsed={ideLayout.toggleOutlineCollapsed}
+    />
+  ) : null
+
   return (
     <div className="h-full flex flex-col">
       {workspace.remoteStatus?.state === 'offline' && (
@@ -1627,6 +1672,9 @@ PLANNING. For any task that will take 3 or more tool calls, call \`set_todos\` B
                   revealRel={revealFolderRel}
                 />
               )}
+              outline={outlineNode}
+              outlineSize={ideLayout.layout.outline.size}
+              onOutlineSizeChange={ideLayout.setOutlineSize}
             />
           )}
           sidebarVisible={ideLayout.layout.sidebar.visible}
