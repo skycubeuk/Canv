@@ -5,6 +5,8 @@ import {
 } from 'lucide-react'
 import type { DirEntry, DirFile, DirNode } from '../lib/fs'
 import { useDialogs } from '../lib/dialogs'
+import { useServeStatus } from '../hooks/useServeStatus'
+import { getServe } from '../lib/serve'
 
 interface Props {
   root: string | null
@@ -286,6 +288,7 @@ function ContextMenu(props: {
   const isDir = props.target.kind === 'dir'
   const parentRel = isDir ? props.target.relPath : dirname(props.target.relPath)
   const isMd = !isDir && /\.(md|markdown)$/i.test(props.target.relPath)
+  const serveStatus = useServeStatus()
 
   useEffect(() => {
     const el = ref.current
@@ -308,6 +311,40 @@ function ContextMenu(props: {
       <MenuItem onClick={() => { props.onCreateFolder(parentRel); props.onClose() }}>
         New folder…
       </MenuItem>
+      {isDir && (() => {
+        const isThisServed = serveStatus.running && serveStatus.relPath === props.target.relPath
+        const someoneElseServed = serveStatus.running && !isThisServed
+        return (
+          <>
+            <div className="my-1 border-t border-stone-200 dark:border-neutral-800" />
+            <MenuItem
+              onClick={() => {
+                const onClose = props.onClose
+                void (async () => {
+                  try {
+                    const serve = getServe()
+                    if (!serve) return
+                    if (isThisServed) {
+                      await serve.stop()
+                      return
+                    }
+                    const result = await serve.start(props.target.relPath)
+                    if ('error' in result && result.error === 'NO_INDEX') {
+                      await dialogs.confirm({
+                        title: 'No index.md found',
+                        message: 'Create an index.md at the root of this folder to serve it as a website.',
+                        confirmLabel: 'OK',
+                      })
+                    }
+                  } finally { onClose() }
+                })()
+              }}
+            >
+              {isThisServed ? 'Stop serving' : someoneElseServed ? 'Serve as website (replaces current)' : 'Serve as website'}
+            </MenuItem>
+          </>
+        )
+      })()}
       {isMd && <div className="my-1 border-t border-stone-200 dark:border-neutral-800" />}
       {isMd && !props.isPinned && (
         <MenuItem onClick={() => { props.onPin(props.target.relPath); props.onClose() }}>

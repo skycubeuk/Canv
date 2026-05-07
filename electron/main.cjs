@@ -12,6 +12,7 @@ const { SshPool } = require('./ssh-pool.cjs')
 const { RemoteFs } = require('./remote-fs.cjs')
 const { parseTarget, resolveTarget } = require('./remote-target.cjs')
 const { RecentRemotes } = require('./recent-remotes.cjs')
+const serve = require('./serve-folder.cjs')
 
 const DEV_URL = 'http://localhost:5173'
 
@@ -205,6 +206,7 @@ function stopWatcher() {
 }
 
 async function closeWorkspace() {
+  await serve.stop()
   if (!WORKSPACE) return
   if (WORKSPACE.kind === 'local') {
     stopWatcher()
@@ -320,11 +322,13 @@ function registerFsHandlers() {
     const root = requireWorkspace()
     const abs = safeResolve(root, rel)
     if (abs === root) throw new Error('cannot delete workspace root')
+    let stat
+    try { stat = await fsp.lstat(abs) }
+    catch (err) { if (err && err.code === 'ENOENT') return; throw err }
     try {
       await shell.trashItem(abs)
     } catch {
       // Fallback for environments where trash is unavailable
-      const stat = await fsp.stat(abs)
       if (stat.isDirectory()) await fsp.rm(abs, { recursive: true, force: true })
       else await fsp.unlink(abs)
     }
@@ -622,6 +626,47 @@ function registerFsHandlers() {
   ipcMain.handle('canvFS:reconnect', () => {
     if (WORKSPACE?.kind === 'remote') WORKSPACE.pool.reconnectNow()
   })
+
+  ipcMain.handle('canvServe:start', async (_e, relPath) => {
+    if (typeof relPath !== 'string') throw new Error('relPath required')
+    if (!WORKSPACE || WORKSPACE.kind !== 'local') throw new Error('serve requires a local workspace')
+    const absRoot = path.resolve(path.join(WORKSPACE.root, relPath))
+    // Defence-in-depth: relPath should not allow escaping the workspace.
+    const resolvedWs = path.resolve(WORKSPACE.root)
+    if (absRoot !== resolvedWs && !absRoot.startsWith(resolvedWs + path.sep)) {
+      throw new Error('serve target must be inside workspace')
+    }
+    try {
+      const { url } = await serve.start(absRoot)
+      shell.openExternal(url).catch(() => {})
+      return { url }
+    } catch (err) {
+      if (err && err.code === 'NO_INDEX') return { error: 'NO_INDEX' }
+      throw err
+    }
+  })
+  ipcMain.handle('canvServe:stop', async () => { await serve.stop(); return null })
+  ipcMain.handle('canvServe:status', () => {
+    const s = serve.status()
+    if (s.running && WORKSPACE && WORKSPACE.kind === 'local') {
+      const resolvedWs = path.resolve(WORKSPACE.root)
+      const rel = path.relative(resolvedWs, s.root).split(path.sep).join('/')
+      return { ...s, relPath: rel }
+    }
+    return s
+  })
+
+  serve.onStatusChange((s) => {
+    let payload = s
+    if (s.running && WORKSPACE && WORKSPACE.kind === 'local') {
+      const resolvedWs = path.resolve(WORKSPACE.root)
+      const rel = path.relative(resolvedWs, s.root).split(path.sep).join('/')
+      payload = { ...s, relPath: rel }
+    }
+    for (const w of BrowserWindow.getAllWindows()) {
+      try { w.webContents.send('canvServe:statusChanged', payload) } catch { /* ignore */ }
+    }
+  })
 }
 
 let popoutWindow = null
@@ -778,6 +823,10 @@ app.whenReady().then(() => {
   registerFsHandlers()
   registerDockHandlers()
   createWindow()
+})
+
+app.on('before-quit', () => {
+  serve.stop().catch(() => {})
 })
 
 app.on('window-all-closed', () => {

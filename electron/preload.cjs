@@ -140,6 +140,17 @@ if (!isDockPopout()) {
     list: () => ipcRenderer.invoke('canvConfig:list'),
     revealFolder: () => ipcRenderer.invoke('canvConfig:revealFolder'),
   })
+
+  contextBridge.exposeInMainWorld('canvServe', {
+    start: (absRoot) => ipcRenderer.invoke('canvServe:start', absRoot),
+    stop: () => ipcRenderer.invoke('canvServe:stop'),
+    status: () => ipcRenderer.invoke('canvServe:status'),
+    onStatusChanged: (cb) => {
+      const listener = (_e, payload) => { try { cb(payload) } catch { /* ignore */ } }
+      ipcRenderer.on('canvServe:statusChanged', listener)
+      return () => ipcRenderer.removeListener('canvServe:statusChanged', listener)
+    },
+  })
 }
 
 // Available in both main and pop-out windows.
