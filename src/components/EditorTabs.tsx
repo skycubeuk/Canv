@@ -94,7 +94,7 @@ export function EditorTabs({
         dragOver ? 'outline outline-2 outline-[rgb(var(--border-strong))]' : ''
       }`}
     >
-      <div className="flex items-center overflow-x-auto whitespace-nowrap min-w-0 h-full">
+      <div className="flex items-center overflow-x-auto overflow-y-hidden whitespace-nowrap min-w-0 h-full">
         {tabs.map((t) => {
           const key = tabKey(t)
           const active = key === activeKey

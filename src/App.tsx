@@ -1709,7 +1709,6 @@ PLANNING. For any task that will take 3 or more tool calls, call \`set_todos\` B
         sidebarVisible={ideLayout.layout.sidebar.visible}
         bottomVisible={ideLayout.layout.bottom.visible}
         bottomPlacement={ideLayout.layout.bottom.placement}
-        onToggleSidebar={ideLayout.toggleSidebar}
         onSetBottomPlacementBottom={setBottomPlacementBottom}
         onSetBottomPlacementRight={setBottomPlacementRight}
         gitBadge={gitBadge}

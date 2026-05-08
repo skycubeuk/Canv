@@ -1,4 +1,4 @@
-import { Folder, Search, GitBranch, PanelLeft, PanelRight, PanelBottom } from 'lucide-react'
+import { Folder, Search, GitBranch, PanelRight, PanelBottom } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { SidebarTab, InAppDockPlacement } from '../../hooks/useIdeLayout'
 import { DocumentAgentMenu } from '../DocumentAgentMenu'
@@ -16,7 +16,6 @@ interface Props {
   sidebarVisible: boolean
   bottomVisible: boolean
   bottomPlacement: InAppDockPlacement | 'popout'
-  onToggleSidebar: () => void
   onSetBottomPlacementBottom: () => void
   onSetBottomPlacementRight: () => void
   gitBadge?: string | null
@@ -34,7 +33,7 @@ export function TopBar(props: Props) {
     workspaceName, activeSidebarTab, onSelectSidebarTab,
     onOpenCommandPalette, profile, hasMarkdownTab, activeFileName, onRunDocAgent,
     sidebarVisible, bottomVisible, bottomPlacement,
-    onToggleSidebar, onSetBottomPlacementBottom, onSetBottomPlacementRight,
+    onSetBottomPlacementBottom, onSetBottomPlacementRight,
     gitBadge,
   } = props
 
@@ -122,18 +121,8 @@ export function TopBar(props: Props) {
 
       <span aria-hidden className="w-px h-[18px] bg-[rgb(var(--border-default))] mx-1" />
 
-      {/* Layout toggles */}
-      <button
-        type="button"
-        aria-label="Panel left (toggle sidebar)"
-        aria-pressed={sidebarVisible}
-        onClick={onToggleSidebar}
-        className={`w-7 h-7 grid place-items-center rounded-md ${
-          sidebarVisible ? 'bg-active text-default' : 'text-muted hover:bg-hover'
-        }`}
-      >
-        <PanelLeft aria-hidden className="w-3.5 h-3.5" />
-      </button>
+      {/* Dock placement toggles. Sidebar visibility is driven by the
+          Files/Search/Git tabs (re-clicking the active tab collapses). */}
       <button
         type="button"
         aria-label="Panel right (dock to right)"

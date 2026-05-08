@@ -32,7 +32,6 @@ const baseProps = {
   sidebarVisible: true,
   bottomVisible: false,
   bottomPlacement: 'bottom' as const,
-  onToggleSidebar: vi.fn(),
   onSetBottomPlacementBottom: vi.fn(),
   onSetBottomPlacementRight: vi.fn(),
   gitBadge: null as string | null,
