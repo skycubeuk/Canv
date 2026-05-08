@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 
-import { Plus, FolderPlus, Upload } from 'lucide-react'
+import { Plus, FolderPlus, FolderOpen } from 'lucide-react'
 import { Group, Panel, Separator, type Layout } from 'react-resizable-panels'
 import type { SidebarTab } from '../../hooks/useIdeLayout'
 import { SidebarFooter } from './sidebar/SidebarFooter'
@@ -26,7 +26,7 @@ interface Props {
   onOutlineSizeChange: (size: number) => void
   onNewFile: () => void
   onNewFolder: () => void
-  onUpload: () => void
+  onChangeWorkspace: () => void
 }
 
 function ComingSoon({ label }: { label: string }) {
@@ -42,7 +42,7 @@ export function LeftSidebar(props: Props) {
     activeTab, files, search, git, settings, onUpdateSettings,
     workspaceName,
     outline, outlineSize, onOutlineSizeChange,
-    onNewFile, onNewFolder, onUpload,
+    onNewFile, onNewFolder, onChangeWorkspace,
   } = props
   const tabs: SidebarTabDef[] = [
     { id: 'files', label: 'Files', body: files },
@@ -87,11 +87,12 @@ export function LeftSidebar(props: Props) {
             </button>
             <button
               type="button"
-              aria-label="Upload"
+              aria-label="Change workspace"
+              title="Change workspace"
               className="w-[22px] h-[22px] grid place-items-center rounded text-subtle hover:bg-hover hover:text-default"
-              onClick={onUpload}
+              onClick={onChangeWorkspace}
             >
-              <Upload aria-hidden className="w-3 h-3" />
+              <FolderOpen aria-hidden className="w-3 h-3" />
             </button>
           </div>
         </header>

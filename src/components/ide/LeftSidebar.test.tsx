@@ -44,7 +44,7 @@ function baseProps() {
     onOutlineSizeChange: vi.fn(),
     onNewFile: vi.fn(),
     onNewFolder: vi.fn(),
-    onUpload: vi.fn(),
+    onChangeWorkspace: vi.fn(),
   }
 }
 
@@ -95,6 +95,19 @@ describe('LeftSidebar', () => {
     const props = { ...baseProps(), activeTab: 'search' as const }
     render(<LeftSidebar {...props} outline={null} />)
     expect(screen.getByTestId('search-tab')).toBeInTheDocument()
+  })
+
+  it('renders a Change workspace button that calls onChangeWorkspace when clicked', () => {
+    const onChangeWorkspace = vi.fn()
+    render(
+      <LeftSidebar
+        {...baseProps()}
+        onChangeWorkspace={onChangeWorkspace}
+        outline={null}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: /change workspace/i }))
+    expect(onChangeWorkspace).toHaveBeenCalledTimes(1)
   })
 
   it('preserves the file tree subtree when the outline appears', () => {

@@ -1876,7 +1876,7 @@ PLANNING. For any task that will take 3 or more tool calls, call \`set_todos\` B
               onOutlineSizeChange={ideLayout.setOutlineSize}
               onNewFile={() => handleCreateFile('')}
               onNewFolder={() => handleCreateFolder('')}
-              onUpload={() => { /* TODO(0.7.1): wire upload action */ }}
+              onChangeWorkspace={handleChangeWorkspace}
             />
           )}
           sidebarVisible={ideLayout.layout.sidebar.visible}
