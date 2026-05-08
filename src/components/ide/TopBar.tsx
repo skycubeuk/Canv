@@ -75,20 +75,24 @@ export function TopBar(props: Props) {
       <div className="flex items-center gap-0.5 ml-1.5">
         {sectionTabs.map((t) => {
           const isActive = t.id === activeSidebarTab && sidebarVisible
+          const hasBadge = t.badge != null && t.badge !== ''
           return (
             <button
               key={t.id}
               type="button"
+              aria-label={t.label}
               aria-pressed={isActive}
+              title={t.label}
               onClick={() => onSelectSidebarTab(t.id)}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md font-medium ${
+              className={`relative w-7 h-7 grid place-items-center rounded-md ${
                 isActive ? 'bg-active text-default' : 'text-muted hover:bg-hover'
               }`}
             >
               <t.icon aria-hidden className="w-3.5 h-3.5" />
-              <span>{t.label}</span>
-              {t.badge != null && t.badge !== '' && (
-                <span className="text-[10px] px-1.5 py-px rounded bg-elev text-muted">{t.badge}</span>
+              {hasBadge && (
+                <span className="absolute top-0 right-0 text-[9px] leading-none px-1 py-px rounded bg-elev text-muted translate-x-1/3 -translate-y-1/3">
+                  {t.badge}
+                </span>
               )}
             </button>
           )
