@@ -26,6 +26,7 @@ export interface Settings {
   chatToolBudget: number
   pricingOverrides: Record<string, ModelPricing>
   streamChunkDelayMs: StreamChunkDelayMs
+  autoScroll: boolean
   lintRules: {
     brokenLinks: boolean
     frontMatter: boolean
@@ -51,6 +52,7 @@ const DEFAULT_SETTINGS: Settings = {
   chatToolBudget: 10,
   pricingOverrides: {},
   streamChunkDelayMs: 0,
+  autoScroll: true,
   lintRules: {
     brokenLinks: true,
     frontMatter: true,

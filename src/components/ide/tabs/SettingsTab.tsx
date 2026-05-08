@@ -349,6 +349,61 @@ export function SettingsTab(props: Props) {
       ),
     },
     {
+      id: 'streaming',
+      title: 'Streaming',
+      keywords: ['streaming', 'slow', 'mode', 'chunk', 'delay', 'auto', 'scroll', 'follow'],
+      body: (
+        <div data-testid="streaming-controls" className="space-y-3">
+          <Field label="Slow-mode delay">
+            <div className="flex gap-1" role="radiogroup" aria-label="Stream chunk delay">
+              {([0, 50, 100, 200] as const).map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  role="radio"
+                  aria-checked={settings.streamChunkDelayMs === d}
+                  onClick={() => onUpdate({ streamChunkDelayMs: d })}
+                  className={`flex-1 px-3 py-1.5 text-sm rounded-md ${
+                    settings.streamChunkDelayMs === d
+                      ? 'bg-[rgb(var(--text-default))] text-[rgb(var(--bg-app))]'
+                      : 'bg-active hover:bg-hover'
+                  }`}
+                >
+                  {d}ms
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-subtle mt-1">
+              Optional pause between streamed chunks. 0 = stream as fast as the model emits.
+            </p>
+          </Field>
+          <Field label="Auto-scroll chat">
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={settings.autoScroll}
+                aria-label="Auto-scroll chat to latest message"
+                onClick={() => onUpdate({ autoScroll: !settings.autoScroll })}
+                className={`w-9 h-5 rounded-full p-0.5 transition-colors ${
+                  settings.autoScroll ? 'bg-accent' : 'bg-hover'
+                }`}
+              >
+                <span
+                  className={`block w-4 h-4 rounded-full bg-elev transition-transform ${
+                    settings.autoScroll ? 'translate-x-4' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+              <span className="text-sm text-muted">
+                {settings.autoScroll ? 'Following latest message during streaming' : 'Viewport stays put'}
+              </span>
+            </div>
+          </Field>
+        </div>
+      ),
+    },
+    {
       id: 'backup',
       title: 'Backup & Restore',
       keywords: ['backup', 'restore', 'export', 'import', 'json'],

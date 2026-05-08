@@ -21,6 +21,7 @@ describe('DocumentAgentMenu', () => {
       <DocumentAgentMenu
         profile={makeProfile([selOnly])}
         hasMarkdownTab={true}
+        activeFileName={"sample.md"}
         onRunAgent={vi.fn()}
       />,
     )
@@ -32,6 +33,7 @@ describe('DocumentAgentMenu', () => {
       <DocumentAgentMenu
         profile={makeProfile([docA])}
         hasMarkdownTab={false}
+        activeFileName={null}
         onRunAgent={vi.fn()}
       />,
     )
@@ -45,6 +47,7 @@ describe('DocumentAgentMenu', () => {
       <DocumentAgentMenu
         profile={makeProfile([docB, docA])}
         hasMarkdownTab={true}
+        activeFileName={"sample.md"}
         onRunAgent={vi.fn()}
       />,
     )
@@ -64,6 +67,7 @@ describe('DocumentAgentMenu', () => {
       <DocumentAgentMenu
         profile={makeProfile([docA])}
         hasMarkdownTab={true}
+        activeFileName={"sample.md"}
         onRunAgent={onRunAgent}
       />,
     )
@@ -80,6 +84,7 @@ describe('DocumentAgentMenu', () => {
       <DocumentAgentMenu
         profile={makeProfile([docInstr])}
         hasMarkdownTab={true}
+        activeFileName={"sample.md"}
         onRunAgent={onRunAgent}
       />,
     )
@@ -101,6 +106,7 @@ describe('DocumentAgentMenu', () => {
       <DocumentAgentMenu
         profile={makeProfile([docInstr])}
         hasMarkdownTab={true}
+        activeFileName={"sample.md"}
         onRunAgent={vi.fn()}
       />,
     )
@@ -118,6 +124,7 @@ describe('DocumentAgentMenu', () => {
       <DocumentAgentMenu
         profile={makeProfile([docA])}
         hasMarkdownTab={true}
+        activeFileName={"sample.md"}
         onRunAgent={vi.fn()}
       />,
     )
@@ -135,6 +142,7 @@ describe('DocumentAgentMenu', () => {
         <DocumentAgentMenu
           profile={makeProfile([docA])}
           hasMarkdownTab={true}
+        activeFileName={"sample.md"}
           onRunAgent={vi.fn()}
         />
       </div>,

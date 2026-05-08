@@ -1,14 +1,34 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
+import { Sparkles } from 'lucide-react'
 import { TopBar } from './TopBar'
+import type { Mode } from '../../config/types'
+
+const stubProfile: Mode = {
+  id: 'test',
+  label: 'Test',
+  systemPromptName: 'default',
+  actions: [
+    {
+      id: 'doc-stub',
+      label: 'Stub doc agent',
+      group: 'core',
+      inputMode: 'document',
+      icon: Sparkles,
+      prompt: 'stub',
+    },
+  ],
+} as unknown as Mode
 
 const baseProps = {
   workspaceName: 'UntitledBook',
   activeSidebarTab: 'files' as const,
   onSelectSidebarTab: vi.fn(),
   onOpenCommandPalette: vi.fn(),
-  onRunMain: vi.fn(),
-  onOpenRunMenu: vi.fn(),
+  profile: stubProfile,
+  hasMarkdownTab: false,
+  activeFileName: null as string | null,
+  onRunDocAgent: vi.fn(),
   sidebarVisible: true,
   bottomVisible: false,
   bottomPlacement: 'bottom' as const,
@@ -45,18 +65,16 @@ describe('TopBar', () => {
     expect(onOpen).toHaveBeenCalled()
   })
 
-  it('clicking Run fires onRunMain', () => {
-    const onRunMain = vi.fn()
-    render(<TopBar {...baseProps} onRunMain={onRunMain} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Run' }))
-    expect(onRunMain).toHaveBeenCalled()
+  it('Run-on-document button is disabled when no markdown tab is open', () => {
+    render(<TopBar {...baseProps} hasMarkdownTab={false} />)
+    const trigger = screen.getByTestId('document-agent-menu-trigger')
+    expect(trigger).toBeDisabled()
   })
 
-  it('clicking the Run chevron fires onOpenRunMenu', () => {
-    const onOpenRunMenu = vi.fn()
-    render(<TopBar {...baseProps} onOpenRunMenu={onOpenRunMenu} />)
-    fireEvent.click(screen.getByRole('button', { name: /run options/i }))
-    expect(onOpenRunMenu).toHaveBeenCalled()
+  it('Run-on-document button is enabled when a markdown tab is open', () => {
+    render(<TopBar {...baseProps} hasMarkdownTab={true} />)
+    const trigger = screen.getByTestId('document-agent-menu-trigger')
+    expect(trigger).not.toBeDisabled()
   })
 
   it('shows git badge count when provided', () => {

@@ -3,7 +3,6 @@ import { EditorTabs } from '../EditorTabs'
 import { SubToolbar } from './SubToolbar'
 import { tabKey, isMarkdownTab, isDiffTab } from '../../lib/tabKey'
 import type { OpenTab, EditorGroupId } from '../../types/workspace'
-import type { Action, Mode } from '../../config/types'
 
 type ViewMode = 'edit' | 'preview'
 
@@ -25,15 +24,13 @@ interface Props {
     viewMode: ViewMode,
   ) => ReactNode
   emptyState: ReactNode
-  profile: Mode
-  onRunDocAgent: (agent: Action, instruction?: string) => void
 }
 
 export function EditorGroup(props: Props) {
   const {
     groupId, isActive, workspaceRoot, tabs, activeKey, dirtySet,
     onSelect, onClose, onClickFolder, onFocusGroup, onDropTab,
-    renderTabContent, emptyState, profile, onRunDocAgent,
+    renderTabContent, emptyState,
   } = props
 
   const activeTab = tabs.find((t) => tabKey(t) === activeKey) ?? null
@@ -79,9 +76,6 @@ export function EditorGroup(props: Props) {
         onSelect={(key) => { if (!isActive) onFocusGroup(); onSelect(key) }}
         onClose={onClose}
         onDropTab={onDropTab}
-        profile={profile}
-        hasMarkdownTab={hasMarkdownTab}
-        onRunDocAgent={onRunDocAgent}
       />
       <SubToolbar
         workspaceName={workspaceRoot}

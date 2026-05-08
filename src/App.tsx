@@ -58,7 +58,6 @@ import { useDockBridge } from './hooks/useDockBridge'
 import type { DockState, DockRun, UserAction } from './lib/dockTypes'
 import { applyAccent, applyTheme, resolveTheme } from './lib/accent'
 import { TopBar } from './components/ide/TopBar'
-import { RunControlsMenu } from './components/ide/RunControlsMenu'
 import { chatTotals } from './lib/chatUsage'
 
 const MAX_RUNS = 10
@@ -129,7 +128,14 @@ export default function App() {
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [paletteMode, setPaletteMode] = useState<PaletteMode>('commands')
   const [followLatest, setFollowLatest] = useState(true)
-  const [runMenuOpen, setRunMenuOpen] = useState(false)
+  // Settings → Streaming → Auto-scroll is the master switch. Reset the
+  // session-level followLatest to match settings.autoScroll on each change.
+  // Within a session, ChatPanel's scroll-up-to-pause logic still overrides
+  // this on each scroll event.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the whole point of this effect: mirror persisted setting into ephemeral session state
+    setFollowLatest(settings.autoScroll)
+  }, [settings.autoScroll])
   const [recentFiles, setRecentFiles] = useState<string[]>([])
   const [revealFolderRel, setRevealFolderRel] = useState<string | null>(null)
   const [pendingDocAgent, setPendingDocAgent] = useState<AgentDef | null>(null)
@@ -452,18 +458,6 @@ export default function App() {
     () => chatTotals(chatMessages, settings.defaultModel[settings.provider], settings.pricingOverrides),
     [chatMessages, settings.defaultModel, settings.provider, settings.pricingOverrides],
   )
-  const runMeterTokens = meterTotals.tokens
-  const runMeterCost = meterTotals.costUsd
-
-  const handleRunMain = useCallback(() => {
-    if (!ideLayout.layout.bottom.visible) ideLayout.toggleBottom()
-    ideLayout.showBottomTab('chat')
-    queueMicrotask(() => {
-      const el = document.querySelector<HTMLTextAreaElement>('[data-testid="chat-input"]')
-      el?.focus()
-    })
-  }, [ideLayout])
-
   const triggerAgent = useCallback(
     async (agent: AgentDef, range: { from: number; to: number } | null, text: string, instruction?: string) => {
       if (apiKeyMissing) {
@@ -1695,45 +1689,31 @@ PLANNING. For any task that will take 3 or more tool calls, call \`set_todos\` B
           </button>
         </div>
       )}
-      <div className="relative">
-        <TopBar
-          workspaceName={workspace.root}
-          activeSidebarTab={ideLayout.layout.sidebar.activeTab}
-          onSelectSidebarTab={(tab) => {
-            const { visible, activeTab } = ideLayout.layout.sidebar
-            if (visible && activeTab === tab) {
-              ideLayout.toggleSidebar()
-              return
-            }
-            ideLayout.setSidebarTab(tab)
-            if (!visible) ideLayout.toggleSidebar()
-          }}
-          onOpenCommandPalette={() => { setPaletteMode('commands'); setPaletteOpen(true) }}
-          onRunMain={handleRunMain}
-          onOpenRunMenu={() => setRunMenuOpen(true)}
-          sidebarVisible={ideLayout.layout.sidebar.visible}
-          bottomVisible={ideLayout.layout.bottom.visible}
-          bottomPlacement={ideLayout.layout.bottom.placement}
-          onToggleSidebar={ideLayout.toggleSidebar}
-          onSetBottomPlacementBottom={setBottomPlacementBottom}
-          onSetBottomPlacementRight={setBottomPlacementRight}
-          gitBadge={gitBadge}
-        />
-        <RunControlsMenu
-          open={runMenuOpen}
-          onClose={() => setRunMenuOpen(false)}
-          provider={settings.provider}
-          model={settings.defaultModel[settings.provider]}
-          availableModels={getAdapter(settings.provider).models}
-          onChangeModel={(m) => update({ defaultModel: { ...settings.defaultModel, [settings.provider]: m } })}
-          streamChunkDelayMs={settings.streamChunkDelayMs}
-          onChangeDelay={(d) => update({ streamChunkDelayMs: d })}
-          followLatest={followLatest}
-          onToggleFollow={() => setFollowLatest((v) => !v)}
-          meterTotalTokens={runMeterTokens}
-          meterCostUsd={runMeterCost}
-        />
-      </div>
+      <TopBar
+        workspaceName={workspace.root}
+        activeSidebarTab={ideLayout.layout.sidebar.activeTab}
+        onSelectSidebarTab={(tab) => {
+          const { visible, activeTab } = ideLayout.layout.sidebar
+          if (visible && activeTab === tab) {
+            ideLayout.toggleSidebar()
+            return
+          }
+          ideLayout.setSidebarTab(tab)
+          if (!visible) ideLayout.toggleSidebar()
+        }}
+        onOpenCommandPalette={() => { setPaletteMode('commands'); setPaletteOpen(true) }}
+        profile={activeProfile}
+        hasMarkdownTab={workspace.activeMarkdownRel != null}
+        activeFileName={workspace.activeMarkdownRel ? basename(workspace.activeMarkdownRel) : null}
+        onRunDocAgent={(agent, instruction) => handleAgentOnDocument(workspace.activeGroupId, agent, instruction)}
+        sidebarVisible={ideLayout.layout.sidebar.visible}
+        bottomVisible={ideLayout.layout.bottom.visible}
+        bottomPlacement={ideLayout.layout.bottom.placement}
+        onToggleSidebar={ideLayout.toggleSidebar}
+        onSetBottomPlacementBottom={setBottomPlacementBottom}
+        onSetBottomPlacementRight={setBottomPlacementRight}
+        gitBadge={gitBadge}
+      />
       <div className="flex-1 min-h-0">
         <IdeShell
           sidebar={(
@@ -1789,8 +1769,6 @@ PLANNING. For any task that will take 3 or more tool calls, call \`set_todos\` B
                   groupSizes={ideLayout.layout.editor.sizes}
                   onGroupSizesChange={(sizes) => ideLayout.setEditorSizes(sizes)}
                   onClickFolder={handleClickBreadcrumbFolder}
-                  profile={activeProfile}
-                  onRunDocAgent={handleAgentOnDocument}
                   renderTabContent={(groupId, t, isActive, viewMode) => {
                     if (t.kind === 'settings') {
                       return (

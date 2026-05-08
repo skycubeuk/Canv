@@ -5,6 +5,7 @@ import type { Action, Mode } from '../config/types'
 interface Props {
   profile: Mode
   hasMarkdownTab: boolean
+  activeFileName: string | null
   onRunAgent: (agent: Action, instruction?: string) => void
 }
 
@@ -13,7 +14,7 @@ type MenuState =
   | { kind: 'list' }
   | { kind: 'instruction'; agent: Action }
 
-export function DocumentAgentMenu({ profile, hasMarkdownTab, onRunAgent }: Props) {
+export function DocumentAgentMenu({ profile, hasMarkdownTab, activeFileName, onRunAgent }: Props) {
   const [state, setState] = useState<MenuState>({ kind: 'closed' })
   const [instructionText, setInstructionText] = useState('')
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -96,7 +97,7 @@ export function DocumentAgentMenu({ profile, hasMarkdownTab, onRunAgent }: Props
   }
 
   return (
-    <div ref={containerRef} className="relative shrink-0 flex items-stretch">
+    <div ref={containerRef} className="relative shrink-0">
       <button
         type="button"
         data-testid="document-agent-menu-trigger"
@@ -105,9 +106,9 @@ export function DocumentAgentMenu({ profile, hasMarkdownTab, onRunAgent }: Props
         title={triggerDisabled ? 'Open a document to run agents' : 'Run on document'}
         aria-haspopup="menu"
         aria-expanded={state.kind !== 'closed'}
-        className="inline-flex items-center gap-1 px-3 text-xs text-muted hover:bg-hover disabled:opacity-50 disabled:cursor-not-allowed border-l border-default"
+        className="flex items-center h-7 pl-2.5 pr-2 rounded-md bg-accent text-accent-fg font-medium text-[12px] gap-1.5 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
       >
-        <Play aria-hidden className="w-3 h-3" />
+        <Play aria-hidden className="w-3 h-3" fill="currentColor" />
         <span className="hidden sm:inline">Run on document</span>
         <ChevronDown aria-hidden className="w-3 h-3" />
       </button>
@@ -117,8 +118,15 @@ export function DocumentAgentMenu({ profile, hasMarkdownTab, onRunAgent }: Props
           role="menu"
           data-testid="document-agent-menu"
           tabIndex={-1}
-          className="absolute right-0 top-full mt-1 z-30 min-w-[220px] rounded-md border border-default bg-elev shadow-md py-1"
+          className="absolute right-0 top-full mt-1 z-30 min-w-[260px] rounded-md border border-default bg-elev shadow-md py-1"
         >
+          <div className="px-3 py-1.5 text-[10.5px] uppercase tracking-wider text-subtle border-b border-default">
+            {activeFileName ? (
+              <>Run on <span className="text-default normal-case tracking-normal">{activeFileName}</span></>
+            ) : (
+              'Run on document'
+            )}
+          </div>
           {documentAgents.map((agent) => (
             <button
               key={agent.id}

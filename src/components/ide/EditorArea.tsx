@@ -2,7 +2,6 @@ import type { ReactNode } from 'react'
 import { Group, Panel, Separator, type Layout } from 'react-resizable-panels'
 import { EditorGroup } from './EditorGroup'
 import type { OpenTab, EditorGroupId, EditorGroupState } from '../../types/workspace'
-import type { Action, Mode } from '../../config/types'
 
 interface Props {
   workspaceRoot: string | null
@@ -23,8 +22,6 @@ interface Props {
     viewMode: 'edit' | 'preview',
   ) => ReactNode
   emptyState: ReactNode
-  profile: Mode
-  onRunDocAgent: (groupId: EditorGroupId, agent: Action, instruction?: string) => void
 }
 
 export function EditorArea(props: Props) {
@@ -56,8 +53,6 @@ function SoloGroup(props: Props) {
           props.renderTabContent(g.id, tab, isActive, viewMode)
         }
         emptyState={props.emptyState}
-        profile={props.profile}
-        onRunDocAgent={(agent, instruction) => props.onRunDocAgent(g.id, agent, instruction)}
       />
     </div>
   )
@@ -94,8 +89,6 @@ function SplitGroups(props: Props) {
             props.renderTabContent(g1.id, tab, isActive, viewMode)
           }
           emptyState={props.emptyState}
-          profile={props.profile}
-          onRunDocAgent={(agent, instruction) => props.onRunDocAgent(g1.id, agent, instruction)}
         />
       </Panel>
       <Separator className="w-px bg-[rgb(var(--border-default))] hover:bg-[rgb(var(--border-strong))] transition-colors cursor-col-resize" />
@@ -116,8 +109,6 @@ function SplitGroups(props: Props) {
             props.renderTabContent(g2.id, tab, isActive, viewMode)
           }
           emptyState={props.emptyState}
-          profile={props.profile}
-          onRunDocAgent={(agent, instruction) => props.onRunDocAgent(g2.id, agent, instruction)}
         />
       </Panel>
     </Group>

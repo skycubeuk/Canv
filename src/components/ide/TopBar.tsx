@@ -1,14 +1,18 @@
-import { Folder, Search, GitBranch, Play, ChevronDown, PanelLeft, PanelRight, PanelBottom } from 'lucide-react'
+import { Folder, Search, GitBranch, PanelLeft, PanelRight, PanelBottom } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { SidebarTab, InAppDockPlacement } from '../../hooks/useIdeLayout'
+import { DocumentAgentMenu } from '../DocumentAgentMenu'
+import type { Action, Mode } from '../../config/types'
 
 interface Props {
   workspaceName: string | null
   activeSidebarTab: SidebarTab
   onSelectSidebarTab: (tab: SidebarTab) => void
   onOpenCommandPalette: () => void
-  onRunMain: () => void
-  onOpenRunMenu: () => void
+  profile: Mode
+  hasMarkdownTab: boolean
+  activeFileName: string | null
+  onRunDocAgent: (agent: Action, instruction?: string) => void
   sidebarVisible: boolean
   bottomVisible: boolean
   bottomPlacement: InAppDockPlacement | 'popout'
@@ -28,7 +32,7 @@ interface SectionTab {
 export function TopBar(props: Props) {
   const {
     workspaceName, activeSidebarTab, onSelectSidebarTab,
-    onOpenCommandPalette, onRunMain, onOpenRunMenu,
+    onOpenCommandPalette, profile, hasMarkdownTab, activeFileName, onRunDocAgent,
     sidebarVisible, bottomVisible, bottomPlacement,
     onToggleSidebar, onSetBottomPlacementBottom, onSetBottomPlacementRight,
     gitBadge,
@@ -108,26 +112,13 @@ export function TopBar(props: Props) {
 
       <div className="flex-1" />
 
-      {/* Run split-button — visually unified, two click targets */}
-      <div className="flex items-stretch h-7 bg-accent text-accent-fg rounded-md overflow-hidden hover:opacity-90 transition-opacity">
-        <button
-          type="button"
-          aria-label="Run"
-          onClick={onRunMain}
-          className="flex items-center gap-1.5 pl-2.5 pr-2 font-medium"
-        >
-          <Play aria-hidden className="w-3 h-3" fill="currentColor" />
-          <span>Run</span>
-        </button>
-        <button
-          type="button"
-          onClick={onOpenRunMenu}
-          aria-label="Run options"
-          className="grid place-items-center w-6 border-l border-[color:color-mix(in_oklab,rgb(var(--accent))_70%,black)]"
-        >
-          <ChevronDown aria-hidden className="w-3 h-3" />
-        </button>
-      </div>
+      {/* Run-on-document — single accent button that opens the agent picker */}
+      <DocumentAgentMenu
+        profile={profile}
+        hasMarkdownTab={hasMarkdownTab}
+        activeFileName={activeFileName}
+        onRunAgent={onRunDocAgent}
+      />
 
       <span aria-hidden className="w-px h-[18px] bg-[rgb(var(--border-default))] mx-1" />
 

@@ -5,13 +5,8 @@ import userEvent from '@testing-library/user-event'
 import { EditorGroup } from './EditorGroup'
 import type { OpenTab } from '../../types/workspace'
 import { DialogProvider } from '../../lib/dialogs'
-import { makeTestMode } from '../../test/fixtures'
 
 const render = (ui: ReactElement) => rtlRender(ui, { wrapper: DialogProvider })
-
-vi.mock('../DocumentAgentMenu', () => ({
-  DocumentAgentMenu: () => <div data-testid="agent-menu-stub" />,
-}))
 
 function makeMarkdownTab(rel: string): OpenTab {
   return {
@@ -20,10 +15,6 @@ function makeMarkdownTab(rel: string): OpenTab {
     loadedMarkdown: '',
     mtimeMs: 0,
   }
-}
-
-function makeProfile() {
-  return makeTestMode()
 }
 
 describe('EditorGroup view-mode persistence', () => {
@@ -57,8 +48,6 @@ describe('EditorGroup view-mode persistence', () => {
           onDropTab={vi.fn()}
           renderTabContent={renderTabContent}
           emptyState={<div />}
-          profile={makeProfile()}
-          onRunDocAgent={vi.fn()}
         />
       )
     }
@@ -105,8 +94,6 @@ describe('EditorGroup view-mode persistence', () => {
         onDropTab={vi.fn()}
         renderTabContent={() => <div />}
         emptyState={<div />}
-        profile={makeProfile()}
-        onRunDocAgent={vi.fn()}
       />,
     )
     expect(screen.queryByRole('button', { name: /^edit$/i })).toBeNull()

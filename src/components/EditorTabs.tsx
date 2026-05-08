@@ -2,8 +2,6 @@ import { tabKey, isMarkdownTab, isDiffTab } from '../lib/tabKey'
 import type { OpenTab, EditorGroupId } from '../types/workspace'
 import { setTabDragPayload, readTabDragPayload, hasTabDragPayload } from './ide/dnd'
 import React, { useState } from 'react'
-import { DocumentAgentMenu } from './DocumentAgentMenu'
-import type { Action, Mode } from '../config/types'
 import { GitBranch, Settings as SettingsIcon, X } from 'lucide-react'
 import { useDialogs } from '../lib/dialogs'
 
@@ -15,9 +13,6 @@ interface Props {
   onSelect: (key: string) => void
   onClose: (key: string) => void
   onDropTab: (sourceGroupId: EditorGroupId, key: string) => void
-  profile: Mode
-  hasMarkdownTab: boolean
-  onRunDocAgent: (agent: Action, instruction?: string) => void
 }
 
 function basename(rel: string): string {
@@ -57,9 +52,6 @@ export function EditorTabs({
   onSelect,
   onClose,
   onDropTab,
-  profile,
-  hasMarkdownTab,
-  onRunDocAgent,
 }: Props) {
   const [dragOver, setDragOver] = useState(false)
   const dialogs = useDialogs()
@@ -98,7 +90,7 @@ export function EditorTabs({
       onDragOver={handleStripDragOver}
       onDragLeave={handleStripDragLeave}
       onDrop={handleStripDrop}
-      className={`shrink-0 flex items-center h-9 pl-1.5 bg-panel border-b border-default justify-between ${
+      className={`shrink-0 flex items-center h-9 pl-1.5 bg-panel border-b border-default ${
         dragOver ? 'outline outline-2 outline-[rgb(var(--border-strong))]' : ''
       }`}
     >
@@ -159,13 +151,6 @@ export function EditorTabs({
             </div>
           )
         })}
-      </div>
-      <div className="flex items-center shrink-0 h-full">
-        <DocumentAgentMenu
-          profile={profile}
-          hasMarkdownTab={hasMarkdownTab}
-          onRunAgent={onRunDocAgent}
-        />
       </div>
     </div>
   )
