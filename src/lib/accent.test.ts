@@ -19,9 +19,14 @@ describe('applyAccent', () => {
     document.documentElement.removeAttribute('style')
   })
 
-  it('writes --accent to the documentElement', () => {
+  it('writes --accent to the documentElement as an RGB triplet', () => {
     applyAccent('#10b981')
-    expect(document.documentElement.style.getPropertyValue('--accent')).toBe('#10b981')
+    expect(document.documentElement.style.getPropertyValue('--accent')).toBe('16 185 129')
+  })
+
+  it('passes through values that already look like triplets', () => {
+    applyAccent('99 102 241')
+    expect(document.documentElement.style.getPropertyValue('--accent')).toBe('99 102 241')
   })
 })
 

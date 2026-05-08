@@ -1686,8 +1686,13 @@ PLANNING. For any task that will take 3 or more tool calls, call \`set_todos\` B
           workspaceName={workspace.root}
           activeSidebarTab={ideLayout.layout.sidebar.activeTab}
           onSelectSidebarTab={(tab) => {
+            const { visible, activeTab } = ideLayout.layout.sidebar
+            if (visible && activeTab === tab) {
+              ideLayout.toggleSidebar()
+              return
+            }
             ideLayout.setSidebarTab(tab)
-            if (!ideLayout.layout.sidebar.visible) ideLayout.toggleSidebar()
+            if (!visible) ideLayout.toggleSidebar()
           }}
           onOpenCommandPalette={() => { setPaletteMode('commands'); setPaletteOpen(true) }}
           onRunMain={handleRunMain}
@@ -1860,8 +1865,13 @@ PLANNING. For any task that will take 3 or more tool calls, call \`set_todos\` B
               diffStats={null}
               chatVisible={ideLayout.layout.bottom.visible && ideLayout.layout.bottom.activeTab === 'chat'}
               onToggleChat={() => {
-                if (!ideLayout.layout.bottom.visible) ideLayout.toggleBottom()
-                ideLayout.showBottomTab('chat')
+                const { visible, activeTab } = ideLayout.layout.bottom
+                if (visible && activeTab === 'chat') {
+                  ideLayout.toggleBottom()
+                } else {
+                  if (!visible) ideLayout.toggleBottom()
+                  ideLayout.showBottomTab('chat')
+                }
               }}
               meterTokens={meterTotals.tokens || null}
               meterCostUsd={meterTotals.costUsd || null}

@@ -16,9 +16,19 @@ export const ACCENTS: readonly AccentSwatch[] = [
 
 export const DEFAULT_ACCENT = ACCENTS[0].hex
 
+function hexToTriplet(hex: string): string {
+  const m = /^#?([0-9a-fA-F]{6})$/.exec(hex.trim())
+  if (!m) return hex  // pass-through if it's already a triplet or unrecognised
+  const n = parseInt(m[1], 16)
+  const r = (n >> 16) & 0xff
+  const g = (n >> 8) & 0xff
+  const b = n & 0xff
+  return `${r} ${g} ${b}`
+}
+
 export function applyAccent(hex: string): void {
   if (typeof document === 'undefined') return
-  document.documentElement.style.setProperty('--accent', hex)
+  document.documentElement.style.setProperty('--accent', hexToTriplet(hex))
 }
 
 export type ResolvedTheme = 'dark' | 'light'
