@@ -76,7 +76,15 @@ export const anthropicAdapter: LLMAdapter = {
 
       if (!res.ok) {
         const text = await res.text().catch(() => '')
-        throw new Error(`Anthropic ${res.status}: ${text || res.statusText}`)
+        let apiMessage: string | undefined
+        try {
+          const j = JSON.parse(text) as { error?: { message?: string } }
+          if (typeof j.error?.message === 'string') apiMessage = j.error.message
+        } catch { /* not JSON */ }
+        const err = new Error(`Anthropic ${res.status}: ${apiMessage || text || res.statusText}`) as Error & { status?: number; apiMessage?: string }
+        err.status = res.status
+        if (apiMessage) err.apiMessage = apiMessage
+        throw err
       }
 
       if (!useStream) {
