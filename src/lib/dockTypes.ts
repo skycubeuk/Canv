@@ -28,6 +28,7 @@ export interface DockState {
   streamingRunId: string | null
   ui: {
     theme: Theme
+    accent: string
     fontSize: number
     profileLabel: string | null
   }

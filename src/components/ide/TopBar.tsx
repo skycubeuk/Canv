@@ -108,13 +108,13 @@ export function TopBar(props: Props) {
 
       <div className="flex-1" />
 
-      {/* Run split-button */}
-      <div className="flex items-center">
+      {/* Run split-button — visually unified, two click targets */}
+      <div className="flex items-stretch h-7 bg-accent text-accent-fg rounded-md overflow-hidden hover:opacity-90 transition-opacity">
         <button
           type="button"
           aria-label="Run"
           onClick={onRunMain}
-          className="flex items-center gap-1.5 pl-2 pr-2.5 py-1 rounded-l-md bg-accent text-accent-fg font-medium hover:opacity-90"
+          className="flex items-center gap-1.5 pl-2.5 pr-2 font-medium"
         >
           <Play aria-hidden className="w-3 h-3" fill="currentColor" />
           <span>Run</span>
@@ -123,7 +123,7 @@ export function TopBar(props: Props) {
           type="button"
           onClick={onOpenRunMenu}
           aria-label="Run options"
-          className="px-1.5 py-1 rounded-r-md bg-accent text-accent-fg hover:opacity-90 border-l border-[color:color-mix(in_oklab,rgb(var(--accent))_60%,black)]"
+          className="grid place-items-center w-6 border-l border-[color:color-mix(in_oklab,rgb(var(--accent))_70%,black)]"
         >
           <ChevronDown aria-hidden className="w-3 h-3" />
         </button>

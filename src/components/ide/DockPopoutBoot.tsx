@@ -5,6 +5,7 @@ import { DockPlacementMenu } from './DockPlacementMenu'
 import { useDockBridge } from '../../hooks/useDockBridge'
 import type { DockState, UserAction } from '../../lib/dockTypes'
 import { computeDiff } from '../../lib/diff'
+import { applyAccent, applyTheme, resolveTheme } from '../../lib/accent'
 import { Play, MessageSquare, AlertTriangle } from 'lucide-react'
 import { DialogProvider, useDialogs } from '../../lib/dialogs'
 import {
@@ -32,14 +33,14 @@ export function DockPopoutBoot() {
     bridge.setStateHandler((s) => setState(s))
   }, [bridge])
 
-  // Apply explicit-theme choices (dark / light) to the popout's <html> element.
-  // 'system' is handled by the dedicated effect below.
+  // Apply theme + accent to the popout's <html> via the same data-theme/CSS-var
+  // mechanism the main window uses. Without this the popout has no data-theme
+  // attribute and no --accent value, so every semantic token (bg-app, text-default,
+  // accent rails) falls back to undefined and the window renders unstyled.
   useEffect(() => {
     if (!state) return
-    const t = state.ui.theme
-    const root = document.documentElement
-    if (t === 'dark') root.classList.add('dark')
-    else if (t === 'light') root.classList.remove('dark')
+    applyTheme(resolveTheme(state.ui.theme))
+    applyAccent(state.ui.accent)
   }, [state])
 
   // When theme === 'system', subscribe to prefers-color-scheme so OS dark-mode
@@ -47,15 +48,12 @@ export function DockPopoutBoot() {
   const theme = state?.ui.theme
   useEffect(() => {
     if (theme !== 'system') return
-    const m = window.matchMedia('(prefers-color-scheme: dark)')
-    const apply = (matches: boolean) => {
-      if (matches) document.documentElement.classList.add('dark')
-      else document.documentElement.classList.remove('dark')
-    }
-    apply(m.matches)
+    const mq = window.matchMedia('(prefers-color-scheme: dark)')
+    const apply = (matches: boolean) => applyTheme(matches ? 'dark' : 'light')
+    apply(mq.matches)
     const handler = (e: MediaQueryListEvent) => apply(e.matches)
-    m.addEventListener('change', handler)
-    return () => m.removeEventListener('change', handler)
+    mq.addEventListener('change', handler)
+    return () => mq.removeEventListener('change', handler)
   }, [theme])
 
   const dispatch = useCallback(

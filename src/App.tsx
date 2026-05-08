@@ -1497,6 +1497,7 @@ PLANNING. For any task that will take 3 or more tool calls, call \`set_todos\` B
       streamingRunId,
       ui: {
         theme: settings.theme,
+        accent: settings.accent,
         fontSize: settings.fontSize,
         profileLabel: activeProfile?.label ?? null,
       },
@@ -1511,6 +1512,7 @@ PLANNING. For any task that will take 3 or more tool calls, call \`set_todos\` B
     chatBusy,
     lintIssuesApi.issues,
     settings.theme,
+    settings.accent,
     settings.fontSize,
     activeProfile,
   ])
