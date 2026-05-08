@@ -29,6 +29,17 @@ const widthClass: Record<LineWidth, string> = {
   wide: 'max-w-[960px]',
 }
 
+const editorTypographyTheme = EditorView.theme({
+  '.cm-content': {
+    fontSize: '15px',
+    lineHeight: '1.7',
+    fontFamily: 'Inter, system-ui, sans-serif',
+  },
+  '.cm-line': {
+    padding: '0',
+  },
+})
+
 export function Canvas({
   groupId, tab, isActive, fontSize, lineWidth, viewMode,
   onChange, onSelectionChange, onEditorReady, onEditorDestroy,
@@ -59,7 +70,7 @@ export function Canvas({
         onChangeRef.current(groupId, tab.relPath, doc)
       },
       onSelectionChange: () => onSelectionChangeRef.current?.(groupId, tab.relPath),
-    })
+    }, [editorTypographyTheme])
     const view = new EditorView({ state, parent: container })
     viewRef.current = view
     onEditorReady(groupId, tab.relPath, view)
@@ -117,9 +128,9 @@ export function Canvas({
       className="h-full flex flex-col min-h-0"
       style={{ display: isActive ? 'flex' : 'none' }}
     >
-      <div className="flex-1 overflow-y-auto px-8 py-12 min-h-0">
+      <div className="flex-1 overflow-auto bg-app min-h-0">
         <div
-          className={`mx-auto ${widthClass[lineWidth]}`}
+          className={`mx-auto px-6 pt-10 pb-20 text-[15px] leading-[1.7] text-default ${widthClass[lineWidth]}`}
           style={{ fontSize: `${fontSize}px` }}
         >
           <div

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ChevronDown, ChevronRight, Folder, FileText,
-  FilePlus, FolderPlus, FolderOpen, Pin,
+  Pin,
 } from 'lucide-react'
 import type { DirEntry, DirFile, DirNode } from '../lib/fs'
 import { useDialogs } from '../lib/dialogs'
@@ -143,21 +143,21 @@ export function FileTree(props: Props) {
   }
 
   const renderEntry = (entry: DirEntry, depth: number): React.ReactNode => {
-    const indent = depth * 12 + 8
+    const indent = depth * 14 + 10
     if (entry.kind === 'dir') {
       const isOpen = expanded.has(entry.relPath)
       return (
         <div key={entry.relPath || '__root__'}>
           <div
-            className="flex items-center gap-1 px-1 py-0.5 text-sm cursor-pointer rounded hover:bg-hover text-default"
+            className="flex items-center gap-1.5 px-1 py-[3px] text-[12.5px] cursor-pointer rounded text-muted hover:bg-hover transition-colors"
             style={{ paddingLeft: indent }}
             onClick={() => toggle(entry.relPath)}
             onContextMenu={(e) => handleContextMenu(e, entry)}
           >
             {isOpen
-              ? <ChevronDown aria-hidden className="w-3 h-3 text-muted" />
-              : <ChevronRight aria-hidden className="w-3 h-3 text-muted" />}
-            <Folder aria-hidden className="w-4 h-4" />
+              ? <ChevronDown aria-hidden className="w-2.5 h-2.5 text-subtle" />
+              : <ChevronRight aria-hidden className="w-2.5 h-2.5 text-subtle" />}
+            <Folder aria-hidden className="w-3.5 h-3.5" />
             <span className="truncate flex-1">{entry.name || basename(root)}</span>
           </div>
           {isOpen && entry.children.map((c) => renderEntry(c, depth + 1))}
@@ -175,20 +175,24 @@ export function FileTree(props: Props) {
     return (
       <div
         key={file.relPath}
-        className={`group flex items-center gap-1 pr-1 py-0.5 text-sm cursor-pointer rounded ${
+        className={`group relative flex items-center gap-1.5 pr-2 py-[3px] text-[12.5px] cursor-pointer rounded transition-colors ${
           active
-            ? 'bg-active text-default border-l-2 border-strong'
-            : open
-              ? 'bg-panel text-default hover:bg-hover'
-              : 'text-muted hover:bg-hover'
+            ? 'bg-active text-default'
+            : 'text-muted hover:bg-hover'
         }`}
-        style={{ paddingLeft: indent + (active ? 0 : 2) }}
+        style={{ paddingLeft: indent }}
         onClick={() => !isRenaming && onOpen(file.relPath)}
         onDoubleClick={() => !isRenaming && onOpen(file.relPath)}
         onContextMenu={(e) => handleContextMenu(e, file)}
       >
-        <span aria-hidden className="w-3 text-xs" />
-        <FileText aria-hidden className={`w-4 h-4 ${file.binary ? 'opacity-40' : ''}`} />
+        {active && (
+          <span
+            aria-hidden
+            className="absolute left-0 top-1 bottom-1 w-0.5 rounded-full bg-accent"
+          />
+        )}
+        <span aria-hidden className="w-2 shrink-0" />
+        <FileText aria-hidden className={`w-3.5 h-3.5 shrink-0 ${file.binary ? 'opacity-40' : ''}`} />
         {isRenaming ? (
           <input
             autoFocus
@@ -205,6 +209,9 @@ export function FileTree(props: Props) {
         ) : (
           <span className={`truncate flex-1 ${file.binary ? 'opacity-40' : ''}`}>{file.name}</span>
         )}
+        {!isRenaming && open && !active && (
+          <span aria-hidden className="w-1 h-1 rounded-full bg-accent" title="Modified" />
+        )}
         {!isRenaming && isPinned && (
           <span
             className="ml-auto inline-flex items-center gap-0.5 px-1 text-xs text-amber-400 select-none"
@@ -220,20 +227,6 @@ export function FileTree(props: Props) {
 
   return (
     <aside className="h-full flex flex-col bg-panel border-r border-default overflow-hidden">
-      <div className="shrink-0 px-3 py-2 flex items-center gap-2 border-b border-default">
-        <span className="text-xs uppercase tracking-wide opacity-60 truncate flex-1" title={root}>
-          {basename(root) || root}
-        </span>
-        <button type="button" aria-label="New file in root" title="New file" className="btn-icon" onClick={() => onCreateFile('')}>
-          <FilePlus aria-hidden className="w-4 h-4" />
-        </button>
-        <button type="button" aria-label="New folder in root" title="New folder" className="btn-icon" onClick={() => onCreateFolder('')}>
-          <FolderPlus aria-hidden className="w-4 h-4" />
-        </button>
-        <button type="button" aria-label="Change workspace folder" title="Change workspace" className="btn-icon" onClick={onChangeWorkspace}>
-          <FolderOpen aria-hidden className="w-4 h-4" />
-        </button>
-      </div>
       <div className="flex-1 overflow-y-auto py-1">
         {tree.children.length === 0 ? (
           <div className="px-4 py-3 text-xs text-muted">

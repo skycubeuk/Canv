@@ -41,6 +41,9 @@ function baseProps() {
     workspaceName: 'test-workspace',
     outlineSize: 40,
     onOutlineSizeChange: vi.fn(),
+    onNewFile: vi.fn(),
+    onNewFolder: vi.fn(),
+    onUpload: vi.fn(),
   }
 }
 

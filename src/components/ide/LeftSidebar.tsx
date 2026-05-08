@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 
+import { Plus, FolderPlus, Upload } from 'lucide-react'
 import { Group, Panel, Separator, type Layout } from 'react-resizable-panels'
 import type { SidebarTab } from '../../hooks/useIdeLayout'
 import { SidebarFooter } from './sidebar/SidebarFooter'
@@ -23,6 +24,9 @@ interface Props {
   outline?: ReactNode | null
   outlineSize: number
   onOutlineSizeChange: (size: number) => void
+  onNewFile: () => void
+  onNewFolder: () => void
+  onUpload: () => void
 }
 
 function ComingSoon({ label }: { label: string }) {
@@ -38,6 +42,7 @@ export function LeftSidebar(props: Props) {
     activeTab, files, search, git, settings, onUpdateSettings,
     workspaceName,
     outline, outlineSize, onOutlineSizeChange,
+    onNewFile, onNewFolder, onUpload,
   } = props
   const tabs: SidebarTabDef[] = [
     { id: 'files', label: 'Files', body: files },
@@ -57,6 +62,39 @@ export function LeftSidebar(props: Props) {
       className="h-full flex flex-col bg-panel border-r border-default"
     >
 
+      {activeTab === 'files' && (
+        <header className="shrink-0 flex items-center justify-between px-3 pt-2.5 pb-2">
+          <span className="text-[10.5px] font-semibold tracking-wider uppercase text-subtle">
+            Workspace
+          </span>
+          <div className="flex gap-0.5">
+            <button
+              type="button"
+              aria-label="New file"
+              className="w-[22px] h-[22px] grid place-items-center rounded text-subtle hover:bg-hover hover:text-default"
+              onClick={onNewFile}
+            >
+              <Plus aria-hidden className="w-3 h-3" />
+            </button>
+            <button
+              type="button"
+              aria-label="New folder"
+              className="w-[22px] h-[22px] grid place-items-center rounded text-subtle hover:bg-hover hover:text-default"
+              onClick={onNewFolder}
+            >
+              <FolderPlus aria-hidden className="w-3 h-3" />
+            </button>
+            <button
+              type="button"
+              aria-label="Upload"
+              className="w-[22px] h-[22px] grid place-items-center rounded text-subtle hover:bg-hover hover:text-default"
+              onClick={onUpload}
+            >
+              <Upload aria-hidden className="w-3 h-3" />
+            </button>
+          </div>
+        </header>
+      )}
       <div className="flex-1 min-h-0">
         {showOutline ? (
           <Group

@@ -98,11 +98,11 @@ export function EditorTabs({
       onDragOver={handleStripDragOver}
       onDragLeave={handleStripDragLeave}
       onDrop={handleStripDrop}
-      className={`shrink-0 flex items-stretch justify-between border-b border-default bg-panel ${
+      className={`shrink-0 flex items-center h-9 pl-1.5 bg-panel border-b border-default justify-between ${
         dragOver ? 'outline outline-2 outline-[rgb(var(--border-strong))]' : ''
-      } ${tabs.length === 0 ? 'h-7' : ''}`}
+      }`}
     >
-      <div className="flex items-stretch overflow-x-auto whitespace-nowrap min-w-0">
+      <div className="flex items-center overflow-x-auto whitespace-nowrap min-w-0 h-full">
         {tabs.map((t) => {
           const key = tabKey(t)
           const active = key === activeKey
@@ -128,18 +128,21 @@ export function EditorTabs({
                 }
               }}
               title={tabTitle(t)}
-              className={`group flex items-center gap-1.5 px-3 py-1.5 text-xs cursor-pointer border-r border-default select-none ${
+              className={`group relative flex items-center gap-2 px-2.5 h-9 border-r border-default text-[12px] cursor-pointer select-none ${
                 active
                   ? 'bg-app text-default'
                   : 'text-muted hover:bg-hover'
               }`}
             >
+              {active && (
+                <span aria-hidden className="absolute top-0 left-0 right-0 h-0.5 bg-accent" />
+              )}
               <span className="flex items-center gap-1 max-w-[180px] truncate">{tabLabel(t)}</span>
               {dirty && (
                 <span
                   aria-hidden
-                  className="w-1.5 h-1.5 rounded-full bg-[rgb(var(--text-muted))]"
-                  title="Unsaved"
+                  className="w-[5px] h-[5px] rounded-full bg-[rgb(var(--text-muted))]"
+                  title="Modified"
                 />
               )}
               <button
@@ -149,15 +152,15 @@ export function EditorTabs({
                   e.stopPropagation()
                   void requestClose(key, dirty)
                 }}
-                className="ml-1 w-4 h-4 inline-flex items-center justify-center rounded text-subtle hover:text-default hover:bg-hover"
+                className="opacity-0 group-hover:opacity-100 w-4 h-4 grid place-items-center rounded text-subtle hover:bg-hover hover:text-default ml-0.5"
               >
-                <X aria-hidden className="w-3 h-3" />
+                <X aria-hidden className="w-2.5 h-2.5" />
               </button>
             </div>
           )
         })}
       </div>
-      <div className="flex items-stretch shrink-0">
+      <div className="flex items-center shrink-0 h-full">
         <DocumentAgentMenu
           profile={profile}
           hasMarkdownTab={hasMarkdownTab}
