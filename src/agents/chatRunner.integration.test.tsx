@@ -85,6 +85,7 @@ function Host({ adapter }: { adapter: LLMAdapter }) {
       pricingOverrides={{}}
       followLatest={followLatest}
       onSetFollowLatest={setFollowLatest}
+      contextFileName={null}
     />
   )
 }

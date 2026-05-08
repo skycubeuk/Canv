@@ -1,3 +1,4 @@
+import { MessageSquare } from 'lucide-react'
 import type { Mode } from '../../config/types'
 import type { WorkspaceKind } from '../../lib/fs'
 
@@ -11,6 +12,14 @@ interface Props {
   onClickProfile: () => void
   apiKeyMissing: boolean
   onClickApiKeyWarning: () => void
+  cursorLine: number | null
+  cursorCol: number | null
+  branch: string | null
+  diffStats: { added: number; removed: number } | null
+  chatVisible: boolean
+  onToggleChat: () => void
+  meterTokens: number | null
+  meterCostUsd: number | null
 }
 
 function basenameOrNull(p: string | null): string {
@@ -20,7 +29,12 @@ function basenameOrNull(p: string | null): string {
 }
 
 export function StatusBar(props: Props) {
-  const { saveState, profile, workspaceName, kind, wordCount, selectionWordCount, onClickProfile, apiKeyMissing, onClickApiKeyWarning } = props
+  const {
+    saveState, profile, workspaceName, kind, wordCount, selectionWordCount,
+    onClickProfile, apiKeyMissing, onClickApiKeyWarning,
+    cursorLine, cursorCol, branch, diffStats,
+    chatVisible, onToggleChat, meterTokens, meterCostUsd,
+  } = props
 
   const wordsLabel = selectionWordCount != null
     ? `selection: ${selectionWordCount.toLocaleString()} words`
@@ -85,7 +99,50 @@ export function StatusBar(props: Props) {
         )
       )}
 
-      <span className="ml-auto">{wordsLabel}</span>
+      {branch && (
+        <>
+          <span aria-hidden className="w-px h-3 bg-[rgb(var(--border-default))]" />
+          <span className="text-muted">{branch}</span>
+          {diffStats && (
+            <span className="text-subtle">+{diffStats.added} −{diffStats.removed}</span>
+          )}
+        </>
+      )}
+
+      <div className="ml-auto flex items-center gap-3">
+        {(cursorLine != null && cursorCol != null) && (
+          <>
+            <span>Ln {cursorLine}, Col {cursorCol}</span>
+            <span aria-hidden className="w-px h-3 bg-[rgb(var(--border-default))]" />
+          </>
+        )}
+        <span>UTF-8</span>
+        <span aria-hidden className="w-px h-3 bg-[rgb(var(--border-default))]" />
+        <span>{wordsLabel}</span>
+        <span aria-hidden className="w-px h-3 bg-[rgb(var(--border-default))]" />
+        <span>{Math.max(1, Math.ceil(wordCount / 220))} min read</span>
+        {meterTokens != null && meterCostUsd != null && (
+          <>
+            <span aria-hidden className="w-px h-3 bg-[rgb(var(--border-default))]" />
+            <span className="text-default" title="Tokens · cost (this run)">
+              {meterTokens.toLocaleString()} tok · ${meterCostUsd.toFixed(2)}
+            </span>
+          </>
+        )}
+        <span aria-hidden className="w-px h-3 bg-[rgb(var(--border-default))]" />
+        <button
+          type="button"
+          onClick={onToggleChat}
+          aria-pressed={chatVisible}
+          aria-label={chatVisible ? 'Hide chat' : 'Show chat'}
+          title={chatVisible ? 'Hide chat (Ctrl+`)' : 'Show chat (Ctrl+`)'}
+          className={`w-5 h-5 grid place-items-center rounded ${
+            chatVisible ? 'bg-active text-default' : 'text-muted hover:bg-hover hover:text-default'
+          }`}
+        >
+          <MessageSquare aria-hidden className="w-3 h-3" />
+        </button>
+      </div>
     </div>
   )
 }

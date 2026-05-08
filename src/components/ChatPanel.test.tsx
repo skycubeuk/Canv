@@ -30,6 +30,7 @@ const baseProps = {
   pricingOverrides: {},
   followLatest: true,
   onSetFollowLatest: vi.fn(),
+  contextFileName: null,
 }
 
 describe('ChatPanel — tool rendering', () => {

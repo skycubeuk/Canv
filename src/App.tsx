@@ -59,6 +59,7 @@ import type { DockState, DockRun, UserAction } from './lib/dockTypes'
 import { applyAccent, applyTheme, resolveTheme } from './lib/accent'
 import { TopBar } from './components/ide/TopBar'
 import { RunControlsMenu } from './components/ide/RunControlsMenu'
+import { chatTotals } from './lib/chatUsage'
 
 const MAX_RUNS = 10
 
@@ -431,8 +432,16 @@ export default function App() {
   }, [ideLayout])
 
   const gitBadge = null  // TODO(0.7.1): wire to actual git diff count
-  const runMeterTokens = 0  // TODO(commit 5): wire from chat usage
-  const runMeterCost = 0     // TODO(commit 5): wire from chat usage
+
+  // TODO(0.7.1): wire cursor line/col from Canvas's CodeMirror via onCursorChange prop.
+  const [cursorPos] = useState<{ line: number; col: number } | null>(null)
+
+  const meterTotals = useMemo(
+    () => chatTotals(chatMessages, settings.defaultModel[settings.provider], settings.pricingOverrides),
+    [chatMessages, settings.defaultModel, settings.provider, settings.pricingOverrides],
+  )
+  const runMeterTokens = meterTotals.tokens
+  const runMeterCost = meterTotals.costUsd
 
   const handleRunMain = useCallback(() => {
     if (!ideLayout.layout.bottom.visible) ideLayout.toggleBottom()
@@ -1424,6 +1433,7 @@ PLANNING. For any task that will take 3 or more tool calls, call \`set_todos\` B
             pricingOverrides={settings.pricingOverrides}
             followLatest={followLatest}
             onSetFollowLatest={setFollowLatest}
+            contextFileName={workspace.activeMarkdownRel ? basename(workspace.activeMarkdownRel) : null}
           />
         ),
       },
@@ -1450,7 +1460,7 @@ PLANNING. For any task that will take 3 or more tool calls, call \`set_todos\` B
         render: () => <OutputTab runs={runs} />,
       },
     ]
-  }, [runs, activeTabId, handleCloseTab, handleApply, handleRerun, refineRun, chatMessages, chatBusy, chatProvider, chatModel, sendChat, clearChat, stopChat, pendingApprovals, onApprovalDecide, lintIssuesApi, handleJumpToProblem, settings.pricingOverrides, followLatest, setFollowLatest])
+  }, [runs, activeTabId, handleCloseTab, handleApply, handleRerun, refineRun, chatMessages, chatBusy, chatProvider, chatModel, sendChat, clearChat, stopChat, pendingApprovals, onApprovalDecide, lintIssuesApi, handleJumpToProblem, settings.pricingOverrides, followLatest, setFollowLatest, workspace.activeMarkdownRel])
 
   // ----- Dock pop-out bridge wiring -------------------------------------------------
   // Parse each run on the main side so the popout can render Notes / Rewrite / Diff
@@ -1844,6 +1854,17 @@ PLANNING. For any task that will take 3 or more tool calls, call \`set_todos\` B
               onClickProfile={openProfileSwitcher}
               apiKeyMissing={apiKeyMissing}
               onClickApiKeyWarning={() => openSettingsTab()}
+              cursorLine={cursorPos?.line ?? null}
+              cursorCol={cursorPos?.col ?? null}
+              branch={null}
+              diffStats={null}
+              chatVisible={ideLayout.layout.bottom.visible && ideLayout.layout.bottom.activeTab === 'chat'}
+              onToggleChat={() => {
+                if (!ideLayout.layout.bottom.visible) ideLayout.toggleBottom()
+                ideLayout.showBottomTab('chat')
+              }}
+              meterTokens={meterTotals.tokens || null}
+              meterCostUsd={meterTotals.costUsd || null}
             />
           )}
         />

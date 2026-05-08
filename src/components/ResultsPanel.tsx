@@ -175,6 +175,7 @@ export function ResultsPanel(props: Props) {
           pricingOverrides={chat.pricingOverrides}
           followLatest={followLatest}
           onSetFollowLatest={handleSetFollowLatest}
+          contextFileName={null}
         />
       ) : activeRun ? (
         <RunView run={activeRun} onApply={onApply} onRerun={onRerun} onRefine={onRefine} />

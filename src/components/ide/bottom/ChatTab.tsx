@@ -14,6 +14,7 @@ interface Props {
   pricingOverrides: Record<string, import('../../../config/pricing').ModelPricing>
   followLatest: boolean
   onSetFollowLatest: (next: boolean) => void
+  contextFileName: string | null
 }
 
 export function ChatTab(props: Props) {
@@ -31,6 +32,7 @@ export function ChatTab(props: Props) {
       pricingOverrides={props.pricingOverrides}
       followLatest={props.followLatest}
       onSetFollowLatest={props.onSetFollowLatest}
+      contextFileName={props.contextFileName}
     />
   )
 }
