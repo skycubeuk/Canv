@@ -64,7 +64,7 @@ interface Props {
   contextFileName: string | null
 }
 
-export function ChatPanel({ messages, busy, provider: _provider, model, onSend, onClear, onStop, pendingApprovals, onApprovalDecide, pricingOverrides, followLatest, onSetFollowLatest, contextFileName }: Props) {
+export function ChatPanel({ messages, busy, provider, model, onSend, onClear, onStop, pendingApprovals, onApprovalDecide, pricingOverrides, followLatest, onSetFollowLatest, contextFileName }: Props) {
   const [input, setInput] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
   const dialogs = useDialogs()
@@ -195,6 +195,7 @@ export function ChatPanel({ messages, busy, provider: _provider, model, onSend, 
 
       <ChatMeter
         messages={messages}
+        provider={provider as ChatProvider}
         model={model}
         overrides={pricingOverrides}
         busy={busy}

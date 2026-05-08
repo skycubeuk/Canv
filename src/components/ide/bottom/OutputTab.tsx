@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { RunRecord } from '../../ResultsPanel'
 import { timeAgo } from '../../../lib/timeAgo'
+import { providerName } from '../../../adapters'
 
 interface Props {
   runs: RunRecord[]
@@ -77,7 +78,7 @@ function Meta({ run }: { run: RunRecord }) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1 text-[11px] text-muted">
       <Cell label="Status" value={run.status} />
-      <Cell label="Provider" value={run.provider} />
+      <Cell label="Provider" value={providerName(run.provider)} />
       <Cell label="Model" value={run.model} />
       <Cell label="Elapsed" value={run.elapsedMs != null ? `${run.elapsedMs} ms` : '—'} />
       <Cell label="Input tokens" value={run.tokenUsage ? String(run.tokenUsage.input) : '—'} />

@@ -17,6 +17,7 @@ import {
 import { ChatPanel, Bubble, type ChatMessage } from './ChatPanel'
 import { timeAgo } from '../lib/timeAgo'
 import type { Message, TokenUsage } from '../adapters/types'
+import { providerName } from '../adapters'
 
 export const CHAT_TAB_ID = '__chat__'
 
@@ -257,7 +258,7 @@ export function RunView({
       <div className="px-4 py-3 border-b border-default flex items-center justify-between">
         <div className="text-xs text-muted flex items-center gap-2">
           <StatusPill status={run.status} />
-          <span>{run.provider} · {run.model}</span>
+          <span>{providerName(run.provider)} · {run.model}</span>
           {refineCount > 0 && (
             <span className="text-subtle">· refined {refineCount}×</span>
           )}

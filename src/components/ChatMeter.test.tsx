@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react'
 import { ChatMeter } from './ChatMeter'
 import type { ChatMessage } from './ChatPanel'
 
-const KNOWN_PRICING = { 'm-known': { input: 3, output: 15 } }
+const KNOWN_PRICING = { 'anthropic/m-known': { input: 3, output: 15 } }
 
 const asst = (id: string, usage?: { input: number; output: number }): ChatMessage => ({
   id,
@@ -15,7 +15,7 @@ const asst = (id: string, usage?: { input: number; output: number }): ChatMessag
 describe('ChatMeter', () => {
   it('renders nothing when there are no messages', () => {
     const { container } = render(
-      <ChatMeter messages={[]} model="m-known" overrides={{}} defaults={KNOWN_PRICING} busy={false} />,
+      <ChatMeter messages={[]} provider="anthropic" model="m-known" overrides={{}} defaults={KNOWN_PRICING} busy={false} />,
     )
     expect(container.firstChild).toBeNull()
   })
@@ -23,7 +23,7 @@ describe('ChatMeter', () => {
   it('shows latest turn input/output and computed cost', () => {
     const messages = [asst('a1', { input: 1000, output: 500 })]
     render(
-      <ChatMeter messages={messages} model="m-known" overrides={{}} defaults={KNOWN_PRICING} busy={false} />,
+      <ChatMeter messages={messages} provider="anthropic" model="m-known" overrides={{}} defaults={KNOWN_PRICING} busy={false} />,
     )
     // 1000 in / 500 out
     expect(screen.getByText(/1,000\s*in/)).toBeInTheDocument()
@@ -39,7 +39,7 @@ describe('ChatMeter', () => {
       asst('a2', { input: 2000, output: 1000 }),
     ]
     render(
-      <ChatMeter messages={messages} model="m-known" overrides={{}} defaults={KNOWN_PRICING} busy={false} />,
+      <ChatMeter messages={messages} provider="anthropic" model="m-known" overrides={{}} defaults={KNOWN_PRICING} busy={false} />,
     )
     // session = (3000*3 + 1500*15)/1e6 = 0.0315 → $0.032
     expect(screen.getByText(/session:\s*\$0\.032/)).toBeInTheDocument()
@@ -48,7 +48,7 @@ describe('ChatMeter', () => {
   it('shows "…" for turn fields while busy and the latest assistant has no usage yet', () => {
     const messages: ChatMessage[] = [{ id: 'a1', role: 'assistant', content: '' }]
     render(
-      <ChatMeter messages={messages} model="m-known" overrides={{}} defaults={KNOWN_PRICING} busy={true} />,
+      <ChatMeter messages={messages} provider="anthropic" model="m-known" overrides={{}} defaults={KNOWN_PRICING} busy={true} />,
     )
     expect(screen.getByText(/turn:\s*…\s*in/)).toBeInTheDocument()
     expect(screen.getByText(/streaming/i)).toBeInTheDocument()
@@ -57,7 +57,7 @@ describe('ChatMeter', () => {
   it('renders "—" when pricing is unresolved', () => {
     const messages = [asst('a1', { input: 100, output: 50 })]
     render(
-      <ChatMeter messages={messages} model="m-unknown" overrides={{}} defaults={KNOWN_PRICING} busy={false} />,
+      <ChatMeter messages={messages} provider="anthropic" model="m-unknown" overrides={{}} defaults={KNOWN_PRICING} busy={false} />,
     )
     expect(screen.getAllByText(/—/).length).toBeGreaterThan(0)
   })

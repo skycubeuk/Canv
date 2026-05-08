@@ -4,6 +4,7 @@ import { useModes, getModeById, getActionById } from '../../../hooks/useModes'
 import { timeAgo } from '../../../lib/timeAgo'
 import { cost } from '../../../lib/cost'
 import type { ModelPricing } from '../../../config/pricing'
+import type { Provider } from '../../../adapters'
 
 interface Props {
   runs: RunRecord[]
@@ -53,7 +54,7 @@ export function RunsTab(props: Props) {
               <Icon aria-hidden className="w-4 h-4" />
               <span className="font-medium truncate">{r.agentLabel}</span>
               {r.tokenUsage && (() => {
-                const c = cost(r.tokenUsage, r.model, pricingOverrides, pricingDefaults)
+                const c = cost(r.tokenUsage, r.provider as Provider, r.model, pricingOverrides, pricingDefaults)
                 return c == null ? null : (
                   <span className="text-subtle font-mono text-[10px] ml-1">
                     ${c.toFixed(3)}

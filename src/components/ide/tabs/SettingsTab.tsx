@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { adapterList } from '../../../adapters'
-import { PRICING, type ModelPricing } from '../../../config/pricing'
+import { PRICING, pricingKey, type ModelPricing } from '../../../config/pricing'
 import { useModes } from '../../../hooks/useModes'
 import type { Provider, Settings } from '../../../hooks/useSettings'
 import { importBackup } from '../../../lib/backup'
@@ -211,7 +211,7 @@ export function SettingsTab(props: Props) {
             />
             Use default model for all actions
           </label>
-          {!settings.useDefaultModelForAll && adapter && (
+          {!settings.useDefaultModelForAll && (
             <div className="space-y-4">
               {modes.map((mode) => {
                 const open = openModes[mode.id] ?? false
@@ -229,29 +229,50 @@ export function SettingsTab(props: Props) {
                     </button>
                     {open && (
                       <div className="space-y-2">
-                        {mode.actions.map((a) => (
+                        {mode.actions.map((a) => {
+                          const ref = settings.perAgentModel[mode.id]?.[a.id]
+                            ?? { provider, model: settings.defaultModel[provider] }
+                          const selectValue = `${ref.provider}/${ref.model}`
+                          return (
                           <Field key={a.id} label={<span className="flex items-center gap-1"><a.icon aria-hidden className="w-3.5 h-3.5" />{a.label}</span>}>
                             <select
                               className="input"
-                              value={settings.perAgentModel[mode.id]?.[a.id] ?? settings.defaultModel[provider]}
-                              onChange={(e) =>
+                              value={selectValue}
+                              onChange={(e) => {
+                                const slash = e.target.value.indexOf('/')
+                                const nextRef = slash > 0
+                                  ? { provider: e.target.value.slice(0, slash) as Provider, model: e.target.value.slice(slash + 1) }
+                                  : ref
                                 onUpdate({
                                   perAgentModel: {
                                     ...settings.perAgentModel,
                                     [mode.id]: {
                                       ...(settings.perAgentModel[mode.id] ?? {}),
-                                      [a.id]: e.target.value,
+                                      [a.id]: nextRef,
                                     },
                                   },
                                 })
-                              }
+                              }}
                             >
-                              {adapter.models.map((m) => (
-                                <option key={m} value={m}>{m}</option>
-                              ))}
+                              {adapterList.map((ad) => {
+                                const hasKey = !!settings.apiKeys[ad.id as Provider]
+                                return (
+                                  <optgroup
+                                    key={ad.id}
+                                    label={hasKey ? ad.name : `${ad.name} (no API key)`}
+                                  >
+                                    {ad.models.map((m) => (
+                                      <option key={`${ad.id}/${m}`} value={`${ad.id}/${m}`}>
+                                        {ad.name} — {m}
+                                      </option>
+                                    ))}
+                                  </optgroup>
+                                )
+                              })}
                             </select>
                           </Field>
-                        ))}
+                          )
+                        })}
                       </div>
                     )}
                   </div>
@@ -271,52 +292,60 @@ export function SettingsTab(props: Props) {
           <p className="text-xs text-muted mb-2">
             USD per 1M tokens. Edit to override the default for a model. Reset removes the override.
           </p>
-          <div className="space-y-1.5">
-            {(adapter?.models ?? []).map((m) => {
-              const def: ModelPricing = PRICING[m] ?? { input: 0, output: 0 }
-              const ov = settings.pricingOverrides[m]
-              const cur: ModelPricing = ov ?? def
-              const isOverride = !!ov
-              const setField = (field: 'input' | 'output', val: number) => {
-                const next: ModelPricing = { ...cur, [field]: val }
-                onUpdate({ pricingOverrides: { ...settings.pricingOverrides, [m]: next } })
-              }
-              const reset = () => {
-                const rest = { ...settings.pricingOverrides }
-                delete rest[m]
-                onUpdate({ pricingOverrides: rest })
-              }
-              return (
-                <div key={m} className="flex items-center gap-2 text-xs">
-                  <span className="flex-1 font-mono truncate">{m}</span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    className="input w-20 text-right"
-                    value={cur.input}
-                    onChange={(e) => setField('input', Number(e.target.value))}
-                    aria-label={`${m} input price per 1M`}
-                  />
-                  <span className="text-subtle">in</span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    className="input w-20 text-right"
-                    value={cur.output}
-                    onChange={(e) => setField('output', Number(e.target.value))}
-                    aria-label={`${m} output price per 1M`}
-                  />
-                  <span className="text-subtle">out</span>
-                  {isOverride ? (
-                    <button type="button" className="btn-ghost text-xs" onClick={reset} aria-label={`reset ${m} pricing`}>reset</button>
-                  ) : (
-                    <span className="w-12" />
-                  )}
+          <div className="space-y-3">
+            {adapterList.map((ad) => (
+              <div key={ad.id}>
+                <div className="text-[11px] font-medium text-muted mb-1">{ad.name}</div>
+                <div className="space-y-1.5">
+                  {ad.models.map((m) => {
+                    const key = pricingKey(ad.id as Provider, m)
+                    const def: ModelPricing = PRICING[key] ?? { input: 0, output: 0 }
+                    const ov = settings.pricingOverrides[key]
+                    const cur: ModelPricing = ov ?? def
+                    const isOverride = !!ov
+                    const setField = (field: 'input' | 'output', val: number) => {
+                      const next: ModelPricing = { ...cur, [field]: val }
+                      onUpdate({ pricingOverrides: { ...settings.pricingOverrides, [key]: next } })
+                    }
+                    const reset = () => {
+                      const rest = { ...settings.pricingOverrides }
+                      delete rest[key]
+                      onUpdate({ pricingOverrides: rest })
+                    }
+                    return (
+                      <div key={key} className="flex items-center gap-2 text-xs">
+                        <span className="flex-1 font-mono truncate">{m}</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          className="input w-20 text-right"
+                          value={cur.input}
+                          onChange={(e) => setField('input', Number(e.target.value))}
+                          aria-label={`${ad.name} ${m} input price per 1M`}
+                        />
+                        <span className="text-subtle">in</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          className="input w-20 text-right"
+                          value={cur.output}
+                          onChange={(e) => setField('output', Number(e.target.value))}
+                          aria-label={`${ad.name} ${m} output price per 1M`}
+                        />
+                        <span className="text-subtle">out</span>
+                        {isOverride ? (
+                          <button type="button" className="btn-ghost text-xs" onClick={reset} aria-label={`reset ${ad.name} ${m} pricing`}>reset</button>
+                        ) : (
+                          <span className="w-12" />
+                        )}
+                      </div>
+                    )
+                  })}
                 </div>
-              )
-            })}
+              </div>
+            ))}
           </div>
         </>
       ),
