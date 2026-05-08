@@ -59,6 +59,9 @@ export interface RunRecord {
    *  schemaVersion (or 1) and their `range` is a ProseMirror position
    *  from the legacy Tiptap editor — Apply must stay disabled for them. */
   schemaVersion?: 2
+  /** Set true once the rewrite has been written into the editor. Disables
+   *  Apply so a second click can't prepend another copy of the change. */
+  applied?: boolean
 }
 
 interface ChatBundle {
@@ -357,16 +360,18 @@ export function RunView({
                 type="button"
                 className="btn-primary"
                 onClick={() => onApply(run, parsed.rewrite!)}
-                disabled={run.schemaVersion !== 2}
+                disabled={run.schemaVersion !== 2 || run.applied === true}
                 title={
                   run.schemaVersion !== 2
                     ? 'Run was created with the previous editor — re-run to apply'
-                    : run.range
-                      ? 'Replace selection with this text'
-                      : 'Replace the entire document with this text'
+                    : run.applied
+                      ? 'Already applied — re-run to produce a fresh edit'
+                      : run.range
+                        ? 'Replace selection with this text'
+                        : 'Replace the entire document with this text'
                 }
               >
-                Apply
+                {run.applied ? 'Applied' : 'Apply'}
               </button>
               <button
                 type="button"

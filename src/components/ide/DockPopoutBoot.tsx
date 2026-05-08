@@ -392,17 +392,19 @@ function RunDetail({
                 <button
                   type="button"
                   onClick={() => onDispatch({ type: 'apply-run', runId: run.id })}
-                  disabled={run.schemaVersion !== 2}
+                  disabled={run.schemaVersion !== 2 || run.applied === true}
                   className="px-3 py-1 rounded bg-accent text-accent-fg text-xs disabled:opacity-50"
                   title={
                     run.schemaVersion !== 2
                       ? 'Run was created with the previous editor — re-run to apply'
-                      : run.range
-                        ? 'Replace selection with this text'
-                        : 'Replace the entire document with this text'
+                      : run.applied
+                        ? 'Already applied — re-run to produce a fresh edit'
+                        : run.range
+                          ? 'Replace selection with this text'
+                          : 'Replace the entire document with this text'
                   }
                 >
-                  Apply
+                  {run.applied ? 'Applied' : 'Apply'}
                 </button>
                 <button
                   type="button"

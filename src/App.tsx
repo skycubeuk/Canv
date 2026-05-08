@@ -30,6 +30,7 @@ import { useFocusedDocText, createLiveDocsChannel } from './hooks/useFocusedDocT
 import { DiffTab } from './components/ide/tabs/DiffTab'
 import type { SearchMatch } from './lib/searchTypes'
 import { findMatchInDoc } from './lib/findMatchInDoc'
+import { decideApply } from './lib/applyDecision'
 import { SettingsTab } from './components/ide/tabs/SettingsTab'
 import { RunsTab } from './components/ide/bottom/RunsTab'
 import { ChatTab } from './components/ide/bottom/ChatTab'
@@ -657,31 +658,33 @@ export default function App() {
         showToast('Editor not ready')
         return
       }
-      if (!run.range) {
-        view.dispatch({
-          changes: { from: 0, to: view.state.doc.length, insert: replacement },
-        })
-        showToast('Document replaced')
-        return
+      const decision = decideApply(view.state.doc.toString(), run, replacement)
+      switch (decision.kind) {
+        case 'replace-doc':
+          view.dispatch({
+            changes: { from: 0, to: view.state.doc.length, insert: replacement },
+          })
+          setRuns((prev) => prev.map((r) => (r.id === run.id ? { ...r, applied: true } : r)))
+          showToast('Document replaced')
+          return
+        case 'already-applied':
+          showToast('Already applied — re-run to produce a fresh edit')
+          return
+        case 'stale':
+          showToast('Selection changed since this run — re-select and re-run')
+          return
+        case 'apply':
+          view.dispatch({
+            changes: { from: decision.from, to: decision.to, insert: replacement },
+            selection: { anchor: decision.from + replacement.length },
+            scrollIntoView: true,
+          })
+          setRuns((prev) => prev.map((r) => (r.id === run.id ? { ...r, applied: true } : r)))
+          showToast('Applied')
+          return
       }
-      const { from, to } = run.range
-      const docLen = view.state.doc.length
-      const safeFrom = Math.max(0, Math.min(from, docLen))
-      const safeTo = Math.max(safeFrom, Math.min(to, docLen))
-      const currentMd = view.state.sliceDoc(safeFrom, safeTo).trim()
-      const originalMd = run.sourceText.trim()
-      if (originalMd && currentMd !== originalMd) {
-        showToast('Selection changed since this run — re-select and re-run')
-        return
-      }
-      view.dispatch({
-        changes: { from: safeFrom, to: safeTo, insert: replacement },
-        selection: { anchor: safeFrom + replacement.length },
-        scrollIntoView: true,
-      })
-      showToast('Applied')
     },
-    [getActiveEditor, showToast],
+    [getActiveEditor, showToast, setRuns],
   )
 
   const handleRerun = useCallback(
@@ -747,7 +750,7 @@ export default function App() {
       ]
 
       setRuns((prev) =>
-        prev.map((r) => (r.id === run.id ? { ...r, status: 'refining' as const, response: '' } : r)),
+        prev.map((r) => (r.id === run.id ? { ...r, status: 'refining' as const, response: '', applied: false } : r)),
       )
 
       const startedAt = Date.now()
