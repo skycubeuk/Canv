@@ -40,6 +40,10 @@ export function TopBar(props: Props) {
     { id: 'git', label: 'Git', icon: GitBranch, badge: gitBadge ?? null },
   ]
 
+  const displayName = workspaceName
+    ? (workspaceName.split(/[\\/]/).filter(Boolean).pop() ?? workspaceName)
+    : null
+
   return (
     <header
       role="banner"
@@ -60,7 +64,7 @@ export function TopBar(props: Props) {
         <span className="font-medium text-default">Canv</span>
         <span aria-hidden className="text-subtle">·</span>
         <span className="text-muted truncate max-w-[180px]" title={workspaceName ?? ''}>
-          {workspaceName || 'No workspace'}
+          {displayName || 'No workspace'}
         </span>
       </div>
 
