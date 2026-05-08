@@ -33,6 +33,16 @@ export interface ErrorInfo {
   retryAfter?: number
 }
 
+function errorKindLabel(kind: ErrorInfo['kind']): string {
+  switch (kind) {
+    case 'network': return 'Network error'
+    case 'rate_limited': return 'Rate limited'
+    case 'server': return 'Server error'
+    case 'schema': return 'API error'
+    default: return 'Error'
+  }
+}
+
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
@@ -473,13 +483,27 @@ export function Bubble({
           </div>
         )}
 
-        {!message.content && !message.toolCalls && (
+        {!message.content && !message.toolCalls && !message.failureReason && (
           <span className="streaming-cursor"> </span>
         )}
 
         {message.failureReason === 'cancelled' && (
           <div className="mt-2 inline-flex items-center gap-1 rounded-full border border-default bg-elev px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted">
             Stopped
+          </div>
+        )}
+
+        {message.failureReason === 'provider_error' && message.errorInfo && (
+          <div className="mt-2 rounded-md border border-default bg-elev px-2 py-1.5 text-[12px] text-default">
+            <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-muted">
+              <span>{errorKindLabel(message.errorInfo.kind)}</span>
+              {message.errorInfo.statusCode != null && (
+                <span className="font-mono text-subtle">{message.errorInfo.statusCode}</span>
+              )}
+            </div>
+            <p className="mt-0.5 leading-snug whitespace-pre-wrap break-words">
+              {message.errorInfo.message}
+            </p>
           </div>
         )}
 

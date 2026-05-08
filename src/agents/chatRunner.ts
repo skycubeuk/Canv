@@ -58,7 +58,11 @@ function classifyError(err: unknown): ErrorInfo {
     // Should never reach here — abort is handled inline. Defensive only.
     return { kind: 'unknown', message: 'Aborted' }
   }
-  const message = err instanceof Error ? err.message : String(err)
+  // Prefer the provider's parsed `error.message` (e.g. Anthropic's "You have
+  // reached your specified API usage limits…") over the wrapper text.
+  const apiMessage = (err as { apiMessage?: string })?.apiMessage
+  const rawMessage = err instanceof Error ? err.message : String(err)
+  const message = apiMessage || rawMessage
   const statusCode = (err as { statusCode?: number; status?: number })?.statusCode
     ?? (err as { status?: number })?.status
   if (typeof statusCode === 'number') {
@@ -150,6 +154,7 @@ async function runChatTurnInner(p: RunChatTurnParams, messages: ChatMessage[]): 
       ...assistantMsg,
       content: result.text,
       toolCalls: result.toolCalls?.length ? result.toolCalls : undefined,
+      ...(result.tokenUsage ? { tokenUsage: result.tokenUsage } : {}),
     }
     messages[messages.length - 1] = assistantMsg
     p.onUpdate(messages)
@@ -310,7 +315,11 @@ async function runChatTurnInner(p: RunChatTurnParams, messages: ChatMessage[]): 
       p.onUpdate(messages)
     },
   })
-  finalMsg = { ...finalMsg, content: finalResult.text }
+  finalMsg = {
+    ...finalMsg,
+    content: finalResult.text,
+    ...(finalResult.tokenUsage ? { tokenUsage: finalResult.tokenUsage } : {}),
+  }
   messages[messages.length - 1] = finalMsg
   p.onUpdate(messages)
 }
