@@ -1,4 +1,4 @@
-import { MessageSquare } from 'lucide-react'
+import { MessageSquare, Settings } from 'lucide-react'
 import type { Mode } from '../../config/types'
 import type { WorkspaceKind } from '../../lib/fs'
 
@@ -18,6 +18,7 @@ interface Props {
   diffStats: { added: number; removed: number } | null
   chatVisible: boolean
   onToggleChat: () => void
+  onOpenSettings: () => void
   meterTokens: number | null
   meterCostUsd: number | null
 }
@@ -33,7 +34,7 @@ export function StatusBar(props: Props) {
     saveState, profile, workspaceName, kind, wordCount, selectionWordCount,
     onClickProfile, apiKeyMissing, onClickApiKeyWarning,
     cursorLine, cursorCol, branch, diffStats,
-    chatVisible, onToggleChat, meterTokens, meterCostUsd,
+    chatVisible, onToggleChat, onOpenSettings, meterTokens, meterCostUsd,
   } = props
 
   const wordsLabel = selectionWordCount != null
@@ -128,18 +129,29 @@ export function StatusBar(props: Props) {
           </>
         )}
         <span aria-hidden className="w-px h-3 bg-[rgb(var(--border-default))]" />
-        <button
-          type="button"
-          onClick={onToggleChat}
-          aria-pressed={chatVisible}
-          aria-label={chatVisible ? 'Hide chat' : 'Show chat'}
-          title={chatVisible ? 'Hide chat (Ctrl+`)' : 'Show chat (Ctrl+`)'}
-          className={`w-5 h-5 grid place-items-center rounded ${
-            chatVisible ? 'bg-active text-default' : 'text-muted hover:bg-hover hover:text-default'
-          }`}
-        >
-          <MessageSquare aria-hidden className="w-3 h-3" />
-        </button>
+        <div className="flex items-center">
+          <button
+            type="button"
+            onClick={onToggleChat}
+            aria-pressed={chatVisible}
+            aria-label={chatVisible ? 'Hide chat' : 'Show chat'}
+            title={chatVisible ? 'Hide chat (Ctrl+`)' : 'Show chat (Ctrl+`)'}
+            className={`w-5 h-5 grid place-items-center rounded ${
+              chatVisible ? 'bg-active text-default' : 'text-muted hover:bg-hover hover:text-default'
+            }`}
+          >
+            <MessageSquare aria-hidden className="w-3 h-3" />
+          </button>
+          <button
+            type="button"
+            onClick={onOpenSettings}
+            aria-label="Open Settings"
+            title="Open Settings"
+            className="w-5 h-5 grid place-items-center rounded text-muted hover:bg-hover hover:text-default"
+          >
+            <Settings aria-hidden className="w-3 h-3" />
+          </button>
+        </div>
       </div>
     </div>
   )

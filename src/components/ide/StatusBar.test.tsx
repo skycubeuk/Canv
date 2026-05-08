@@ -25,6 +25,7 @@ const baseProps = {
   diffStats: null as { added: number; removed: number } | null,
   chatVisible: false,
   onToggleChat: vi.fn(),
+  onOpenSettings: vi.fn(),
   meterTokens: null as number | null,
   meterCostUsd: null as number | null,
 }
@@ -79,5 +80,13 @@ describe('StatusBar', () => {
   it('renders the run meter when both meterTokens and meterCostUsd are non-null', () => {
     render(<StatusBar {...baseProps} meterTokens={1247} meterCostUsd={0.18} />)
     expect(screen.getByText('1,247 tok · $0.18')).toBeInTheDocument()
+  })
+
+  it('renders an Open Settings button that calls onOpenSettings when clicked', async () => {
+    const onOpen = vi.fn()
+    const user = userEvent.setup()
+    render(<StatusBar {...baseProps} onOpenSettings={onOpen} />)
+    await user.click(screen.getByRole('button', { name: /open settings/i }))
+    expect(onOpen).toHaveBeenCalled()
   })
 })

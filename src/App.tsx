@@ -1985,6 +1985,7 @@ PLANNING. For any task that will take 3 or more tool calls, call \`set_todos\` B
               cursorCol={cursorPos?.col ?? null}
               branch={null}
               diffStats={null}
+              onOpenSettings={() => openSettingsTab()}
               chatVisible={ideLayout.layout.bottom.visible && ideLayout.layout.bottom.activeTab === 'chat'}
               onToggleChat={() => {
                 const { visible, activeTab } = ideLayout.layout.bottom
