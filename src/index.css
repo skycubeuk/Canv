@@ -145,6 +145,13 @@
   background: transparent;
 }
 
+.tabs-scroller {
+  scrollbar-width: none;
+}
+.tabs-scroller::-webkit-scrollbar {
+  display: none;
+}
+
 /* Theme-aware scrollbars (dark) */
 [data-theme="dark"] * {
   scrollbar-color: rgb(64 64 64) transparent; /* neutral-700 */
