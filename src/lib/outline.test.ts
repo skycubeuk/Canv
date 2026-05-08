@@ -90,4 +90,25 @@ describe('parseOutline', () => {
     const nodes = parseOutline(md)
     expect(nodes[0].line).toBe(5)
   })
+
+  it('assigns index in DFS pre-order across the tree', () => {
+    const md = '# A\n\n## B\n\n### C\n\n## D\n\n# E\n'
+    const nodes = parseOutline(md)
+    // Tree:
+    //   A (0)
+    //     B (1)
+    //       C (2)
+    //     D (3)
+    //   E (4)
+    expect(nodes[0].index).toBe(0)
+    expect(nodes[0].children[0].index).toBe(1)
+    expect(nodes[0].children[0].children[0].index).toBe(2)
+    expect(nodes[0].children[1].index).toBe(3)
+    expect(nodes[1].index).toBe(4)
+  })
+
+  it('index for a single heading is 0', () => {
+    const nodes = parseOutline('# Only')
+    expect(nodes[0].index).toBe(0)
+  })
 })

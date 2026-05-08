@@ -6,6 +6,8 @@ export interface OutlineNode {
   level: 1 | 2 | 3 | 4 | 5 | 6
   text: string
   line: number
+  /** DFS pre-order position across the whole outline tree, zero-based. */
+  index: number
   children: OutlineNode[]
 }
 
@@ -67,12 +69,14 @@ export function parseOutline(text: string): OutlineNode[] {
   const roots: OutlineNode[] = []
   const stack: OutlineNode[] = []
 
-  for (const h of flat) {
+  for (let i = 0; i < flat.length; i++) {
+    const h = flat[i]
     const node: OutlineNode = {
       id: `${h.level}:${h.line}`,
       level: h.level,
       text: h.text,
       line: h.line,
+      index: i,
       children: [],
     }
     while (stack.length > 0 && stack[stack.length - 1].level >= node.level) {

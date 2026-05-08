@@ -5,7 +5,7 @@ import type { OutlineNode } from '../../../lib/outline'
 interface OutlinePanelProps {
   nodes: OutlineNode[]
   resetKey: string | null
-  onJump: (line: number) => void
+  onJump: (node: OutlineNode) => void
   collapsed: boolean
   onToggleSectionCollapsed: () => void
 }
@@ -68,7 +68,7 @@ interface RowProps {
   node: OutlineNode
   collapsedIds: Set<string>
   onToggle: (id: string) => void
-  onJump: (line: number) => void
+  onJump: (node: OutlineNode) => void
 }
 
 function OutlineNodeRow({ node, collapsedIds, onToggle, onJump }: RowProps) {
@@ -100,7 +100,7 @@ function OutlineNodeRow({ node, collapsedIds, onToggle, onJump }: RowProps) {
         )}
         <button
           type="button"
-          onClick={() => onJump(node.line)}
+          onClick={() => onJump(node)}
           title={node.text}
           className="flex-1 min-w-0 text-left px-1 py-0.5 truncate text-stone-800 dark:text-neutral-200"
         >

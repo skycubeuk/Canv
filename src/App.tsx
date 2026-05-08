@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { EditorView } from '@codemirror/view'
 import { Play, MessageSquare, AlertTriangle, FileText } from 'lucide-react'
-import { Canvas } from './components/Canvas'
+import { Canvas, type Jumper } from './components/Canvas'
 import { FloatingToolbar } from './components/FloatingToolbar'
 import { useContextMenu, type ContextMenuItem } from './lib/contextMenu'
 import { selectAll as cmSelectAll } from '@codemirror/commands'
@@ -24,6 +24,7 @@ import { SearchTab } from './components/ide/sidebar/SearchTab'
 import { GitTab } from './components/ide/sidebar/GitTab'
 import { OutlinePanel } from './components/ide/sidebar/OutlinePanel'
 import { useOutline } from './hooks/useOutline'
+import type { OutlineNode } from './lib/outline'
 import { useFocusedDocText, createLiveDocsChannel } from './hooks/useFocusedDocText'
 import { DiffTab } from './components/ide/tabs/DiffTab'
 import type { SearchMatch } from './lib/searchTypes'
@@ -122,6 +123,16 @@ export default function App() {
 
   const liveDocsChannel = useMemo(() => createLiveDocsChannel(), [])
   const bumpEditors = useCallback(() => bumpEditorRev((n) => n + 1), [])
+
+  const jumpersRef = useRef<Map<string, Jumper>>(new Map())
+
+  const handleJumperReady = useCallback((groupId: EditorGroupId, rel: string, jumper: Jumper) => {
+    jumpersRef.current.set(editorMapKey(groupId, rel), jumper)
+  }, [])
+
+  const handleJumperDestroy = useCallback((groupId: EditorGroupId, rel: string) => {
+    jumpersRef.current.delete(editorMapKey(groupId, rel))
+  }, [])
 
   const openSources = useMemo<OpenTabSource[]>(() => {
     const seen = new Set<string>()
@@ -244,11 +255,21 @@ export default function App() {
     workspace.openDiffTab(rel, baseRef)
   }, [workspace])
 
-  const handleOutlineJump = useCallback((line: number) => {
-    const view = editorsRef.current.get(editorMapKey(workspace.activeGroupId, workspace.activeMarkdownRel ?? ''))
+  const handleOutlineJump = useCallback((node: OutlineNode) => {
+    const rel = workspace.activeMarkdownRel
+    if (!rel) return
+    const key = editorMapKey(workspace.activeGroupId, rel)
+    const jumper = jumpersRef.current.get(key)
+    if (jumper) {
+      jumper(node.line, node.index)
+      return
+    }
+    // Fallback: no Canvas-registered jumper (no current code path hits this,
+    // but keeps the contract well-defined). Drive CodeMirror directly.
+    const view = editorsRef.current.get(key)
     if (!view) return
     const doc = view.state.doc
-    const safeLine = Math.max(1, Math.min(line, doc.lines))
+    const safeLine = Math.max(1, Math.min(node.line, doc.lines))
     const linePos = doc.line(safeLine).from
     view.dispatch({
       selection: { anchor: linePos },
@@ -1742,6 +1763,8 @@ PLANNING. For any task that will take 3 or more tool calls, call \`set_todos\` B
                         onSelectionChange={handleEditorSelectionChange}
                         onEditorReady={handleEditorReady}
                         onEditorDestroy={handleEditorDestroy}
+                        onJumperReady={handleJumperReady}
+                        onJumperDestroy={handleJumperDestroy}
                       />
                     )
                   }}
