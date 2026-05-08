@@ -36,7 +36,7 @@ export function ChatToolChip({ name, inputPath, status, summary, result }: ChatT
         ? 'border-red-700/60 bg-red-950/40 text-red-200'
         : 'border-default bg-panel text-default'
   return (
-    <div data-testid="chip-root" className={`my-1 inline-block max-w-full rounded-md border px-2 py-1 text-xs ${tone}`}>
+    <div data-testid="chip-root" className={`my-1 inline-block max-w-full rounded-md border px-2 py-1 text-[0.85em] ${tone}`}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -46,7 +46,7 @@ export function ChatToolChip({ name, inputPath, status, summary, result }: ChatT
         <span>{headline}</span>
       </button>
       {open && (result ?? '').length > 0 && (
-        <pre data-testid="chip-result-body" className="mt-1 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-panel/40 p-2 text-[11px]">
+        <pre data-testid="chip-result-body" className="mt-1 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-panel/40 p-2 text-[0.85em]">
           {result}
         </pre>
       )}

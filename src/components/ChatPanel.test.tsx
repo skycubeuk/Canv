@@ -33,6 +33,7 @@ const baseProps = {
   followLatest: true,
   onSetFollowLatest: vi.fn(),
   contextFileName: null,
+  chatFontSize: 14,
 }
 
 describe('ChatPanel — tool rendering', () => {

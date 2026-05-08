@@ -17,6 +17,7 @@ interface Props {
   followLatest: boolean
   onSetFollowLatest: (next: boolean) => void
   contextFileName: string | null
+  chatFontSize: number
 }
 
 export function ChatTab(props: Props) {
@@ -37,6 +38,7 @@ export function ChatTab(props: Props) {
       followLatest={props.followLatest}
       onSetFollowLatest={props.onSetFollowLatest}
       contextFileName={props.contextFileName}
+      chatFontSize={props.chatFontSize}
     />
   )
 }

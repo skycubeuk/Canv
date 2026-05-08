@@ -49,7 +49,7 @@ export function ChatMeter({ messages, provider, model, overrides, defaults, busy
 
   return (
     <div
-      className="border-t border-default bg-panel/60 px-3 py-1 text-[10px] font-mono text-muted flex justify-between"
+      className="border-t border-default bg-panel/60 px-3 py-1 text-[0.75em] font-mono text-muted flex justify-between"
       aria-label="chat token and cost meter"
     >
       <span>{turnText}</span>

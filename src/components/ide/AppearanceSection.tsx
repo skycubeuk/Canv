@@ -5,6 +5,7 @@ interface AppearanceSettings {
   theme: Theme
   accent: string
   fontSize: number
+  chatFontSize: number
 }
 
 interface Props {
@@ -80,6 +81,22 @@ export function AppearanceSection({ settings, onUpdate }: Props) {
           step={1}
           value={settings.fontSize}
           onChange={(e) => onUpdate({ fontSize: Number(e.target.value) })}
+          className="w-full"
+        />
+      </div>
+
+      <div>
+        <label htmlFor="appearance-chat-font-size" className="block text-sm font-medium mb-2">
+          Chat font size: {settings.chatFontSize}px
+        </label>
+        <input
+          id="appearance-chat-font-size"
+          type="range"
+          min={12}
+          max={22}
+          step={1}
+          value={settings.chatFontSize}
+          onChange={(e) => onUpdate({ chatFontSize: Number(e.target.value) })}
           className="w-full"
         />
       </div>

@@ -24,22 +24,22 @@ export function ChatApprovalCard({ preview, state, onDecide }: ChatApprovalCardP
       ? 'border-emerald-700/60 bg-emerald-950/40'
       : 'border-amber-700/60 bg-amber-950/40'
   return (
-    <div className={`my-2 rounded-md border px-3 py-2 text-sm ${tone}`}>
+    <div className={`my-2 rounded-md border px-3 py-2 text-[1em] ${tone}`}>
       <div className="font-medium">{HEADERS[preview.kind](preview)}</div>
       {preview.kind === 'create' && preview.contentPreview && (
-        <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap rounded bg-panel/60 p-2 text-xs">{preview.contentPreview}</pre>
+        <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap rounded bg-panel/60 p-2 text-[0.85em]">{preview.contentPreview}</pre>
       )}
       {preview.kind === 'edit' && preview.diff && (
         <DiffView before={preview.diff.before} after={preview.diff.after} />
       )}
       {state === 'pending' ? (
         <div className="mt-2 flex flex-wrap gap-2">
-          <button type="button" className="btn-primary text-xs" onClick={() => onDecide('approve')}>Approve</button>
-          <button type="button" className="btn-secondary text-xs" onClick={() => onDecide('deny')}>Deny</button>
-          <button type="button" className="btn-ghost text-xs" onClick={() => onDecide('approve-rest')}>Approve rest of turn</button>
+          <button type="button" className="btn-primary text-[0.85em]" onClick={() => onDecide('approve')}>Approve</button>
+          <button type="button" className="btn-secondary text-[0.85em]" onClick={() => onDecide('deny')}>Deny</button>
+          <button type="button" className="btn-ghost text-[0.85em]" onClick={() => onDecide('approve-rest')}>Approve rest of turn</button>
         </div>
       ) : (
-        <div className="mt-1 text-xs text-muted">
+        <div className="mt-1 text-[0.85em] text-muted">
           {state === 'approved' && '✓ approved'}
           {state === 'denied' && '✗ denied'}
           {state === 'cancelled' && '— cancelled'}
@@ -52,7 +52,7 @@ export function ChatApprovalCard({ preview, state, onDecide }: ChatApprovalCardP
 function DiffView({ before, after }: { before: string; after: string }) {
   const parts = computeDiff(before, after)
   return (
-    <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap rounded bg-panel/60 p-2 text-xs">
+    <pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap rounded bg-panel/60 p-2 text-[0.85em]">
       {parts.map((p, i) => (
         <span
           key={i}

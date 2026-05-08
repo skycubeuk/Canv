@@ -32,6 +32,10 @@ export interface Settings {
   useDefaultModelForAll: boolean
   perAgentModel: Record<string, Record<string, AgentModelRef>>
   fontSize: number
+  /** Base font size (px) for the chat panel. Bubbles use 1em; smaller chrome
+   *  scales proportionally. Independent of the editor's `fontSize` so writing
+   *  density and chat-reading density can be tuned separately. */
+  chatFontSize: number
   lineWidth: LineWidth
   theme: Theme
   streaming: boolean
@@ -58,6 +62,7 @@ const DEFAULT_SETTINGS: Settings = {
   useDefaultModelForAll: true,
   perAgentModel: {},
   fontSize: 16,
+  chatFontSize: 14,
   lineWidth: 'normal',
   theme: 'system',
   streaming: true,
@@ -125,6 +130,9 @@ export function useSettings() {
     if (!(ALLOWED_DELAYS as readonly number[]).includes(m.streamChunkDelayMs)) {
       m.streamChunkDelayMs = 0
     }
+    // Clamp chatFontSize to the slider range; default if nonsense.
+    if (!Number.isFinite(m.chatFontSize)) m.chatFontSize = DEFAULT_SETTINGS.chatFontSize
+    else m.chatFontSize = Math.min(22, Math.max(12, Math.round(m.chatFontSize)))
     // pricingOverrides: drop entries whose values are not finite numbers.
     // Also upgrade legacy bare-model-id keys to `${provider}/${model}` so two
     // adapters listing the same model id can carry independent overrides.

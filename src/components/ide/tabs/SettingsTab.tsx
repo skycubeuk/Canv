@@ -517,7 +517,12 @@ export function SettingsTab(props: Props) {
       <div className="flex-1 overflow-y-auto px-6 py-4">
         <section className="panel-section" data-testid="settings-section-appearance">
           <AppearanceSection
-            settings={{ theme: settings.theme, accent: settings.accent, fontSize: settings.fontSize }}
+            settings={{
+              theme: settings.theme,
+              accent: settings.accent,
+              fontSize: settings.fontSize,
+              chatFontSize: settings.chatFontSize,
+            }}
             onUpdate={onUpdate}
           />
         </section>

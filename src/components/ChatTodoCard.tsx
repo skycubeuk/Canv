@@ -30,7 +30,7 @@ export function ChatTodoCard({ resultJson }: ChatTodoCardProps) {
   if (parsed === 'empty') return null
   if (parsed === 'malformed') {
     return (
-      <div className="my-1 rounded-md border border-default bg-panel px-2 py-1 text-xs text-muted">
+      <div className="my-1 rounded-md border border-default bg-panel px-2 py-1 text-[0.85em] text-muted">
         Could not render todo list
       </div>
     )
@@ -38,9 +38,9 @@ export function ChatTodoCard({ resultJson }: ChatTodoCardProps) {
   return (
     <div
       data-testid="todo-card"
-      className="my-1 rounded-md border border-default bg-panel px-2 py-1 text-xs text-default"
+      className="my-1 rounded-md border border-default bg-panel px-2 py-1 text-[0.85em] text-default"
     >
-      <div className="mb-1 font-mono text-[11px] uppercase tracking-wide text-muted">Plan</div>
+      <div className="mb-1 font-mono text-[0.85em] uppercase tracking-wide text-muted">Plan</div>
       <ul className="flex flex-col gap-0.5">
         {parsed.todos.map((todo, i) => (
           <Item key={i} todo={todo} index={i} />

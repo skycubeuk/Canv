@@ -378,6 +378,7 @@ export default function App() {
             followLatest={followLatest}
             onSetFollowLatest={setFollowLatest}
             contextFileName={workspace.activeMarkdownRel ? basename(workspace.activeMarkdownRel) : null}
+            chatFontSize={settings.chatFontSize}
           />
         ),
       },

@@ -6,6 +6,7 @@ const baseSettings = {
   theme: 'dark' as const,
   accent: '#6366f1',
   fontSize: 16,
+  chatFontSize: 14,
 }
 
 describe('AppearanceSection', () => {
@@ -35,8 +36,16 @@ describe('AppearanceSection', () => {
   it('changing the font-size slider fires onUpdate', () => {
     const onUpdate = vi.fn()
     render(<AppearanceSection settings={baseSettings} onUpdate={onUpdate} />)
-    const slider = screen.getByLabelText(/font size/i)
+    const slider = screen.getByLabelText(/^font size/i)
     fireEvent.change(slider, { target: { value: '18' } })
     expect(onUpdate).toHaveBeenCalledWith({ fontSize: 18 })
+  })
+
+  it('changing the chat-font-size slider fires onUpdate', () => {
+    const onUpdate = vi.fn()
+    render(<AppearanceSection settings={baseSettings} onUpdate={onUpdate} />)
+    const slider = screen.getByLabelText(/chat font size/i)
+    fireEvent.change(slider, { target: { value: '18' } })
+    expect(onUpdate).toHaveBeenCalledWith({ chatFontSize: 18 })
   })
 })

@@ -94,9 +94,12 @@ interface Props {
   followLatest: boolean
   onSetFollowLatest: (next: boolean) => void
   contextFileName: string | null
+  /** Base px size for chat text. Bubbles render at 1em; chrome scales
+   *  proportionally via em-relative classes. */
+  chatFontSize: number
 }
 
-export function ChatPanel({ messages, busy, provider, model, onSend, onClear, onStop, onRetry, onEditAndRetry, pendingApprovals, onApprovalDecide, pricingOverrides, followLatest, onSetFollowLatest, contextFileName }: Props) {
+export function ChatPanel({ messages, busy, provider, model, onSend, onClear, onStop, onRetry, onEditAndRetry, pendingApprovals, onApprovalDecide, pricingOverrides, followLatest, onSetFollowLatest, contextFileName, chatFontSize }: Props) {
   const [input, setInput] = useState('')
   const [editingUserId, setEditingUserId] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -194,12 +197,12 @@ export function ChatPanel({ messages, busy, provider, model, onSend, onClear, on
   }
 
   return (
-    <div className="h-full flex flex-col min-h-0">
-      <div className="shrink-0 flex items-center gap-2 px-3 py-2 border-b border-default text-[11.5px] text-muted">
+    <div className="h-full flex flex-col min-h-0" style={{ fontSize: `${chatFontSize}px` }}>
+      <div className="shrink-0 flex items-center gap-2 px-3 py-2 border-b border-default text-[0.85em] text-muted">
         <FileText aria-hidden className="w-2.5 h-2.5" />
         <span className="text-default truncate">{contextFileName ?? 'No active document'}</span>
         {contextFileName && (
-          <span className="px-1.5 py-px rounded text-[10px] font-medium bg-accent-soft text-accent">
+          <span className="px-1.5 py-px rounded text-[0.75em] font-medium bg-accent-soft text-accent">
             shared
           </span>
         )}
@@ -218,7 +221,7 @@ export function ChatPanel({ messages, busy, provider, model, onSend, onClear, on
                 if (ok) onClear()
               })()
             }}
-            className="text-[11px] text-muted hover:text-default"
+            className="text-[0.85em] text-muted hover:text-default"
             disabled={busy}
           >
             Clear
@@ -235,7 +238,7 @@ export function ChatPanel({ messages, busy, provider, model, onSend, onClear, on
         className="relative flex-1 overflow-y-auto px-4 py-4 space-y-3"
       >
         {messages.length === 0 && (
-          <div className="text-sm text-muted text-center py-8">
+          <div className="text-[1em] text-muted text-center py-8">
             Ask anything about the document.<br />
             Try: <em>"Summarise this in one sentence"</em> or <em>"What's missing from the argument?"</em>
           </div>
@@ -263,7 +266,7 @@ export function ChatPanel({ messages, busy, provider, model, onSend, onClear, on
           <button
             type="button"
             onClick={jumpToLatest}
-            className="sticky bottom-2 left-1/2 -translate-x-1/2 z-10 inline-flex items-center gap-1 rounded-full border border-default bg-elev px-3 py-1 text-[11px] text-muted shadow-lg hover:text-default"
+            className="sticky bottom-2 left-1/2 -translate-x-1/2 z-10 inline-flex items-center gap-1 rounded-full border border-default bg-elev px-3 py-1 text-[0.85em] text-muted shadow-lg hover:text-default"
             aria-label="Jump to latest message"
           >
             ↓ jump to latest
@@ -296,12 +299,12 @@ export function ChatPanel({ messages, busy, provider, model, onSend, onClear, on
             placeholder="Message the document…"
             minRows={2}
             maxRows={6}
-            className="w-full bg-transparent border-none focus:outline-none text-[12.5px] text-default placeholder:text-subtle resize-none px-1 pb-2"
+            className="w-full bg-transparent border-none focus:outline-none text-[1em] text-default placeholder:text-subtle resize-none px-1 pb-2"
           />
           <div className="flex items-center gap-1.5">
             <button
               type="button"
-              className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10.5px] border border-default text-muted hover:bg-hover"
+              className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[0.78em] border border-default text-muted hover:bg-hover"
               title="Document context shared with this chat"
             >
               <FileText aria-hidden className="w-2.5 h-2.5" />
@@ -309,7 +312,7 @@ export function ChatPanel({ messages, busy, provider, model, onSend, onClear, on
             </button>
             <button
               type="button"
-              className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10.5px] border border-default text-muted hover:bg-hover"
+              className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[0.78em] border border-default text-muted hover:bg-hover"
               title="Active model"
             >
               <Sparkles aria-hidden className="w-2.5 h-2.5" />
@@ -321,13 +324,13 @@ export function ChatPanel({ messages, busy, provider, model, onSend, onClear, on
               <button
                 type="button"
                 onClick={onStop}
-                className="text-[10px] px-2 py-1 rounded text-muted hover:text-default"
+                className="text-[0.75em] px-2 py-1 rounded text-muted hover:text-default"
               >
                 Stop
               </button>
             ) : (
               <>
-                <span className="text-[10px] text-subtle">⏎ to send</span>
+                <span className="text-[0.75em] text-subtle">⏎ to send</span>
                 <button
                   type="button"
                   onClick={handleSubmit}
@@ -408,7 +411,7 @@ export function Bubble({
         <div
           ref={ref}
           onContextMenu={onContextMenu}
-          className="max-w-[85%] px-3 py-2 text-[12.5px] whitespace-pre-wrap leading-relaxed bg-accent text-accent-fg"
+          className="max-w-[85%] px-3 py-2 text-[1em] whitespace-pre-wrap leading-relaxed bg-accent text-accent-fg"
           style={{ borderRadius: '14px 14px 4px 14px' }}
         >
           {editing ? (
@@ -438,7 +441,7 @@ export function Bubble({
       <div
         ref={ref}
         onContextMenu={onContextMenu}
-        className="px-3 py-2 text-[12.5px] leading-[1.55] bg-elev text-default border border-default whitespace-pre-wrap"
+        className="px-3 py-2 text-[1em] leading-[1.55] bg-elev text-default border border-default whitespace-pre-wrap"
         style={{ borderRadius: '4px 14px 14px 14px' }}
       >
         {message.content && <span>{message.content}</span>}
@@ -488,14 +491,14 @@ export function Bubble({
         )}
 
         {message.failureReason === 'cancelled' && (
-          <div className="mt-2 inline-flex items-center gap-1 rounded-full border border-default bg-elev px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted">
+          <div className="mt-2 inline-flex items-center gap-1 rounded-full border border-default bg-elev px-2 py-0.5 text-[0.75em] uppercase tracking-wide text-muted">
             Stopped
           </div>
         )}
 
         {message.failureReason === 'provider_error' && message.errorInfo && (
-          <div className="mt-2 rounded-md border border-default bg-elev px-2 py-1.5 text-[12px] text-default">
-            <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-muted">
+          <div className="mt-2 rounded-md border border-default bg-elev px-2 py-1.5 text-[0.92em] text-default">
+            <div className="flex items-center gap-1.5 text-[0.75em] uppercase tracking-wide text-muted">
               <span>{errorKindLabel(message.errorInfo.kind)}</span>
               {message.errorInfo.statusCode != null && (
                 <span className="font-mono text-subtle">{message.errorInfo.statusCode}</span>
@@ -557,20 +560,20 @@ function UserEditMode({ initial, onSubmit, onCancel }: {
         onChange={(e) => setText(e.target.value)}
         onKeyDown={onKey}
         autoFocus
-        className="w-full bg-elev text-default border border-default rounded-md p-2 text-[12.5px] resize-y min-h-[64px]"
+        className="w-full bg-elev text-default border border-default rounded-md p-2 text-[1em] resize-y min-h-[64px]"
       />
       <div className="chat-user-edit-actions flex justify-end gap-2">
         <button
           type="button"
           onClick={() => onSubmit(text.trim())}
-          className="px-2 py-1 text-[11px] rounded bg-accent text-accent-fg hover:opacity-90"
+          className="px-2 py-1 text-[0.85em] rounded bg-accent text-accent-fg hover:opacity-90"
         >
           Submit
         </button>
         <button
           type="button"
           onClick={onCancel}
-          className="px-2 py-1 text-[11px] rounded border border-default text-muted hover:text-default"
+          className="px-2 py-1 text-[0.85em] rounded border border-default text-muted hover:text-default"
         >
           Cancel
         </button>
