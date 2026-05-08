@@ -28,6 +28,24 @@ describe('DockPlacementMenu', () => {
     expect(screen.getByLabelText(/dock at bottom/i)).toHaveAttribute('aria-pressed', 'false')
   })
 
+  it('renders only the placements listed in the placements prop', () => {
+    render(
+      <DockPlacementMenu placement="bottom" canPopOut placements={['popout']} onChange={vi.fn()} />,
+    )
+    expect(screen.queryByLabelText(/dock at bottom/i)).toBeNull()
+    expect(screen.queryByLabelText(/dock at right/i)).toBeNull()
+    expect(screen.getByLabelText(/pop out dock/i)).toBeInTheDocument()
+  })
+
+  it('omits popout button when not in placements list, even if canPopOut is true', () => {
+    render(
+      <DockPlacementMenu placement="popout" canPopOut placements={['bottom', 'right']} onChange={vi.fn()} />,
+    )
+    expect(screen.getByLabelText(/dock at bottom/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/dock at right/i)).toBeInTheDocument()
+    expect(screen.queryByLabelText(/pop out dock/i)).toBeNull()
+  })
+
   it('calls onChange with the matching placement on click', async () => {
     const onChange = vi.fn()
     const user = userEvent.setup()

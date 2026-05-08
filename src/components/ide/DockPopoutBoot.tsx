@@ -131,6 +131,7 @@ export function DockPopoutBoot() {
               <DockPlacementMenu
                 placement="popout"
                 canPopOut={false}
+                placements={['bottom', 'right']}
                 onChange={(next) => {
                   if (next === 'bottom' || next === 'right') {
                     dispatch({ type: 'set-placement', placement: next })

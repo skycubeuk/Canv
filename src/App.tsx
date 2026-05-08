@@ -1839,6 +1839,7 @@ PLANNING. For any task that will take 3 or more tool calls, call \`set_todos\` B
                 <DockPlacementMenu
                   placement={ideLayout.layout.bottom.placement}
                   canPopOut={isElectron()}
+                  placements={['popout']}
                   onChange={(next) => ideLayout.setDockPlacement(next)}
                 />
               )}

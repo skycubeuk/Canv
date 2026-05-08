@@ -5,6 +5,14 @@ interface Props {
   placement: DockPlacement
   canPopOut: boolean
   onChange: (placement: DockPlacement) => void
+  /**
+   * Which placement buttons to render. Each surface chooses the subset that
+   * makes sense for its context — the in-app dock header only needs the
+   * popout action (the top bar covers dock placement); the popout window
+   * only needs the re-dock actions (bottom/right) since it's already
+   * popped out.
+   */
+  placements?: DockPlacement[]
 }
 
 interface ButtonDef {
@@ -19,10 +27,13 @@ const BUTTONS: ButtonDef[] = [
   { value: 'popout', label: 'Pop out dock', Icon: PictureInPicture2 },
 ]
 
-export function DockPlacementMenu({ placement, canPopOut, onChange }: Props) {
+const DEFAULT_PLACEMENTS: DockPlacement[] = ['bottom', 'right', 'popout']
+
+export function DockPlacementMenu({ placement, canPopOut, onChange, placements = DEFAULT_PLACEMENTS }: Props) {
   return (
     <div className="flex items-center gap-0.5 px-1" role="group" aria-label="Dock placement">
       {BUTTONS.map(({ value, label, Icon }) => {
+        if (!placements.includes(value)) return null
         if (value === 'popout' && !canPopOut) return null
         const isActive = placement === value
         return (
