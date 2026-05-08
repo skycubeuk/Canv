@@ -3,12 +3,9 @@ import type { OpenTab, EditorGroupId } from '../types/workspace'
 import { setTabDragPayload, readTabDragPayload, hasTabDragPayload } from './ide/dnd'
 import React, { useState } from 'react'
 import { DocumentAgentMenu } from './DocumentAgentMenu'
-import { EditorViewModeToggle } from './ide/EditorViewModeToggle'
 import type { Action, Mode } from '../config/types'
 import { GitBranch, Settings as SettingsIcon, X } from 'lucide-react'
 import { useDialogs } from '../lib/dialogs'
-
-type ViewMode = 'edit' | 'preview'
 
 interface Props {
   groupId: EditorGroupId
@@ -21,8 +18,6 @@ interface Props {
   profile: Mode
   hasMarkdownTab: boolean
   onRunDocAgent: (agent: Action, instruction?: string) => void
-  activeTabViewMode: ViewMode | null
-  onChangeActiveTabViewMode: (mode: ViewMode) => void
 }
 
 function basename(rel: string): string {
@@ -65,8 +60,6 @@ export function EditorTabs({
   profile,
   hasMarkdownTab,
   onRunDocAgent,
-  activeTabViewMode,
-  onChangeActiveTabViewMode,
 }: Props) {
   const [dragOver, setDragOver] = useState(false)
   const dialogs = useDialogs()
@@ -165,12 +158,6 @@ export function EditorTabs({
         })}
       </div>
       <div className="flex items-stretch shrink-0">
-        {activeTabViewMode !== null && (
-          <EditorViewModeToggle
-            mode={activeTabViewMode}
-            onChange={onChangeActiveTabViewMode}
-          />
-        )}
         <DocumentAgentMenu
           profile={profile}
           hasMarkdownTab={hasMarkdownTab}

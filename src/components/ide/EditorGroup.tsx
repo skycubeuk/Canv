@@ -1,6 +1,6 @@
 import { useCallback, useState, type ReactNode } from 'react'
 import { EditorTabs } from '../EditorTabs'
-import { Breadcrumbs } from './Breadcrumbs'
+import { SubToolbar } from './SubToolbar'
 import { tabKey, isMarkdownTab, isDiffTab } from '../../lib/tabKey'
 import type { OpenTab, EditorGroupId } from '../../types/workspace'
 import type { Action, Mode } from '../../config/types'
@@ -60,6 +60,10 @@ export function EditorGroup(props: Props) {
     setTabViewMode(activeKey, mode)
   }, [activeKey, setTabViewMode])
 
+  const subToolbarRelPath = breadcrumbDiff
+    ? breadcrumbDiff.relPath
+    : breadcrumbRel
+
   return (
     <div
       className={`h-full flex flex-col min-w-0 bg-app ${
@@ -78,14 +82,14 @@ export function EditorGroup(props: Props) {
         profile={profile}
         hasMarkdownTab={hasMarkdownTab}
         onRunDocAgent={onRunDocAgent}
-        activeTabViewMode={activeTabViewMode}
-        onChangeActiveTabViewMode={handleChangeActiveTabViewMode}
       />
-      <Breadcrumbs
+      <SubToolbar
         workspaceName={workspaceRoot}
-        relPath={breadcrumbRel}
-        diffEntry={breadcrumbDiff}
-        onClickFolder={onClickFolder}
+        relPath={subToolbarRelPath}
+        onClickFolder={onClickFolder ?? (() => {})}
+        viewMode={activeTabViewMode}
+        onChangeViewMode={handleChangeActiveTabViewMode}
+        showViewToggle={hasMarkdownTab}
       />
       <div className="flex-1 min-h-0 relative">
         {tabs.length === 0 ? (

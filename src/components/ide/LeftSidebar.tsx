@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react'
-import type { LucideIcon } from 'lucide-react'
-import { Folder, Search, GitBranch } from 'lucide-react'
+
 import { Group, Panel, Separator, type Layout } from 'react-resizable-panels'
 import type { SidebarTab } from '../../hooks/useIdeLayout'
 import { SidebarFooter } from './sidebar/SidebarFooter'
@@ -9,7 +8,6 @@ import type { Settings } from '../../hooks/useSettings'
 interface SidebarTabDef {
   id: SidebarTab
   label: string
-  icon: LucideIcon
   body: ReactNode
 }
 
@@ -37,14 +35,14 @@ function ComingSoon({ label }: { label: string }) {
 
 export function LeftSidebar(props: Props) {
   const {
-    activeTab, onSelectTab, files, search, git, settings, onUpdateSettings,
+    activeTab, files, search, git, settings, onUpdateSettings,
     workspaceName,
     outline, outlineSize, onOutlineSizeChange,
   } = props
   const tabs: SidebarTabDef[] = [
-    { id: 'files', label: 'Files', icon: Folder, body: files },
-    { id: 'search', label: 'Search', icon: Search, body: search ?? <ComingSoon label="Search" /> },
-    { id: 'git', label: 'Git', icon: GitBranch, body: git ?? <ComingSoon label="Source control" /> },
+    { id: 'files', label: 'Files', body: files },
+    { id: 'search', label: 'Search', body: search ?? <ComingSoon label="Search" /> },
+    { id: 'git', label: 'Git', body: git ?? <ComingSoon label="Source control" /> },
   ]
   const active = tabs.find((t) => t.id === activeTab) ?? tabs[0]
   const showOutline = activeTab === 'files' && outline != null
@@ -58,26 +56,7 @@ export function LeftSidebar(props: Props) {
       aria-label="Sidebar"
       className="h-full flex flex-col bg-panel border-r border-default"
     >
-      <header className="shrink-0 flex border-b border-default text-xs">
-        {tabs.map((t) => {
-          const isActive = t.id === active.id
-          return (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => onSelectTab(t.id)}
-              className={`flex-1 px-2 py-2 flex items-center justify-center gap-1.5 border-b-2 ${
-                isActive
-                  ? 'border-strong text-default bg-active'
-                  : 'border-transparent text-muted hover:bg-hover'
-              }`}
-            >
-              <t.icon aria-hidden className="w-4 h-4" />
-              <span className="font-medium">{t.label}</span>
-            </button>
-          )
-        })}
-      </header>
+
       <div className="flex-1 min-h-0">
         {showOutline ? (
           <Group

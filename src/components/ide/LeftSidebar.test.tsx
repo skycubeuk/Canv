@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import { LeftSidebar } from './LeftSidebar'
 import type { Settings } from '../../hooks/useSettings'
 
@@ -87,10 +87,9 @@ describe('LeftSidebar', () => {
     expect(screen.getByTestId('git-tab')).toBeInTheDocument()
   })
 
-  it('clicking a tab calls onSelectTab', () => {
-    const props = baseProps()
+  it('shows search body when activeTab is search', () => {
+    const props = { ...baseProps(), activeTab: 'search' as const }
     render(<LeftSidebar {...props} outline={null} />)
-    fireEvent.click(screen.getByRole('button', { name: /search/i }))
-    expect(props.onSelectTab).toHaveBeenCalledWith('search')
+    expect(screen.getByTestId('search-tab')).toBeInTheDocument()
   })
 })

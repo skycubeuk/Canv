@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeAll } from 'vitest'
 import { render as rtlRender, screen, fireEvent } from '@testing-library/react'
-import type { ReactElement, ReactNode } from 'react'
+import { useState } from 'react'
+import type { ComponentProps, ReactElement, ReactNode } from 'react'
 import { ChatPanel } from './ChatPanel'
 import type { ChatMessage } from './ChatPanel'
 import { DialogProvider } from '../lib/dialogs'
@@ -27,6 +28,8 @@ const baseProps = {
   pendingApprovals: new Map(),
   onApprovalDecide: () => {},
   pricingOverrides: {},
+  followLatest: true,
+  onSetFollowLatest: vi.fn(),
 }
 
 describe('ChatPanel — tool rendering', () => {
@@ -137,12 +140,19 @@ describe('ChatPanel — auto-scroll intent', () => {
     Object.defineProperty(el, 'clientHeight', { configurable: true, get: () => opts.clientHeight })
   }
 
+  // Wrapper that holds real followLatest state so scroll-triggered callbacks
+  // actually update the component (onSetFollowLatest is now a prop, not local state).
+  function StatefulChatPanel(props: Omit<ComponentProps<typeof ChatPanel>, 'followLatest' | 'onSetFollowLatest'>) {
+    const [followLatest, setFollowLatest] = useState(true)
+    return <ChatPanel {...props} followLatest={followLatest} onSetFollowLatest={setFollowLatest} />
+  }
+
   it('shows the jump-to-latest pill after a user scroll-up of more than 40px', () => {
     const messages: ChatMessage[] = [
       { id: 'u1', role: 'user', content: 'hi' },
       { id: 'a1', role: 'assistant', content: 'hello' },
     ]
-    render(<ChatPanel {...baseProps} messages={messages} busy={true} />)
+    render(<StatefulChatPanel {...baseProps} messages={messages} busy={true} />)
     const list = screen.getByTestId('chat-message-list')
     // user scrolled up: distanceFromBottom = 100 - 50 - 0 = 50 > 40
     setGeometry(list, { scrollTop: 0, scrollHeight: 100, clientHeight: 50 })
@@ -152,7 +162,7 @@ describe('ChatPanel — auto-scroll intent', () => {
 
   it('hides the pill again when the user scrolls within 8px of the bottom', () => {
     const messages: ChatMessage[] = [{ id: 'a1', role: 'assistant', content: 'x' }]
-    render(<ChatPanel {...baseProps} messages={messages} busy={true} />)
+    render(<StatefulChatPanel {...baseProps} messages={messages} busy={true} />)
     const list = screen.getByTestId('chat-message-list')
     setGeometry(list, { scrollTop: 0, scrollHeight: 200, clientHeight: 100 })
     fireEvent.scroll(list)
@@ -164,7 +174,7 @@ describe('ChatPanel — auto-scroll intent', () => {
 
   it('clicking the pill scrolls to bottom and hides it', () => {
     const messages: ChatMessage[] = [{ id: 'a1', role: 'assistant', content: 'x' }]
-    render(<ChatPanel {...baseProps} messages={messages} busy={true} />)
+    render(<StatefulChatPanel {...baseProps} messages={messages} busy={true} />)
     const list = screen.getByTestId('chat-message-list')
     setGeometry(list, { scrollTop: 0, scrollHeight: 200, clientHeight: 100 })
     fireEvent.scroll(list)

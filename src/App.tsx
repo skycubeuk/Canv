@@ -57,6 +57,8 @@ import type { RecentRemote } from './lib/fs'
 import { useDockBridge } from './hooks/useDockBridge'
 import type { DockState, DockRun, UserAction } from './lib/dockTypes'
 import { applyAccent, applyTheme, resolveTheme } from './lib/accent'
+import { TopBar } from './components/ide/TopBar'
+import { RunControlsMenu } from './components/ide/RunControlsMenu'
 
 const MAX_RUNS = 10
 
@@ -125,6 +127,8 @@ export default function App() {
   const commands = useCommands()
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [paletteMode, setPaletteMode] = useState<PaletteMode>('commands')
+  const [followLatest, setFollowLatest] = useState(true)
+  const [runMenuOpen, setRunMenuOpen] = useState(false)
   const [recentFiles, setRecentFiles] = useState<string[]>([])
   const [revealFolderRel, setRevealFolderRel] = useState<string | null>(null)
   const [pendingDocAgent, setPendingDocAgent] = useState<AgentDef | null>(null)
@@ -415,6 +419,29 @@ export default function App() {
   }, [])
 
   const { showBottomTab } = ideLayout
+
+  const setBottomPlacementBottom = useCallback(() => {
+    ideLayout.setDockPlacement('bottom')
+    if (!ideLayout.layout.bottom.visible) ideLayout.toggleBottom()
+  }, [ideLayout])
+
+  const setBottomPlacementRight = useCallback(() => {
+    ideLayout.setDockPlacement('right')
+    if (!ideLayout.layout.bottom.visible) ideLayout.toggleBottom()
+  }, [ideLayout])
+
+  const gitBadge = null  // TODO(0.7.1): wire to actual git diff count
+  const runMeterTokens = 0  // TODO(commit 5): wire from chat usage
+  const runMeterCost = 0     // TODO(commit 5): wire from chat usage
+
+  const handleRunMain = useCallback(() => {
+    if (!ideLayout.layout.bottom.visible) ideLayout.toggleBottom()
+    ideLayout.showBottomTab('chat')
+    queueMicrotask(() => {
+      const el = document.querySelector<HTMLTextAreaElement>('[data-testid="chat-input"]')
+      el?.focus()
+    })
+  }, [ideLayout])
 
   const triggerAgent = useCallback(
     async (agent: AgentDef, range: { from: number; to: number } | null, text: string, instruction?: string) => {
@@ -1395,6 +1422,8 @@ PLANNING. For any task that will take 3 or more tool calls, call \`set_todos\` B
             pendingApprovals={pendingApprovals}
             onApprovalDecide={onApprovalDecide}
             pricingOverrides={settings.pricingOverrides}
+            followLatest={followLatest}
+            onSetFollowLatest={setFollowLatest}
           />
         ),
       },
@@ -1421,7 +1450,7 @@ PLANNING. For any task that will take 3 or more tool calls, call \`set_todos\` B
         render: () => <OutputTab runs={runs} />,
       },
     ]
-  }, [runs, activeTabId, handleCloseTab, handleApply, handleRerun, refineRun, chatMessages, chatBusy, chatProvider, chatModel, sendChat, clearChat, stopChat, pendingApprovals, onApprovalDecide, lintIssuesApi, handleJumpToProblem, settings.pricingOverrides])
+  }, [runs, activeTabId, handleCloseTab, handleApply, handleRerun, refineRun, chatMessages, chatBusy, chatProvider, chatModel, sendChat, clearChat, stopChat, pendingApprovals, onApprovalDecide, lintIssuesApi, handleJumpToProblem, settings.pricingOverrides, followLatest, setFollowLatest])
 
   // ----- Dock pop-out bridge wiring -------------------------------------------------
   // Parse each run on the main side so the popout can render Notes / Rewrite / Diff
@@ -1642,6 +1671,40 @@ PLANNING. For any task that will take 3 or more tool calls, call \`set_todos\` B
           </button>
         </div>
       )}
+      <div className="relative">
+        <TopBar
+          workspaceName={workspace.root}
+          activeSidebarTab={ideLayout.layout.sidebar.activeTab}
+          onSelectSidebarTab={(tab) => {
+            ideLayout.setSidebarTab(tab)
+            if (!ideLayout.layout.sidebar.visible) ideLayout.toggleSidebar()
+          }}
+          onOpenCommandPalette={() => { setPaletteMode('commands'); setPaletteOpen(true) }}
+          onRunMain={handleRunMain}
+          onOpenRunMenu={() => setRunMenuOpen(true)}
+          sidebarVisible={ideLayout.layout.sidebar.visible}
+          bottomVisible={ideLayout.layout.bottom.visible}
+          bottomPlacement={ideLayout.layout.bottom.placement}
+          onToggleSidebar={ideLayout.toggleSidebar}
+          onSetBottomPlacementBottom={setBottomPlacementBottom}
+          onSetBottomPlacementRight={setBottomPlacementRight}
+          gitBadge={gitBadge}
+        />
+        <RunControlsMenu
+          open={runMenuOpen}
+          onClose={() => setRunMenuOpen(false)}
+          provider={settings.provider}
+          model={settings.defaultModel[settings.provider]}
+          availableModels={getAdapter(settings.provider).models}
+          onChangeModel={(m) => update({ defaultModel: { ...settings.defaultModel, [settings.provider]: m } })}
+          streamChunkDelayMs={settings.streamChunkDelayMs}
+          onChangeDelay={(d) => update({ streamChunkDelayMs: d })}
+          followLatest={followLatest}
+          onToggleFollow={() => setFollowLatest((v) => !v)}
+          meterTotalTokens={runMeterTokens}
+          meterCostUsd={runMeterCost}
+        />
+      </div>
       <div className="flex-1 min-h-0">
         <IdeShell
           sidebar={(

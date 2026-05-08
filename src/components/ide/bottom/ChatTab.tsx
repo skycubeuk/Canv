@@ -12,6 +12,8 @@ interface Props {
   pendingApprovals?: Map<string, PendingApproval>
   onApprovalDecide?: (callId: string, decision: ApprovalDecision) => void
   pricingOverrides: Record<string, import('../../../config/pricing').ModelPricing>
+  followLatest: boolean
+  onSetFollowLatest: (next: boolean) => void
 }
 
 export function ChatTab(props: Props) {
@@ -27,6 +29,8 @@ export function ChatTab(props: Props) {
       pendingApprovals={props.pendingApprovals}
       onApprovalDecide={props.onApprovalDecide}
       pricingOverrides={props.pricingOverrides}
+      followLatest={props.followLatest}
+      onSetFollowLatest={props.onSetFollowLatest}
     />
   )
 }

@@ -58,9 +58,11 @@ interface Props {
   pendingApprovals?: Map<string, PendingApproval>
   onApprovalDecide?: (callId: string, decision: ApprovalDecision) => void
   pricingOverrides: Record<string, ModelPricing>
+  followLatest: boolean
+  onSetFollowLatest: (next: boolean) => void
 }
 
-export function ChatPanel({ messages, busy, provider, model, onSend, onClear, onStop, pendingApprovals, onApprovalDecide, pricingOverrides }: Props) {
+export function ChatPanel({ messages, busy, provider, model, onSend, onClear, onStop, pendingApprovals, onApprovalDecide, pricingOverrides, followLatest, onSetFollowLatest }: Props) {
   const [input, setInput] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
   const dialogs = useDialogs()
@@ -81,7 +83,7 @@ export function ChatPanel({ messages, busy, provider, model, onSend, onClear, on
     ctxMenu.open(e, items)
   }
 
-  const [followLatest, setFollowLatest] = useState(true)
+  const setFollowLatest = onSetFollowLatest
   const programmaticScroll = useRef(false)
 
   // When messages change and we're following, scroll to bottom — and tag the
@@ -111,7 +113,7 @@ export function ChatPanel({ messages, busy, provider, model, onSend, onClear, on
     }
     el.addEventListener('scroll', onScroll, { passive: true })
     return () => el.removeEventListener('scroll', onScroll)
-  }, [followLatest])
+  }, [followLatest, setFollowLatest])
 
   const jumpToLatest = () => {
     const el = scrollRef.current
@@ -210,6 +212,7 @@ export function ChatPanel({ messages, busy, provider, model, onSend, onClear, on
             minRows={2}
             maxRows={6}
             className="input flex-1 resize-none font-sans"
+            data-testid="chat-input"
           />
           {busy ? (
             <button type="button" onClick={onStop} className="btn-secondary">

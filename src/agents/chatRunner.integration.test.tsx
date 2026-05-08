@@ -70,6 +70,7 @@ function Host({ adapter }: { adapter: LLMAdapter }) {
   }, [])
 
   const noApprovals = new Map<string, PendingApproval>()
+  const [followLatest, setFollowLatest] = useState(true)
   return (
     <ChatPanel
       messages={messages}
@@ -82,6 +83,8 @@ function Host({ adapter }: { adapter: LLMAdapter }) {
       pendingApprovals={noApprovals}
       onApprovalDecide={() => {}}
       pricingOverrides={{}}
+      followLatest={followLatest}
+      onSetFollowLatest={setFollowLatest}
     />
   )
 }

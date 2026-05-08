@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, type ReactNode } from 'react'
+import { useState, useMemo, useRef, useCallback, type ReactNode } from 'react'
 import { MessageSquare, ChevronDown, ChevronRight, X, RotateCw, CircleHelp } from 'lucide-react'
 import { computeDiff } from '../lib/diff'
 import { parseAgentResponse } from '../agents/runner'
@@ -87,6 +87,8 @@ interface Props {
 export function ResultsPanel(props: Props) {
   const { runs, activeId, onSelect, onClose, onApply, onRerun, onRefine, chat } = props
   const { modes, defaultModeId } = useModes()
+  const [followLatest, setFollowLatest] = useState(true)
+  const handleSetFollowLatest = useCallback((next: boolean) => setFollowLatest(next), [])
 
   if (runs.length === 0 && !chat.enabled) return null
 
@@ -171,6 +173,8 @@ export function ResultsPanel(props: Props) {
           onClear={chat.onClear}
           onStop={chat.onStop}
           pricingOverrides={chat.pricingOverrides}
+          followLatest={followLatest}
+          onSetFollowLatest={handleSetFollowLatest}
         />
       ) : activeRun ? (
         <RunView run={activeRun} onApply={onApply} onRerun={onRerun} onRefine={onRefine} />
