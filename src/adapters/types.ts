@@ -13,6 +13,9 @@ export interface ToolResult {
   /** Serialised tool output. Caller stringifies non-string results before passing. */
   content: string
   isError?: boolean
+  /** True when the user declined the approval prompt for the originating tool call.
+   *  Renderers use this to distinguish "denied" from "ran and failed". */
+  isUserDenial?: true
 }
 
 export type Message =
