@@ -116,8 +116,6 @@ export function StatusBar(props: Props) {
             <span aria-hidden className="w-px h-3 bg-[rgb(var(--border-default))]" />
           </>
         )}
-        <span>UTF-8</span>
-        <span aria-hidden className="w-px h-3 bg-[rgb(var(--border-default))]" />
         <span>{wordsLabel}</span>
         <span aria-hidden className="w-px h-3 bg-[rgb(var(--border-default))]" />
         <span>{Math.max(1, Math.ceil(wordCount / 220))} min read</span>
