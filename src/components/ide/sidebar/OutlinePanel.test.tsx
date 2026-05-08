@@ -9,20 +9,22 @@ const NODES: OutlineNode[] = [
     level: 1,
     text: 'Title',
     line: 1,
+    index: 0,
     children: [
       {
         id: '2:3',
         level: 2,
         text: 'Section A',
         line: 3,
+        index: 1,
         children: [
-          { id: '3:5', level: 3, text: 'Sub 1', line: 5, children: [] },
+          { id: '3:5', level: 3, text: 'Sub 1', line: 5, index: 2, children: [] },
         ],
       },
-      { id: '2:7', level: 2, text: 'Section B', line: 7, children: [] },
+      { id: '2:7', level: 2, text: 'Section B', line: 7, index: 3, children: [] },
     ],
   },
-  { id: '1:9', level: 1, text: 'Appendix', line: 9, children: [] },
+  { id: '1:9', level: 1, text: 'Appendix', line: 9, index: 4, children: [] },
 ]
 
 describe('OutlinePanel', () => {
@@ -71,7 +73,7 @@ describe('OutlinePanel', () => {
     expect(onToggle).toHaveBeenCalledTimes(1)
   })
 
-  it('clicking a leaf node calls onJump with its line number', () => {
+  it('clicking a leaf node calls onJump with its node', () => {
     const onJump = vi.fn()
     render(
       <OutlinePanel
@@ -83,7 +85,7 @@ describe('OutlinePanel', () => {
       />,
     )
     fireEvent.click(screen.getByText('Sub 1'))
-    expect(onJump).toHaveBeenCalledWith(5)
+    expect(onJump).toHaveBeenCalledWith(NODES[0].children[0].children[0])
   })
 
   it('clicking a parent node label calls onJump (not toggle)', () => {
@@ -98,7 +100,7 @@ describe('OutlinePanel', () => {
       />,
     )
     fireEvent.click(screen.getByText('Title'))
-    expect(onJump).toHaveBeenCalledWith(1)
+    expect(onJump).toHaveBeenCalledWith(NODES[0])
     expect(screen.getByText('Section A')).toBeInTheDocument()
   })
 
@@ -165,20 +167,22 @@ describe('OutlinePanel', () => {
         level: 1,
         text: 'Title',
         line: 1,
+        index: 0,
         children: [
           {
             id: '2:3',
             level: 2,
             text: 'Section A',
             line: 3,
+            index: 1,
             children: [
-              { id: '3:5', level: 3, text: 'Sub 1', line: 5, children: [] },
+              { id: '3:5', level: 3, text: 'Sub 1', line: 5, index: 2, children: [] },
             ],
           },
-          { id: '2:7', level: 2, text: 'Section B', line: 7, children: [] },
+          { id: '2:7', level: 2, text: 'Section B', line: 7, index: 3, children: [] },
         ],
       },
-      { id: '1:9', level: 1, text: 'Appendix', line: 9, children: [] },
+      { id: '1:9', level: 1, text: 'Appendix', line: 9, index: 4, children: [] },
     ]
     rerender(
       <OutlinePanel

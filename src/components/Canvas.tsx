@@ -10,6 +10,8 @@ import { copyFromDom, selectAllInDom } from '../lib/contextMenuActions'
 type MarkdownTab = Extract<OpenTab, { kind: 'markdown' }>
 type ViewMode = 'edit' | 'preview'
 
+export type Jumper = (line: number, index: number) => void
+
 interface Props {
   groupId: EditorGroupId
   tab: MarkdownTab
@@ -21,6 +23,8 @@ interface Props {
   onSelectionChange?: (groupId: EditorGroupId, rel: string) => void
   onEditorReady: (groupId: EditorGroupId, rel: string, view: EditorView) => void
   onEditorDestroy: (groupId: EditorGroupId, rel: string) => void
+  onJumperReady: (groupId: EditorGroupId, rel: string, jumper: Jumper) => void
+  onJumperDestroy: (groupId: EditorGroupId, rel: string) => void
 }
 
 const widthClass: Record<LineWidth, string> = {
@@ -43,6 +47,7 @@ const editorTypographyTheme = EditorView.theme({
 export function Canvas({
   groupId, tab, isActive, fontSize, lineWidth, viewMode,
   onChange, onSelectionChange, onEditorReady, onEditorDestroy,
+  onJumperReady, onJumperDestroy,
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const viewRef = useRef<EditorView | null>(null)
@@ -56,10 +61,14 @@ export function Canvas({
   // Latest callbacks via ref so the editor construction doesn't capture stale closures.
   const onChangeRef = useRef(onChange)
   const onSelectionChangeRef = useRef(onSelectionChange)
+  // The jumper closes over the latest viewMode so a single registered function
+  // routes correctly across edit↔preview toggles without re-registration.
+  const viewModeRef = useRef<ViewMode>(viewMode)
   useEffect(() => {
     onChangeRef.current = onChange
     onSelectionChangeRef.current = onSelectionChange
-  }, [onChange, onSelectionChange])
+    viewModeRef.current = viewMode
+  }, [onChange, onSelectionChange, viewMode])
 
   useLayoutEffect(() => {
     const container = containerRef.current
@@ -74,10 +83,34 @@ export function Canvas({
     const view = new EditorView({ state, parent: container })
     viewRef.current = view
     onEditorReady(groupId, tab.relPath, view)
+
+    const jumper: Jumper = (line, index) => {
+      if (viewModeRef.current === 'preview') {
+        const root = previewRef.current
+        if (!root) return
+        const headings = root.querySelectorAll(':scope > h1, :scope > h2, :scope > h3, :scope > h4, :scope > h5, :scope > h6')
+        const el = headings[index] as HTMLElement | undefined
+        el?.scrollIntoView({ block: 'start' })
+        return
+      }
+      const v = viewRef.current
+      if (!v) return
+      const doc = v.state.doc
+      const safeLine = Math.max(1, Math.min(line, doc.lines))
+      const linePos = doc.line(safeLine).from
+      v.dispatch({
+        selection: { anchor: linePos },
+        effects: EditorView.scrollIntoView(linePos, { y: 'start', yMargin: 8 }),
+      })
+      v.focus()
+    }
+    onJumperReady(groupId, tab.relPath, jumper)
+
     return () => {
       view.destroy()
       viewRef.current = null
       onEditorDestroy(groupId, tab.relPath)
+      onJumperDestroy(groupId, tab.relPath)
     }
     // Only construct the view once per (groupId, relPath). External
     // content changes are handled by the next effect.
