@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
+import { useState } from 'react'
 import { LeftSidebar } from './LeftSidebar'
 import type { Settings } from '../../hooks/useSettings'
 
@@ -94,5 +95,41 @@ describe('LeftSidebar', () => {
     const props = { ...baseProps(), activeTab: 'search' as const }
     render(<LeftSidebar {...props} outline={null} />)
     expect(screen.getByTestId('search-tab')).toBeInTheDocument()
+  })
+
+  it('preserves the file tree subtree when the outline appears', () => {
+    // Regression: the outline panel spawning would unmount FileTree and
+    // wipe its expanded-folders local state. Verify that a stateful child
+    // mounted inside the `files` slot survives the outline transition.
+    function FilesWithCounter() {
+      const [count, setCount] = useState(0)
+      return (
+        <div>
+          <button data-testid="bump" onClick={() => setCount((c) => c + 1)}>
+            bump
+          </button>
+          <span data-testid="count">{count}</span>
+        </div>
+      )
+    }
+    const props = baseProps()
+    const filesNode = <FilesWithCounter />
+    const { rerender } = render(
+      <LeftSidebar {...props} files={filesNode} outline={null} />,
+    )
+    fireEvent.click(screen.getByTestId('bump'))
+    fireEvent.click(screen.getByTestId('bump'))
+    expect(screen.getByTestId('count').textContent).toBe('2')
+
+    // Outline appears — FilesWithCounter must keep its state.
+    rerender(
+      <LeftSidebar
+        {...props}
+        files={filesNode}
+        outline={<div data-testid="outline-section">OUTLINE</div>}
+      />,
+    )
+    expect(screen.getByTestId('outline-section')).toBeInTheDocument()
+    expect(screen.getByTestId('count').textContent).toBe('2')
   })
 })
