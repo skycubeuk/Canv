@@ -1,5 +1,6 @@
 import type { TokenUsage } from '../adapters/types'
-import { PRICING, type ModelPricing } from '../config/pricing'
+import type { Provider } from '../adapters'
+import { PRICING, pricingKey, type ModelPricing } from '../config/pricing'
 
 function isUsable(p: ModelPricing | undefined | null): p is ModelPricing {
   if (!p) return false
@@ -9,24 +10,30 @@ function isUsable(p: ModelPricing | undefined | null): p is ModelPricing {
 }
 
 /**
- * Returns USD cost for `usage` under `model`, applying override-then-default
- * resolution. Returns null when no usable pricing is found, when the resolved
- * entry has any field ≤ 0 (placeholder or partial pricing), or when `usage` carries
- * non-finite numbers.
+ * Returns USD cost for `usage` under (`provider`, `model`), applying
+ * override-then-default resolution. Returns null when no usable pricing is
+ * found, when the resolved entry has any field ≤ 0 (placeholder or partial
+ * pricing), or when `usage` carries non-finite numbers.
+ *
+ * Both `overrides` and `defaults` are keyed by `${provider}/${model}` (see
+ * `pricingKey`), so a future adapter that shares a model id with another
+ * provider gets its own pricing slot.
  *
  * The `defaults` parameter is injectable for testing. Production code should
- * call `cost(usage, model, overrides)` and let the default argument apply.
+ * call `cost(usage, provider, model, overrides)` and let the default apply.
  */
 export function cost(
   usage: TokenUsage,
+  provider: Provider,
   model: string,
   overrides: Record<string, ModelPricing> = {},
   defaults: Record<string, ModelPricing> = PRICING,
 ): number | null {
   if (!Number.isFinite(usage.input) || !Number.isFinite(usage.output)) return null
 
-  const override = overrides[model]
-  const def = defaults[model]
+  const key = pricingKey(provider, model)
+  const override = overrides[key]
+  const def = defaults[key]
   const resolved = isUsable(override) ? override : isUsable(def) ? def : null
   if (!resolved) return null
 

@@ -504,24 +504,27 @@ export default function App() {
   const [cursorPos] = useState<{ line: number; col: number } | null>(null)
 
   const meterTotals = useMemo(
-    () => chatTotals(chatMessages, settings.defaultModel[settings.provider], settings.pricingOverrides),
+    () => chatTotals(chatMessages, settings.provider, settings.defaultModel[settings.provider], settings.pricingOverrides),
     [chatMessages, settings.defaultModel, settings.provider, settings.pricingOverrides],
   )
   const triggerAgent = useCallback(
     async (agent: AgentDef, range: { from: number; to: number } | null, text: string, instruction?: string) => {
-      if (apiKeyMissing) {
-        openSettingsTab()
-        showToast(`Add an ${settings.provider === 'anthropic' ? 'Anthropic' : 'OpenAI'} API key in settings.`)
-        return
-      }
       if (!text.trim()) {
         showToast('Select some text first')
         return
       }
 
+      // The per-action override carries its provider explicitly so a future
+      // adapter exposing the same model id (e.g. Bedrock + direct Anthropic
+      // both listing claude-sonnet-4-6) routes unambiguously.
+      const { provider, model } = modelForAgent(activeProfileId, agent.id)
+      if (!settings.apiKeys[provider]) {
+        openSettingsTab()
+        showToast(`Add an ${provider === 'anthropic' ? 'Anthropic' : 'OpenAI'} API key in settings.`)
+        return
+      }
+      const adapter = getAdapter(provider)
       const freshContextSummaries = await ensurePinnedReady()
-      const adapter = getAdapter(settings.provider)
-      const model = modelForAgent(activeProfileId, agent.id)
       const promptTemplate = agent.prompt
 
       const id = `${agent.id}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
@@ -541,7 +544,7 @@ export default function App() {
         agentLabel: agent.label,
         modeId: activeProfileId,
         model,
-        provider: adapter.name,
+        provider: adapter.id,
         sourceText: text,
         range,
         response: '',
@@ -575,9 +578,9 @@ export default function App() {
         const { text: final, truncated, rawMessages, tokenUsage } = await runAgent({
           agent,
           adapter,
-          apiKey: settings.apiKeys[settings.provider],
+          apiKey: settings.apiKeys[provider],
           model,
-          maxTokens: settings.maxOutputTokens[settings.provider],
+          maxTokens: settings.maxOutputTokens[provider],
           text,
           instruction,
           contextSummaries: freshContextSummaries,
@@ -623,7 +626,7 @@ export default function App() {
         runAbort.current.delete(id)
       }
     },
-    [apiKeyMissing, activeProfileId, settings, modelForAgent, ensurePinnedReady, getActiveEditor, setRuns, showToast, openSettingsTab, showBottomTab],
+    [activeProfileId, settings, modelForAgent, ensurePinnedReady, getActiveEditor, setRuns, showToast, openSettingsTab, showBottomTab],
   )
 
   const handleAgentFromToolbar = useCallback(
@@ -705,11 +708,6 @@ export default function App() {
 
   const refineRun = useCallback(
     async (run: RunRecord, message: string) => {
-      if (apiKeyMissing) {
-        openSettingsTab()
-        showToast(`Add an ${settings.provider === 'anthropic' ? 'Anthropic' : 'OpenAI'} API key in settings.`)
-        return
-      }
       if (!run.basePrompt || !run.originalResponse) {
         showToast('This result has no conversation context')
         return
@@ -721,8 +719,13 @@ export default function App() {
         showToast('Action no longer exists in current mode')
         return
       }
-      const adapter = getAdapter(settings.provider)
-      const model = modelForAgent(activeProfileId, agent.id)
+      const { provider, model } = modelForAgent(activeProfileId, agent.id)
+      if (!settings.apiKeys[provider]) {
+        openSettingsTab()
+        showToast(`Add an ${provider === 'anthropic' ? 'Anthropic' : 'OpenAI'} API key in settings.`)
+        return
+      }
+      const adapter = getAdapter(provider)
 
       const formatHint =
         agent.outputMode === 'feedback-and-rewrite'
@@ -763,11 +766,11 @@ export default function App() {
           : undefined
 
         const { text: final, truncated, tokenUsage } = await adapter.complete({
-          apiKey: settings.apiKeys[settings.provider],
+          apiKey: settings.apiKeys[provider],
           model,
           system,
           messages,
-          maxTokens: settings.maxOutputTokens[settings.provider],
+          maxTokens: settings.maxOutputTokens[provider],
           signal: controller.signal,
           onToken,
           chunkDelayMs: settings.streamChunkDelayMs,
@@ -811,7 +814,7 @@ export default function App() {
         runAbort.current.delete(run.id)
       }
     },
-    [apiKeyMissing, activeProfileId, settings, modelForAgent, setRuns, showToast, openSettingsTab, activeProfile],
+    [activeProfileId, settings, modelForAgent, setRuns, showToast, openSettingsTab, activeProfile],
   )
 
   const [pendingApprovals, setPendingApprovals] = useState<Map<string, PendingApproval>>(new Map())

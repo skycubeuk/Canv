@@ -50,7 +50,7 @@ describe('RunsTab — per-run cost badge', () => {
           {...noopProps}
           runs={[baseRun()]}
           pricingOverrides={{}}
-          pricingDefaults={{ 'm-known': { input: 3, output: 15 } }}
+          pricingDefaults={{ 'anthropic/m-known': { input: 3, output: 15 } }}
         />
       </ContextMenuProvider>,
     )
@@ -65,7 +65,7 @@ describe('RunsTab — per-run cost badge', () => {
           {...noopProps}
           runs={[baseRun({ model: 'm-unknown' })]}
           pricingOverrides={{}}
-          pricingDefaults={{ 'm-known': { input: 3, output: 15 } }}
+          pricingDefaults={{ 'anthropic/m-known': { input: 3, output: 15 } }}
         />
       </ContextMenuProvider>,
     )
@@ -79,7 +79,7 @@ describe('RunsTab — per-run cost badge', () => {
           {...noopProps}
           runs={[baseRun({ tokenUsage: undefined })]}
           pricingOverrides={{}}
-          pricingDefaults={{ 'm-known': { input: 3, output: 15 } }}
+          pricingDefaults={{ 'anthropic/m-known': { input: 3, output: 15 } }}
         />
       </ContextMenuProvider>,
     )

@@ -1,10 +1,12 @@
 import { useMemo } from 'react'
 import type { ChatMessage } from './ChatPanel'
 import type { ModelPricing } from '../config/pricing'
+import type { Provider } from '../adapters'
 import { cost } from '../lib/cost'
 
 interface Props {
   messages: ChatMessage[]
+  provider: Provider
   model: string
   overrides: Record<string, ModelPricing>
   /** Injectable for tests; production callers can omit (use PRICING from config). */
@@ -15,7 +17,7 @@ interface Props {
 const fmtCost = (n: number | null): string => (n == null ? '—' : `$${n.toFixed(3)}`)
 const fmtNum = (n: number): string => n.toLocaleString('en-US')
 
-export function ChatMeter({ messages, model, overrides, defaults, busy }: Props) {
+export function ChatMeter({ messages, provider, model, overrides, defaults, busy }: Props) {
   const { turn, session } = useMemo(() => {
     const assistantMsgs = messages.filter((m) => m.role === 'assistant')
     if (assistantMsgs.length === 0) return { turn: null, session: null }
@@ -36,8 +38,8 @@ export function ChatMeter({ messages, model, overrides, defaults, busy }: Props)
   if (messages.length === 0) return null
   if (!session) return null
 
-  const sessionCost = cost(session, model, overrides, defaults)
-  const turnCost = turn ? cost(turn, model, overrides, defaults) : null
+  const sessionCost = cost(session, provider, model, overrides, defaults)
+  const turnCost = turn ? cost(turn, provider, model, overrides, defaults) : null
 
   const turnText = turn
     ? `turn: ${fmtNum(turn.input)} in / ${fmtNum(turn.output)} out · ${fmtCost(turnCost)}`

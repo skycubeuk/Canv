@@ -1,14 +1,27 @@
 import { useCallback, useMemo } from 'react'
 import { useLocalStorage } from './useLocalStorage'
 import type { Mode } from '../config/types'
-import { adapters } from '../adapters'
+import { adapters, providerForModel } from '../adapters'
+import type { Provider } from '../adapters'
 import type { ModelPricing } from '../config/pricing'
 import { DEFAULT_ACCENT } from '../lib/accent'
 
 const ALLOWED_DELAYS = [0, 50, 100, 200] as const
 export type StreamChunkDelayMs = (typeof ALLOWED_DELAYS)[number]
 
-export type Provider = 'anthropic' | 'openai'
+export type { Provider }
+
+/**
+ * Per-action model overrides store the provider explicitly so a future
+ * adapter that lists the same model id (e.g. AWS Bedrock exposing a Claude
+ * model name already used by the direct Anthropic adapter) can be selected
+ * unambiguously. Older storage held just the model string; the merge step
+ * upgrades those values via providerForModel.
+ */
+export interface AgentModelRef {
+  provider: Provider
+  model: string
+}
 export type Theme = 'light' | 'dark' | 'system'
 export type LineWidth = 'narrow' | 'normal' | 'wide'
 
@@ -17,7 +30,7 @@ export interface Settings {
   apiKeys: Record<Provider, string>
   defaultModel: Record<Provider, string>
   useDefaultModelForAll: boolean
-  perAgentModel: Record<string, Record<string, string>>
+  perAgentModel: Record<string, Record<string, AgentModelRef>>
   fontSize: number
   lineWidth: LineWidth
   theme: Theme
@@ -113,18 +126,48 @@ export function useSettings() {
       m.streamChunkDelayMs = 0
     }
     // pricingOverrides: drop entries whose values are not finite numbers.
+    // Also upgrade legacy bare-model-id keys to `${provider}/${model}` so two
+    // adapters listing the same model id can carry independent overrides.
     const cleaned: Record<string, ModelPricing> = {}
     for (const [k, v] of Object.entries(m.pricingOverrides)) {
-      if (v && Number.isFinite(v.input) && Number.isFinite(v.output)) cleaned[k] = v
+      if (!v || !Number.isFinite(v.input) || !Number.isFinite(v.output)) continue
+      if (k.includes('/')) {
+        cleaned[k] = v
+        continue
+      }
+      const ownedBy = providerForModel(k)
+      if (ownedBy) {
+        cleaned[`${ownedBy}/${k}`] = v
+      }
+      // No adapter claims this bare model id — drop. Legacy entries for
+      // models that no longer exist were never resolvable anyway.
     }
     m.pricingOverrides = cleaned
+    // Normalize per-action overrides. Old storage held a bare model-id
+    // string per action; new storage holds { provider, model }. Upgrade
+    // bare strings via providerForModel; replace anything that no adapter
+    // claims with the user's current default ref so the action stays linked.
+    const fallbackRef: AgentModelRef = {
+      provider: m.provider,
+      model: m.defaultModel[m.provider],
+    }
     const allKnownModels = new Set(Object.values(adapters).flatMap((a) => a.models))
-    const fallbackModel = m.defaultModel[m.provider]
     for (const modeId of Object.keys(m.perAgentModel)) {
-      const inner = m.perAgentModel[modeId]
+      const inner = m.perAgentModel[modeId] as unknown as Record<string, AgentModelRef | string>
       for (const actionId of Object.keys(inner)) {
-        if (!allKnownModels.has(inner[actionId])) {
-          inner[actionId] = fallbackModel
+        const v = inner[actionId]
+        if (typeof v === 'string') {
+          const provider = providerForModel(v)
+          if (provider) {
+            inner[actionId] = { provider, model: v }
+          } else {
+            inner[actionId] = fallbackRef
+          }
+        } else if (v && typeof v === 'object' && 'provider' in v && 'model' in v) {
+          // Validate the composite still resolves to an extant model.
+          if (!allKnownModels.has(v.model)) inner[actionId] = fallbackRef
+        } else {
+          inner[actionId] = fallbackRef
         }
       }
     }
@@ -135,9 +178,13 @@ export function useSettings() {
     setSettings((prev) => ({ ...prev, ...patch }))
   }, [setSettings])
 
-  const modelForAgent = useCallback((modeId: string, agentId: string): string => {
-    if (merged.useDefaultModelForAll) return merged.defaultModel[merged.provider]
-    return merged.perAgentModel[modeId]?.[agentId] || merged.defaultModel[merged.provider]
+  const modelForAgent = useCallback((modeId: string, agentId: string): AgentModelRef => {
+    const fallback: AgentModelRef = {
+      provider: merged.provider,
+      model: merged.defaultModel[merged.provider],
+    }
+    if (merged.useDefaultModelForAll) return fallback
+    return merged.perAgentModel[modeId]?.[agentId] ?? fallback
   }, [merged])
 
   const getActionPrompt = useCallback((mode: Mode, actionId: string): string => {

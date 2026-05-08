@@ -1,6 +1,7 @@
 import type { ChatMessage } from '../components/ChatPanel'
 import type { ModelPricing } from '../config/pricing'
 import { PRICING } from '../config/pricing'
+import type { Provider } from '../adapters'
 import { cost } from './cost'
 
 /**
@@ -9,12 +10,14 @@ import { cost } from './cost'
  * surfaces agree on the numbers shown.
  *
  * @param messages  Full message list (user + assistant).
+ * @param provider  Provider id used to resolve pricing.
  * @param model     Model ID used to resolve pricing.
  * @param overrides Per-model pricing overrides (from user settings).
  * @param defaults  Fallback pricing table — injectable for tests.
  */
 export function chatTotals(
   messages: ChatMessage[],
+  provider: Provider,
   model: string,
   overrides: Record<string, ModelPricing>,
   defaults: Record<string, ModelPricing> = PRICING,
@@ -30,7 +33,7 @@ export function chatTotals(
   )
 
   const tokens = sessionUsage.input + sessionUsage.output
-  const costUsd = cost(sessionUsage, model, overrides, defaults) ?? 0
+  const costUsd = cost(sessionUsage, provider, model, overrides, defaults) ?? 0
 
   return { tokens, costUsd }
 }

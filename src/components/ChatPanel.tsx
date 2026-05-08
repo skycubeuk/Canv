@@ -86,7 +86,7 @@ interface Props {
   contextFileName: string | null
 }
 
-export function ChatPanel({ messages, busy, provider: _provider, model, onSend, onClear, onStop, onRetry, onEditAndRetry, pendingApprovals, onApprovalDecide, pricingOverrides, followLatest, onSetFollowLatest, contextFileName }: Props) {
+export function ChatPanel({ messages, busy, provider, model, onSend, onClear, onStop, onRetry, onEditAndRetry, pendingApprovals, onApprovalDecide, pricingOverrides, followLatest, onSetFollowLatest, contextFileName }: Props) {
   const [input, setInput] = useState('')
   const [editingUserId, setEditingUserId] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -263,6 +263,7 @@ export function ChatPanel({ messages, busy, provider: _provider, model, onSend, 
 
       <ChatMeter
         messages={messages}
+        provider={provider as ChatProvider}
         model={model}
         overrides={pricingOverrides}
         busy={busy}
