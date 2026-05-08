@@ -97,6 +97,7 @@
     "files": [
       "dist/**",
       "electron/**",
+      "build/icon.png",
       "package.json"
     ],
     "afterPack": "./scripts/afterPack.cjs",
@@ -107,7 +108,7 @@
         "rpm"
       ],
       "category": "Office",
-      "icon": "build/icon.png"
+      "icon": "build/icons"
     },
     "mac": {
       "target": [

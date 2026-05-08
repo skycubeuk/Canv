@@ -14,6 +14,8 @@ const { parseTarget, resolveTarget } = require('./remote-target.cjs')
 const { RecentRemotes } = require('./recent-remotes.cjs')
 const serve = require('./serve-folder.cjs')
 
+const APP_ICON = path.join(__dirname, '..', 'build', 'icon.png')
+
 const DEV_URL = 'http://localhost:5173'
 
 // ---------- Screenshot harness env overrides ----------
@@ -696,6 +698,7 @@ function registerDockHandlers() {
       minHeight: 320,
       backgroundColor: nativeTheme.shouldUseDarkColors ? '#171717' : '#fafaf9',
       title: 'Canv Dock',
+      icon: APP_ICON,
       webPreferences: {
         preload: path.join(__dirname, 'preload.cjs'),
         contextIsolation: true,
@@ -771,6 +774,7 @@ function createWindow() {
     minWidth: 800,
     minHeight: 600,
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#171717' : '#fafaf9',
+    icon: APP_ICON,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
