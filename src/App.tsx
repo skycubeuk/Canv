@@ -421,14 +421,26 @@ export default function App() {
 
   const { showBottomTab } = ideLayout
 
+  // Mirror the sidebar toggle: clicking the active placement collapses the
+  // dock; clicking an inactive placement switches and ensures it's visible.
   const setBottomPlacementBottom = useCallback(() => {
+    const { visible, placement } = ideLayout.layout.bottom
+    if (visible && placement === 'bottom') {
+      ideLayout.toggleBottom()
+      return
+    }
     ideLayout.setDockPlacement('bottom')
-    if (!ideLayout.layout.bottom.visible) ideLayout.toggleBottom()
+    if (!visible) ideLayout.toggleBottom()
   }, [ideLayout])
 
   const setBottomPlacementRight = useCallback(() => {
+    const { visible, placement } = ideLayout.layout.bottom
+    if (visible && placement === 'right') {
+      ideLayout.toggleBottom()
+      return
+    }
     ideLayout.setDockPlacement('right')
-    if (!ideLayout.layout.bottom.visible) ideLayout.toggleBottom()
+    if (!visible) ideLayout.toggleBottom()
   }, [ideLayout])
 
   const gitBadge = null  // TODO(0.7.1): wire to actual git diff count
