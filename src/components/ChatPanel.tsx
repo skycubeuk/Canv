@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { FileText, Sparkles, ChevronDown, ArrowRight } from 'lucide-react'
 import { useDialogs } from '../lib/dialogs'
 import { AutoGrowTextarea } from './AutoGrowTextarea'
@@ -18,9 +18,20 @@ import type { WritePreview, ApprovalDecision } from '../agents/chatRunner'
 import { ChatToolChip } from './ChatToolChip'
 import { ChatApprovalCard, type ApprovalState } from './ChatApprovalCard'
 import { ChatTodoCard } from './ChatTodoCard'
+import { ChatRetryActions, type RetryActionKind } from './ChatRetryActions'
 import { getTool } from '../tools/registry'
 
 export type ChatProvider = 'anthropic' | 'openai'
+
+export type FailureReason = 'cancelled' | 'provider_error'
+
+export interface ErrorInfo {
+  kind: 'network' | 'rate_limited' | 'server' | 'schema' | 'unknown'
+  statusCode?: number
+  message: string
+  /** Seconds; honoured by Retry button countdown when set (typically from a 429). */
+  retryAfter?: number
+}
 
 export interface ChatMessage {
   id: string
@@ -34,10 +45,14 @@ export interface ChatMessage {
   toolResults?: ToolResult[]
   /** Marks a system-injected synthetic note (e.g. "(turn cancelled)"). */
   synthetic?: boolean
-  /** Why this message terminated, when it ended on something other than a
-   *  clean end_turn. 'cancelled' means the user clicked Stop; rendered as
-   *  a "Stopped" pill, and used by A3 as the anchor for retry actions. */
-  stopReason?: 'cancelled'
+  /** Provider-reported terminal reason for this turn. Mirrors the provider's
+   *  own value; for failures, see `failureReason`. */
+  stopReason?: 'end_turn' | 'tool_use' | 'max_tokens' | 'stop_sequence'
+  /** Why this message ended in a recoverable failure state. Used by A3 to
+   *  drive inline retry affordances. */
+  failureReason?: FailureReason
+  /** Populated when `failureReason === 'provider_error'`. */
+  errorInfo?: ErrorInfo
   /** Token counts reported by the model for this assistant turn. */
   tokenUsage?: { input: number; output: number }
 }
@@ -56,6 +71,13 @@ interface Props {
   onSend: (text: string) => void
   onClear: () => void
   onStop: () => void
+  /** Retry handler: anchorId is the message the action was attached to
+   *  (a failed assistant message, or an earlier user/assistant message). */
+  onRetry: (anchorId: string) => void
+  /** Edit-and-retry handler: takes the new text for the most-recent user
+   *  message. The chat panel itself owns the inline editor UI; App.tsx just
+   *  receives the final text on submit. */
+  onEditAndRetry: (newText: string) => void
   pendingApprovals?: Map<string, PendingApproval>
   onApprovalDecide?: (callId: string, decision: ApprovalDecision) => void
   pricingOverrides: Record<string, ModelPricing>
@@ -64,12 +86,20 @@ interface Props {
   contextFileName: string | null
 }
 
-export function ChatPanel({ messages, busy, provider: _provider, model, onSend, onClear, onStop, pendingApprovals, onApprovalDecide, pricingOverrides, followLatest, onSetFollowLatest, contextFileName }: Props) {
+export function ChatPanel({ messages, busy, provider: _provider, model, onSend, onClear, onStop, onRetry, onEditAndRetry, pendingApprovals, onApprovalDecide, pricingOverrides, followLatest, onSetFollowLatest, contextFileName }: Props) {
   const [input, setInput] = useState('')
+  const [editingUserId, setEditingUserId] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const dialogs = useDialogs()
   const ctxMenu = useContextMenu()
   const inputRef = useRef<HTMLTextAreaElement>(null)
+
+  const lastUserId = useMemo(() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'user') return messages[i].id
+    }
+    return null
+  }, [messages])
 
   const onInputContextMenu = (e: React.MouseEvent) => {
     const el = inputRef.current
@@ -133,6 +163,26 @@ export function ChatPanel({ messages, busy, provider: _provider, model, onSend, 
     setInput('')
   }
 
+  const onScrollKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== 'r' && e.key !== 'R') return
+    const tag = (e.target as HTMLElement).tagName
+    if (tag === 'TEXTAREA' || tag === 'INPUT') return
+    e.preventDefault()
+    // Walk back to find the most recent failed/cancelled/denied-tool message;
+    // locate its primary Retry button by data-attribute and focus it.
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i]
+      if (m.failureReason || m.toolResults?.some((r) => r.isUserDenial)) {
+        const btn = scrollRef.current?.querySelector<HTMLButtonElement>(
+          `[data-msg-id="${CSS.escape(m.id)}"] [data-retry-primary]`,
+        )
+        btn?.scrollIntoView({ block: 'nearest' })
+        btn?.focus()
+        return
+      }
+    }
+  }
+
   return (
     <div className="h-full flex flex-col min-h-0">
       <div className="shrink-0 flex items-center gap-2 px-3 py-2 border-b border-default text-[11.5px] text-muted">
@@ -166,21 +216,39 @@ export function ChatPanel({ messages, busy, provider: _provider, model, onSend, 
         )}
       </div>
 
-      <div ref={scrollRef} data-testid="chat-message-list" className="relative flex-1 overflow-y-auto px-4 py-4 space-y-3">
+      <div
+        ref={scrollRef}
+        data-testid="chat-message-list"
+        role="log"
+        tabIndex={0}
+        onKeyDown={onScrollKeyDown}
+        className="relative flex-1 overflow-y-auto px-4 py-4 space-y-3"
+      >
         {messages.length === 0 && (
           <div className="text-sm text-muted text-center py-8">
             Ask anything about the document.<br />
             Try: <em>"Summarise this in one sentence"</em> or <em>"What's missing from the argument?"</em>
           </div>
         )}
-        {messages.map((m) => (
-          <Bubble
-            key={m.id}
-            message={m}
-            pendingApprovals={pendingApprovals}
-            onApprovalDecide={onApprovalDecide}
-          />
-        ))}
+        {messages.map((m, i) => {
+          const isLatestAssistant = m.role === 'assistant' && i === messages.length - 1
+          return (
+            <Bubble
+              key={m.id}
+              message={m}
+              pendingApprovals={pendingApprovals}
+              onApprovalDecide={onApprovalDecide}
+              busy={busy}
+              onRetry={onRetry}
+              onEditAndRetry={onEditAndRetry}
+              isLatestAssistant={isLatestAssistant}
+              editing={editingUserId === m.id}
+              onBeginEdit={() => { if (lastUserId) setEditingUserId(lastUserId) }}
+              onCancelEdit={() => setEditingUserId(null)}
+              onSubmitEdit={(text) => { setEditingUserId(null); onEditAndRetry(text) }}
+            />
+          )
+        })}
         {!followLatest && (
           <button
             type="button"
@@ -271,14 +339,46 @@ export function Bubble({
   message,
   pendingApprovals,
   onApprovalDecide,
+  busy,
+  onRetry,
+  onEditAndRetry,
+  isLatestAssistant,
+  editing,
+  onBeginEdit,
+  onCancelEdit,
+  onSubmitEdit,
 }: {
   message: ChatMessage
   pendingApprovals?: Map<string, PendingApproval>
   onApprovalDecide?: (callId: string, decision: ApprovalDecision) => void
+  busy?: boolean
+  onRetry?: (anchorId: string) => void
+  onEditAndRetry?: (newText: string) => void
+  /** True only for the most recent assistant message; suppresses the
+   *  hover-only "Retry from here" earlier-anchor. */
+  isLatestAssistant?: boolean
+  editing?: boolean
+  onBeginEdit?: () => void
+  onCancelEdit?: () => void
+  onSubmitEdit?: (text: string) => void
 }) {
   const isUser = message.role === 'user'
   const ctxMenu = useContextMenu()
   const ref = useRef<HTMLDivElement>(null)
+  const isFailed = !!message.failureReason
+  const isDeniedTool = !isFailed && message.role === 'assistant'
+    && !!message.toolResults?.some((r) => r.isUserDenial)
+  const showEarlierAnchor = !!onRetry && !isFailed && !isDeniedTool && !isLatestAssistant && !editing
+  const earlierAnchor = showEarlierAnchor ? (
+    <div className="chat-bubble-earlier-anchor mt-1 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+      <ChatRetryActions
+        kind="earlier-anchor"
+        disabled={!!busy}
+        disabledReason="Stop the current run first"
+        onRetry={() => onRetry?.(message.id)}
+      />
+    </div>
+  ) : null
   const onContextMenu = (e: React.MouseEvent) => {
     const root = ref.current
     if (!root) return
@@ -293,31 +393,41 @@ export function Bubble({
 
   if (isUser) {
     return (
-      <div className="flex justify-end">
+      <div className="group flex flex-col items-end" data-msg-id={message.id}>
         <div
           ref={ref}
           onContextMenu={onContextMenu}
           className="max-w-[85%] px-3 py-2 text-[12.5px] whitespace-pre-wrap leading-relaxed bg-accent text-accent-fg"
           style={{ borderRadius: '14px 14px 4px 14px' }}
         >
-          {message.content}
+          {editing ? (
+            <UserEditMode
+              initial={message.content}
+              onSubmit={(text) => onSubmitEdit?.(text)}
+              onCancel={() => onCancelEdit?.()}
+            />
+          ) : (
+            message.content
+          )}
         </div>
+        {earlierAnchor}
       </div>
     )
   }
 
   return (
-    <div className="flex gap-2 items-start">
+    <div className="group flex gap-2 items-start" data-msg-id={message.id}>
       <div
         aria-hidden
         className="w-[22px] h-[22px] shrink-0 rounded-md grid place-items-center bg-elev border border-default text-accent"
       >
         <Sparkles className="w-2.5 h-2.5" />
       </div>
+      <div className="flex flex-col min-w-0 max-w-[85%]">
       <div
         ref={ref}
         onContextMenu={onContextMenu}
-        className="max-w-[85%] px-3 py-2 text-[12.5px] leading-[1.55] bg-elev text-default border border-default whitespace-pre-wrap"
+        className="px-3 py-2 text-[12.5px] leading-[1.55] bg-elev text-default border border-default whitespace-pre-wrap"
         style={{ borderRadius: '4px 14px 14px 14px' }}
       >
         {message.content && <span>{message.content}</span>}
@@ -366,11 +476,79 @@ export function Bubble({
           <span className="streaming-cursor"> </span>
         )}
 
-        {message.stopReason === 'cancelled' && (
+        {message.failureReason === 'cancelled' && (
           <div className="mt-2 inline-flex items-center gap-1 rounded-full border border-default bg-elev px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted">
             Stopped
           </div>
         )}
+
+        {(() => {
+          if (!onRetry || !onEditAndRetry) return null
+          const isFailed = !!message.failureReason
+          const hasDeniedTool = !isFailed && message.role === 'assistant'
+            && message.toolResults?.some((r) => r.isUserDenial)
+          if (!isFailed && !hasDeniedTool) return null
+          const kind: RetryActionKind = hasDeniedTool ? 'denied-tool' : 'cancelled-or-error'
+          return (
+            <ChatRetryActions
+              kind={kind}
+              disabled={!!busy}
+              disabledReason="Stop the current run first"
+              retryAfterSeconds={message.errorInfo?.retryAfter}
+              onRetry={() => onRetry(message.id)}
+              onEditAndRetry={() => onBeginEdit?.()}
+              primaryDataAttr="retry-primary"
+            />
+          )
+        })()}
+      </div>
+      {earlierAnchor}
+      </div>
+    </div>
+  )
+}
+
+function UserEditMode({ initial, onSubmit, onCancel }: {
+  initial: string
+  onSubmit: (text: string) => void
+  onCancel: () => void
+}) {
+  const [text, setText] = useState(initial)
+  const onKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      onCancel()
+    }
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault()
+      onSubmit(text.trim())
+    }
+  }
+  return (
+    <div className="chat-user-edit flex flex-col gap-2">
+      <textarea
+        aria-label="Edit prompt"
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={onKey}
+        autoFocus
+        className="w-full bg-elev text-default border border-default rounded-md p-2 text-[12.5px] resize-y min-h-[64px]"
+      />
+      <div className="chat-user-edit-actions flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={() => onSubmit(text.trim())}
+          className="px-2 py-1 text-[11px] rounded bg-accent text-accent-fg hover:opacity-90"
+        >
+          Submit
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-2 py-1 text-[11px] rounded border border-default text-muted hover:text-default"
+        >
+          Cancel
+        </button>
       </div>
     </div>
   )

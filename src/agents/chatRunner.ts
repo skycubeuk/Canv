@@ -1,7 +1,7 @@
 import type {
   LLMAdapter, Message, ToolCall, ToolResult,
 } from '../adapters/types'
-import type { ChatMessage } from '../components/ChatPanel'
+import type { ChatMessage, ErrorInfo } from '../components/ChatPanel'
 import type { ToolCtx } from '../tools/types'
 import { getTool, toolSchemas } from '../tools/registry'
 
@@ -53,8 +53,53 @@ export interface RunChatTurnParams {
   chunkDelayMs?: number
 }
 
+function classifyError(err: unknown): ErrorInfo {
+  if (err && typeof err === 'object' && 'name' in err && (err as { name: string }).name === 'AbortError') {
+    // Should never reach here — abort is handled inline. Defensive only.
+    return { kind: 'unknown', message: 'Aborted' }
+  }
+  const message = err instanceof Error ? err.message : String(err)
+  const statusCode = (err as { statusCode?: number; status?: number })?.statusCode
+    ?? (err as { status?: number })?.status
+  if (typeof statusCode === 'number') {
+    if (statusCode === 429) return { kind: 'rate_limited', statusCode, message }
+    if (statusCode >= 500) return { kind: 'server', statusCode, message }
+    if (statusCode >= 400) return { kind: 'schema', statusCode, message }
+  }
+  if (/network|fetch|ECONNREF|ENOTFOUND|timeout/i.test(message)) {
+    return { kind: 'network', message }
+  }
+  return { kind: 'unknown', message }
+}
+
 export async function runChatTurn(p: RunChatTurnParams): Promise<void> {
   const messages = [...p.history]
+  try {
+    await runChatTurnInner(p, messages)
+  } catch (err) {
+    if ((err as { name?: string }).name === 'AbortError' || p.signal.aborted) {
+      // Aborted runs are handled inline by the inner function; nothing to do.
+      return
+    }
+    const errorInfo = classifyError(err)
+    const failedId = `a-${Date.now()}-${Math.random().toString(36).slice(2, 7)}-err`
+    // If the loop had already pushed an assistant message and is mid-stream,
+    // mutate that one in place; otherwise append a fresh failed message.
+    const last = messages[messages.length - 1]
+    const canMutateLast = last && last.role === 'assistant' && !last.synthetic
+    const failed: ChatMessage = canMutateLast
+      ? { ...last, failureReason: 'provider_error', errorInfo }
+      : { id: failedId, role: 'assistant', content: '', provider: p.provider, failureReason: 'provider_error', errorInfo }
+    if (canMutateLast) {
+      messages[messages.length - 1] = failed
+    } else {
+      messages.push(failed)
+    }
+    p.onUpdate(messages)
+  }
+}
+
+async function runChatTurnInner(p: RunChatTurnParams, messages: ChatMessage[]): Promise<void> {
   const system = `${p.systemPreamble}\n\n${p.inventoryText}`
   let approveAll = false
 
@@ -120,7 +165,7 @@ export async function runChatTurn(p: RunChatTurnParams): Promise<void> {
       assistantMsg = {
         ...assistantMsg,
         content: result.text,
-        stopReason: 'cancelled',
+        failureReason: 'cancelled',
         ...(result.toolCalls?.length ? { toolCalls: result.toolCalls } : {}),
         ...(cancelledResults.length ? { toolResults: cancelledResults } : {}),
       }
@@ -153,7 +198,7 @@ export async function runChatTurn(p: RunChatTurnParams): Promise<void> {
       }))
       assistantMsg = {
         ...assistantMsg,
-        stopReason: 'cancelled',
+        failureReason: 'cancelled',
         ...(cancelledResults.length ? { toolResults: cancelledResults } : {}),
       }
       messages[messages.length - 1] = assistantMsg
@@ -202,7 +247,7 @@ export async function runChatTurn(p: RunChatTurnParams): Promise<void> {
         }
         if (decision === 'approve-rest') { approveAll = true; decision = 'approve' }
         if (decision === 'deny') {
-          toolResults.push({ id: call.id, content: 'User denied this action', isError: true })
+          toolResults.push({ id: call.id, content: 'User denied this action', isError: true, isUserDenial: true })
           continue
         }
         try {
@@ -239,7 +284,7 @@ export async function runChatTurn(p: RunChatTurnParams): Promise<void> {
     assistantMsg = {
       ...assistantMsg,
       toolResults,
-      ...(cancelledMidLoop ? { stopReason: 'cancelled' as const } : {}),
+      ...(cancelledMidLoop ? { failureReason: 'cancelled' as const } : {}),
     }
     messages[messages.length - 1] = assistantMsg
     p.onUpdate(messages)
@@ -273,6 +318,13 @@ export async function runChatTurn(p: RunChatTurnParams): Promise<void> {
 function toAdapterMessages(history: ChatMessage[]): Message[] {
   const out: Message[] = []
   for (const m of history) {
+    // Drop failed/cancelled/denied turns wholesale — they have no clean
+    // content for the provider and may carry orphan tool_use blocks. Any
+    // partial toolResults (e.g. tools that ran before a mid-turn cancel)
+    // are intentionally dropped along with them; the next turn re-runs from
+    // the user's preceding prompt. Synthetic notes (e.g. the max-tokens
+    // warning) are also dropped — they're UI-only markers.
+    if (m.failureReason || m.synthetic) continue
     if (m.role === 'assistant') {
       const am: Message = m.toolCalls && m.toolCalls.length
         ? { role: 'assistant', content: m.content, toolCalls: m.toolCalls }

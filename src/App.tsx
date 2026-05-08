@@ -8,6 +8,7 @@ import { selectAll as cmSelectAll } from '@codemirror/commands'
 import { type RunRecord } from './components/ResultsPanel'
 import type { ChatMessage, ChatProvider, PendingApproval } from './components/ChatPanel'
 import { runChatTurn, type ApprovalDecision, type WritePreview } from './agents/chatRunner'
+import { truncateForRetry, truncateForEditAndRetry } from './agents/retryOrchestrator'
 import { buildInventory, formatInventoryForPrompt } from './lib/inventory'
 import type { ToolCall } from './adapters/types'
 import { ProfilePicker } from './components/ProfilePicker'
@@ -109,16 +110,43 @@ export default function App() {
   const [runs, setRuns] = useLocalStorage<RunRecord[]>('canv:runs', [])
   const [activeTabId, setActiveTabId] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
+  const [retryUndo, setRetryUndo] = useState<{ count: number; expiresAt: number } | null>(null)
+  const retryUndoTimer = useRef<number | null>(null)
+  const lastDiscardedRef = useRef<{ previous: ChatMessage[]; discarded: ChatMessage[] } | null>(null)
 
   const [chatMessages, setChatMessages] = useLocalStorage<ChatMessage[]>('canv:chat', [])
   const [chatBusy, setChatBusy] = useState(false)
   const chatAbort = useRef<AbortController | null>(null)
+  const runningRef = useRef(false)
 
   const runAbort = useRef<Map<string, AbortController>>(new Map())
 
   const showToast = useCallback((msg: string) => {
     setToast(msg)
     setTimeout(() => setToast(null), 3000)
+  }, [])
+
+  const dismissRetryUndo = useCallback(() => {
+    if (retryUndoTimer.current != null) {
+      window.clearTimeout(retryUndoTimer.current)
+      retryUndoTimer.current = null
+    }
+    setRetryUndo(null)
+    lastDiscardedRef.current = null
+  }, [])
+
+  const showRetryUndoToast = useCallback((count: number) => {
+    if (retryUndoTimer.current != null) {
+      window.clearTimeout(retryUndoTimer.current)
+    }
+    setRetryUndo({ count, expiresAt: Date.now() + 10_000 })
+    retryUndoTimer.current = window.setTimeout(dismissRetryUndo, 10_000)
+  }, [dismissRetryUndo])
+
+  useEffect(() => {
+    return () => {
+      if (retryUndoTimer.current != null) window.clearTimeout(retryUndoTimer.current)
+    }
   }, [])
 
   const workspace = useWorkspace({ onToast: showToast })
@@ -816,36 +844,24 @@ export default function App() {
     resolver(decision)
   }, [])
 
-  const sendChat = useCallback(
-    async (text: string) => {
-      if (apiKeyMissing) {
-        openSettingsTab()
-        showToast('Add an API key first.')
-        return
-      }
-      if (chatBusy) return
+  const runTurn = useCallback(
+    async (history: ChatMessage[]) => {
+      if (runningRef.current) return
       if (!workspace.tree) {
         showToast('Open a workspace first.')
         return
       }
-
-      const lockedProvider: ChatProvider = (chatMessages[0]?.provider ?? settings.provider) as ChatProvider
-      const userMsg: ChatMessage = {
-        id: `u-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-        role: 'user',
-        content: text,
-        ...(chatMessages.length === 0 ? { provider: lockedProvider } : {}),
-      }
-      const next = [...chatMessages, userMsg]
-      setChatMessages(next)
+      runningRef.current = true
+      const lockedProvider: ChatProvider = (history[0]?.provider ?? settings.provider) as ChatProvider
       setChatBusy(true)
 
       const adapter = getAdapter(lockedProvider)
       const model = settings.defaultModel[lockedProvider]
       const view = getActiveEditor()
       const lineCount = view ? view.state.doc.lines : 0
+      const tree = workspace.tree
       const inventory = buildInventory({
-        tree: workspace.tree,
+        tree,
         activeDocPath: workspace.activeMarkdownRel ?? null,
         activeDocLineCount: lineCount,
         pinned: workspace.pinned.map((p) => p.relPath),
@@ -896,7 +912,7 @@ PLANNING. For any task that will take 3 or more tool calls, call \`set_todos\` B
         await runChatTurn({
           adapter,
           provider: lockedProvider,
-          history: next,
+          history,
           inventoryText,
           systemPreamble,
           toolBudget: settings.chatToolBudget,
@@ -921,7 +937,16 @@ PLANNING. For any task that will take 3 or more tool calls, call \`set_todos\` B
             signal: controller.signal,
           },
           requestApproval: (call, preview) => requestApprovalRef.current(call, preview),
-          onUpdate: (m) => setChatMessages([...m]),
+          onUpdate: (m) => {
+            // If we're in a retry-undo window and the new run has produced any
+            // assistant content, the user has committed to the new turn — dismiss
+            // the undo offer so they can't accidentally roll it back after
+            // meaningful streaming has happened.
+            if (lastDiscardedRef.current && m.some((x) => x.role === 'assistant' && x.content.length > 0)) {
+              dismissRetryUndo()
+            }
+            setChatMessages([...m])
+          },
           model,
           maxTokens: settings.maxOutputTokens[lockedProvider],
           apiKey: settings.apiKeys[lockedProvider],
@@ -931,19 +956,96 @@ PLANNING. For any task that will take 3 or more tool calls, call \`set_todos\` B
       } catch (e) {
         if ((e as { name?: string }).name === 'AbortError') {
           // Stop button — runner already updated state.
-        } else {
-          const msg = e instanceof Error ? e.message : String(e)
-          setChatMessages((prev) => [...prev, {
-            id: `a-${Date.now()}-err`, role: 'assistant', content: `Error: ${msg}`, provider: lockedProvider,
-          }])
         }
+        // Provider errors are now captured as a synthetic ChatMessage by the runner;
+        // nothing to do here.
       } finally {
+        runningRef.current = false
         setChatBusy(false)
         chatAbort.current = null
       }
     },
-    [apiKeyMissing, chatBusy, chatMessages, settings, getActiveEditor, workspace, activeProfile, openSettingsTab, showToast, setChatMessages],
+    [settings, getActiveEditor, workspace, activeProfile, setChatMessages, showToast, dismissRetryUndo],
   )
+
+  const sendChat = useCallback(
+    async (text: string) => {
+      if (apiKeyMissing) {
+        openSettingsTab()
+        showToast('Add an API key first.')
+        return
+      }
+      if (chatBusy) return
+      if (!workspace.tree) {
+        showToast('Open a workspace first.')
+        return
+      }
+
+      const lockedProvider: ChatProvider = (chatMessages[0]?.provider ?? settings.provider) as ChatProvider
+      const userMsg: ChatMessage = {
+        id: `u-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        role: 'user',
+        content: text,
+        ...(chatMessages.length === 0 ? { provider: lockedProvider } : {}),
+      }
+      const next = [...chatMessages, userMsg]
+      setChatMessages(next)
+      await runTurn(next)
+    },
+    [apiKeyMissing, chatBusy, chatMessages, settings.provider, workspace.tree, openSettingsTab, showToast, setChatMessages, runTurn],
+  )
+
+  const retryFromAnchor = useCallback(
+    (anchorId: string) => {
+      if (apiKeyMissing) {
+        openSettingsTab()
+        showToast('Add an API key first.')
+        return
+      }
+      if (chatBusy) return
+      const { kept, discarded } = truncateForRetry(chatMessages, anchorId)
+      lastDiscardedRef.current = { previous: chatMessages, discarded }
+      setChatMessages(kept)
+      if (discarded.length > 0) showRetryUndoToast(discarded.length)
+      void runTurn(kept)
+    },
+    [apiKeyMissing, openSettingsTab, showToast, chatBusy, chatMessages, setChatMessages, runTurn, showRetryUndoToast],
+  )
+
+  const editAndRetry = useCallback(
+    (newText: string) => {
+      if (apiKeyMissing) {
+        openSettingsTab()
+        showToast('Add an API key first.')
+        return
+      }
+      if (chatBusy) return
+      const { kept, discarded } = truncateForEditAndRetry(chatMessages, newText)
+      lastDiscardedRef.current = { previous: chatMessages, discarded }
+      setChatMessages(kept)
+      if (discarded.length > 0) showRetryUndoToast(discarded.length)
+      void runTurn(kept)
+    },
+    [apiKeyMissing, openSettingsTab, showToast, chatBusy, chatMessages, setChatMessages, runTurn, showRetryUndoToast],
+  )
+
+  const undoRetry = useCallback(() => {
+    const stash = lastDiscardedRef.current
+    if (!stash) return
+    // Abort any in-flight new run so it doesn't keep streaming into the
+    // restored history.
+    chatAbort.current?.abort()
+    chatAbort.current = null
+    runningRef.current = false
+    setChatBusy(false)
+    setChatMessages(stash.previous)
+    lastDiscardedRef.current = null
+    if (retryUndoTimer.current != null) {
+      window.clearTimeout(retryUndoTimer.current)
+      retryUndoTimer.current = null
+    }
+    setRetryUndo(null)
+  }, [setChatMessages])
 
   const stopChat = useCallback(() => {
     console.debug('[stopChat] called; abortable?', !!chatAbort.current, 'pendingApprovals=', approvalResolversRef.current.size)
@@ -1455,6 +1557,8 @@ PLANNING. For any task that will take 3 or more tool calls, call \`set_todos\` B
             onSend={sendChat}
             onClear={clearChat}
             onStop={stopChat}
+            onRetry={retryFromAnchor}
+            onEditAndRetry={editAndRetry}
             pendingApprovals={pendingApprovals}
             onApprovalDecide={onApprovalDecide}
             pricingOverrides={settings.pricingOverrides}
@@ -1487,7 +1591,7 @@ PLANNING. For any task that will take 3 or more tool calls, call \`set_todos\` B
         render: () => <OutputTab runs={runs} />,
       },
     ]
-  }, [runs, activeTabId, handleCloseTab, handleApply, handleRerun, refineRun, chatMessages, chatBusy, chatProvider, chatModel, sendChat, clearChat, stopChat, pendingApprovals, onApprovalDecide, lintIssuesApi, handleJumpToProblem, settings.pricingOverrides, followLatest, setFollowLatest, workspace.activeMarkdownRel])
+  }, [runs, activeTabId, handleCloseTab, handleApply, handleRerun, refineRun, chatMessages, chatBusy, chatProvider, chatModel, sendChat, retryFromAnchor, editAndRetry, clearChat, stopChat, pendingApprovals, onApprovalDecide, lintIssuesApi, handleJumpToProblem, settings.pricingOverrides, followLatest, setFollowLatest, workspace.activeMarkdownRel])
 
   // ----- Dock pop-out bridge wiring -------------------------------------------------
   // Parse each run on the main side so the popout can render Notes / Rewrite / Diff
@@ -1957,6 +2061,19 @@ PLANNING. For any task that will take 3 or more tool calls, call \`set_todos\` B
       {toast && (
         <div className="fixed bottom-7 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-[rgb(var(--text-default))] text-[rgb(var(--bg-app))] text-sm rounded-md shadow-lg">
           {toast}
+        </div>
+      )}
+
+      {retryUndo && (
+        <div className="fixed bottom-7 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-[rgb(var(--text-default))] text-[rgb(var(--bg-app))] text-sm rounded-md shadow-lg flex items-center gap-3">
+          <span>Discarded {retryUndo.count} turn{retryUndo.count === 1 ? '' : 's'}</span>
+          <button
+            type="button"
+            className="underline font-medium"
+            onClick={undoRetry}
+          >
+            Undo
+          </button>
         </div>
       )}
 

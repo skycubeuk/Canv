@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { runChatTurn, type ApprovalDecision } from './chatRunner'
-import type { LLMAdapter, CompleteParams, CompleteResult } from '../adapters/types'
+import type { LLMAdapter, CompleteParams, CompleteResult, Message } from '../adapters/types'
 import type { ChatMessage } from '../components/ChatPanel'
 import { makeMockFs, makeCtx } from '../test/fixtures'
 
@@ -200,7 +200,8 @@ describe('chatRunner — approval gate', () => {
     })
 
     const firstAsst = final.filter((m) => m.role === 'assistant')[0]
-    expect(firstAsst.toolResults![0]).toEqual({ id: 'c1', content: 'User denied this action', isError: true })
+    expect(firstAsst.toolResults![0]).toEqual({ id: 'c1', content: 'User denied this action', isError: true, isUserDenial: true })
+    expect(firstAsst.toolResults![0].isUserDenial).toBe(true)
     await expect(fs.readFile('new.md')).rejects.toThrow(/ENOENT/)
   })
 })
@@ -335,6 +336,32 @@ describe('chatRunner — set_todos', () => {
   })
 })
 
+describe('chatRunner — provider error', () => {
+  it('captures a thrown adapter error as a synthetic failed assistant message', async () => {
+    const adapter: LLMAdapter = {
+      id: 'mock', name: 'Mock', models: ['m'],
+      async complete(_p: CompleteParams): Promise<CompleteResult> {
+        throw Object.assign(new Error('boom'), { statusCode: 500 })
+      },
+    }
+    const updates: ChatMessage[][] = []
+    await runChatTurn({
+      ...baseCtx,
+      adapter,
+      provider: 'anthropic',
+      history: [{ id: 'u1', role: 'user', content: 'hi', provider: 'anthropic' }],
+      onUpdate: (m) => updates.push(m.map((x) => ({ ...x }))),
+      signal: new AbortController().signal,
+    })
+    const last = updates.at(-1)!.at(-1)!
+    expect(last.role).toBe('assistant')
+    expect(last.failureReason).toBe('provider_error')
+    expect(last.errorInfo?.message).toBe('boom')
+    expect(last.errorInfo?.kind).toBe('server')
+    expect(last.errorInfo?.statusCode).toBe(500)
+  })
+})
+
 describe('chatRunner — abort', () => {
   it('stops cleanly mid-stream when signal aborts', async () => {
     const ctrl = new AbortController()
@@ -356,7 +383,9 @@ describe('chatRunner — abort', () => {
       onUpdate: () => {},
     })
     queueMicrotask(() => ctrl.abort())
-    await expect(promise).rejects.toThrow(/abort/i)
+    // Runner now swallows AbortError and resolves cleanly — abort handling
+    // is the runner's responsibility, not the caller's.
+    await expect(promise).resolves.toBeUndefined()
   })
 
   it('cancels pending approval when signal aborts (resolves with cancelled tool_result)', async () => {
@@ -388,7 +417,7 @@ describe('chatRunner — abort', () => {
     await promise
     // Runner resolves cleanly with a cancelled tool_result, NOT a rejection.
     const asst = final.filter((m) => m.role === 'assistant')[0]
-    expect(asst.stopReason).toBe('cancelled')
+    expect(asst.failureReason).toBe('cancelled')
     expect(asst.toolResults).toEqual([{ id: 'c1', content: 'Cancelled by user', isError: true }])
     // Safety: file was never created.
     await expect(fs.readFile('a.md')).rejects.toThrow(/ENOENT/)
@@ -417,7 +446,7 @@ describe('chatRunner — cancellation', () => {
     expect(final[1]).toMatchObject({
       role: 'assistant',
       content: 'hello par',
-      stopReason: 'cancelled',
+      failureReason: 'cancelled',
     })
     expect(final[1].toolCalls).toBeUndefined()
     expect(final[1].toolResults).toBeUndefined()
@@ -448,7 +477,7 @@ describe('chatRunner — cancellation', () => {
     })
 
     expect(final).toHaveLength(2)
-    expect(final[1].stopReason).toBe('cancelled')
+    expect(final[1].failureReason).toBe('cancelled')
     expect(final[1].content).toBe('I am about to write a long file…')
     // The partial must NOT survive — otherwise the next turn sends an open
     // tool_use to the provider and gets schema-rejected.
@@ -534,7 +563,7 @@ describe('chatRunner — cancellation', () => {
     })
 
     expect(final).toHaveLength(2)
-    expect(final[1].stopReason).toBe('cancelled')
+    expect(final[1].failureReason).toBe('cancelled')
     expect(final[1].toolCalls).toEqual([{ id: 'c1', name: 'read_file', input: { path: 'a.md' } }])
     expect(final[1].toolResults).toEqual([{ id: 'c1', content: 'Cancelled by user', isError: true }])
   })
@@ -565,7 +594,7 @@ describe('chatRunner — cancellation', () => {
     })
 
     expect(final).toHaveLength(2)
-    expect(final[1].stopReason).toBe('cancelled')
+    expect(final[1].failureReason).toBe('cancelled')
     expect(final[1].toolCalls).toHaveLength(2)
     expect(final[1].toolResults).toEqual([
       { id: 'c1', content: 'Cancelled by user', isError: true },
@@ -605,7 +634,7 @@ describe('chatRunner — cancellation', () => {
     })
 
     const asst = final.filter((m) => m.role === 'assistant')[0]
-    expect(asst.stopReason).toBe('cancelled')
+    expect(asst.failureReason).toBe('cancelled')
     expect(asst.toolResults).toEqual([{ id: 'c1', content: 'Cancelled by user', isError: true }])
     // File was not created.
     await expect(fs.readFile('x.md')).rejects.toThrow(/ENOENT/)
@@ -646,7 +675,7 @@ describe('chatRunner — cancellation', () => {
     })
 
     const asst = final.filter((m) => m.role === 'assistant')[0]
-    expect(asst.stopReason).toBe('cancelled')
+    expect(asst.failureReason).toBe('cancelled')
     expect(asst.toolResults).toEqual([{ id: 'c1', content: 'Cancelled by user', isError: true }])
   })
 
@@ -728,12 +757,13 @@ describe('chatRunner — cancellation', () => {
       onUpdate: () => {},
     })
 
+    // The cancelled assistant turn (failureReason: 'cancelled') is dropped at
+    // serialisation time, so there are no tool_use blocks (and no tool message)
+    // on the wire — the provider sees a clean user-only history.
     const adapterMessages = seen!.messages
-    const toolMsg = adapterMessages.find((m) => m.role === 'tool')
-    expect(toolMsg).toBeDefined()
-    expect((toolMsg as { toolResults: Array<{ id: string; content: string; isError: boolean }> }).toolResults).toEqual([
-      { id: 'c1', content: 'Cancelled by user', isError: true },
-    ])
+    expect(adapterMessages.find((m) => m.role === 'tool')).toBeUndefined()
+    expect(adapterMessages.find((m) => m.role === 'assistant')).toBeUndefined()
+    expect(adapterMessages.filter((m) => m.role === 'user').map((m) => (m as { content: string }).content)).toEqual(['q', 'try again'])
     for (let i = 0; i < adapterMessages.length; i++) {
       const m = adapterMessages[i]
       if (m.role === 'assistant' && m.toolCalls?.length) {
@@ -743,5 +773,63 @@ describe('chatRunner — cancellation', () => {
         for (const c of m.toolCalls) expect(nextIds.has(c.id)).toBe(true)
       }
     }
+  })
+})
+
+describe('chatRunner — toAdapterMessages filtering', () => {
+  it('omits messages with failureReason from the provider payload', async () => {
+    const sentBodies: Message[][] = []
+    const adapter: LLMAdapter = {
+      id: 'mock', name: 'Mock', models: ['m'],
+      async complete(p: CompleteParams): Promise<CompleteResult> {
+        sentBodies.push(p.messages)
+        return { text: 'ok', truncated: false, stopReason: 'end_turn' }
+      },
+    }
+    const history: ChatMessage[] = [
+      { id: 'u1', role: 'user', content: 'first', provider: 'anthropic' },
+      {
+        id: 'a1', role: 'assistant', content: '', provider: 'anthropic',
+        failureReason: 'provider_error',
+        errorInfo: { kind: 'server', message: 'boom' },
+      },
+      { id: 'u2', role: 'user', content: 'second', provider: 'anthropic' },
+    ]
+    await runChatTurn({
+      ...baseCtx,
+      adapter,
+      provider: 'anthropic',
+      history,
+      onUpdate: () => {},
+    })
+    const sent = sentBodies[0]
+    expect(sent.find((m) => m.role === 'assistant' && m.content === '')).toBeUndefined()
+    expect(sent.filter((m) => m.role === 'user').map((m) => (m as { content: string }).content)).toEqual(['first', 'second'])
+  })
+
+  it('omits synthetic messages from the provider payload', async () => {
+    const sentBodies: Message[][] = []
+    const adapter: LLMAdapter = {
+      id: 'mock', name: 'Mock', models: ['m'],
+      async complete(p: CompleteParams): Promise<CompleteResult> {
+        sentBodies.push(p.messages)
+        return { text: 'ok', truncated: false, stopReason: 'end_turn' }
+      },
+    }
+    const history: ChatMessage[] = [
+      { id: 'u1', role: 'user', content: 'hi', provider: 'anthropic' },
+      { id: 's1', role: 'assistant', content: '(reached max tokens)', provider: 'anthropic', synthetic: true },
+      { id: 'u2', role: 'user', content: 'continue', provider: 'anthropic' },
+    ]
+    await runChatTurn({
+      ...baseCtx,
+      adapter,
+      provider: 'anthropic',
+      history,
+      onUpdate: () => {},
+    })
+    const sent = sentBodies[0]
+    expect(sent.find((m) => m.role === 'assistant')).toBeUndefined()
+    expect(sent.filter((m) => m.role === 'user').map((m) => (m as { content: string }).content)).toEqual(['hi', 'continue'])
   })
 })

@@ -69,6 +69,8 @@ interface ChatBundle {
   onSend: (text: string) => void
   onClear: () => void
   onStop: () => void
+  onRetry: (anchorId: string) => void
+  onEditAndRetry: (newText: string) => void
   onCloseChat: () => void
   pricingOverrides: Record<string, import('../config/pricing').ModelPricing>
 }
@@ -172,6 +174,8 @@ export function ResultsPanel(props: Props) {
           onSend={chat.onSend}
           onClear={chat.onClear}
           onStop={chat.onStop}
+          onRetry={chat.onRetry}
+          onEditAndRetry={chat.onEditAndRetry}
           pricingOverrides={chat.pricingOverrides}
           followLatest={followLatest}
           onSetFollowLatest={handleSetFollowLatest}

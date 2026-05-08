@@ -9,6 +9,8 @@ interface Props {
   onSend: (text: string) => void
   onClear: () => void
   onStop: () => void
+  onRetry: (anchorId: string) => void
+  onEditAndRetry: (newText: string) => void
   pendingApprovals?: Map<string, PendingApproval>
   onApprovalDecide?: (callId: string, decision: ApprovalDecision) => void
   pricingOverrides: Record<string, import('../../../config/pricing').ModelPricing>
@@ -27,6 +29,8 @@ export function ChatTab(props: Props) {
       onSend={props.onSend}
       onClear={props.onClear}
       onStop={props.onStop}
+      onRetry={props.onRetry}
+      onEditAndRetry={props.onEditAndRetry}
       pendingApprovals={props.pendingApprovals}
       onApprovalDecide={props.onApprovalDecide}
       pricingOverrides={props.pricingOverrides}
