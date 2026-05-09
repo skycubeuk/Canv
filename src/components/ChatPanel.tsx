@@ -328,8 +328,15 @@ export function ChatPanel({ messages, busy, provider, model, onSend, onClear, on
         busy={busy}
       />
 
-      <div className="shrink-0 p-2.5 bg-app">
-        <div className="bg-elev border border-default rounded-[10px] p-2">
+      <div
+        className="shrink-0 p-2.5 bg-app"
+        onMouseDown={(e) => {
+          if ((e.target as Element).closest('button, textarea, input, select, a, [role="button"]')) return
+          e.preventDefault()
+          inputRef.current?.focus()
+        }}
+      >
+        <div className="bg-elev border border-default rounded-[10px] p-2 cursor-text">
           <AutoGrowTextarea
             ref={inputRef}
             data-testid="chat-input"
