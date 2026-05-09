@@ -89,6 +89,7 @@ function Host({ adapter }: { adapter: LLMAdapter }) {
       followLatest={followLatest}
       onSetFollowLatest={setFollowLatest}
       contextFileName={null}
+      chatFontSize={14}
     />
   )
 }
@@ -235,6 +236,7 @@ function RetryHost({
       followLatest={true}
       onSetFollowLatest={() => {}}
       contextFileName={null}
+      chatFontSize={14}
     />
   )
 }

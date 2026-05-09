@@ -156,6 +156,7 @@ describe('ChatPanel — retry action row', () => {
         followLatest
         onSetFollowLatest={() => {}}
         contextFileName={null}
+        chatFontSize={14}
       />,
     )
     expect(screen.getByRole('button', { name: /^retry$/i })).toBeInTheDocument()
@@ -183,6 +184,7 @@ describe('ChatPanel — retry action row', () => {
         followLatest
         onSetFollowLatest={() => {}}
         contextFileName={null}
+        chatFontSize={14}
       />,
     )
     expect(screen.getByRole('button', { name: /^retry$/i })).toBeDisabled()
@@ -213,6 +215,7 @@ describe('ChatPanel — earlier-anchor', () => {
         followLatest
         onSetFollowLatest={() => {}}
         contextFileName={null}
+        chatFontSize={14}
       />,
     )
     // Both u1 and a1 are earlier; u2 is also earlier (the latest user before
@@ -247,6 +250,7 @@ describe('ChatPanel — inline editor', () => {
         followLatest
         onSetFollowLatest={() => {}}
         contextFileName={null}
+        chatFontSize={14}
       />,
     )
     fireEvent.click(screen.getByRole('button', { name: /edit & retry/i }))
@@ -277,6 +281,7 @@ describe('ChatPanel — inline editor', () => {
         followLatest
         onSetFollowLatest={() => {}}
         contextFileName={null}
+        chatFontSize={14}
       />,
     )
     fireEvent.click(screen.getByRole('button', { name: /edit & retry/i }))
@@ -309,6 +314,7 @@ describe('ChatPanel — keyboard R shortcut', () => {
         followLatest
         onSetFollowLatest={() => {}}
         contextFileName={null}
+        chatFontSize={14}
       />,
     )
     const scroll = screen.getByRole('log')
