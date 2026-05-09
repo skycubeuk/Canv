@@ -1,5 +1,6 @@
-import { ChatPanel, type ChatMessage, type PendingApproval } from '../../ChatPanel'
+import { ChatPanel, type ChatMessage, type PendingApproval, type ChatProvider } from '../../ChatPanel'
 import type { ApprovalDecision } from '../../../agents/chatRunner'
+import type { SidebarSession } from '../../ChatSessionsSidebar'
 
 interface Props {
   messages: ChatMessage[]
@@ -18,6 +19,13 @@ interface Props {
   onSetFollowLatest: (next: boolean) => void
   contextFileName: string | null
   chatFontSize: number
+  sessions: SidebarSession[]
+  activeId: string
+  onCreateSession: () => void
+  onSelectSession: (id: string) => void
+  onCloseSession: (id: string) => void
+  onChangeProviderModel: (provider: ChatProvider, model: string) => void
+  availableModels: Record<ChatProvider, string[]>
 }
 
 export function ChatTab(props: Props) {
@@ -39,6 +47,13 @@ export function ChatTab(props: Props) {
       onSetFollowLatest={props.onSetFollowLatest}
       contextFileName={props.contextFileName}
       chatFontSize={props.chatFontSize}
+      sessions={props.sessions}
+      activeId={props.activeId}
+      onCreateSession={props.onCreateSession}
+      onSelectSession={props.onSelectSession}
+      onCloseSession={props.onCloseSession}
+      onChangeProviderModel={props.onChangeProviderModel}
+      availableModels={props.availableModels}
     />
   )
 }

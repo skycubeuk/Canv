@@ -11,7 +11,6 @@ import { OutlinePanel } from './sidebar/OutlinePanel'
 import { Canvas } from '../Canvas'
 import { SettingsTab } from './tabs/SettingsTab'
 import { DiffTab } from './tabs/DiffTab'
-import type { ChatProvider } from '../ChatPanel'
 import type { Mode } from '../../config/types'
 import type { UseIdeLayoutApi, BottomLayout } from '../../hooks/useIdeLayout'
 import type { WorkspaceApi } from '../../hooks/useWorkspace'
@@ -62,7 +61,6 @@ export interface WorkspaceShellProps {
   settings: Settings
   onUpdateSettings: (patch: Partial<Settings>) => void
   // Settings tab callbacks
-  onChangeProvider: (next: ChatProvider) => Promise<void>
   onExportBackup: () => void
   // Bottom panel
   bottomPanelTabs: BottomPanelTabDef[]
@@ -93,7 +91,7 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
     onCreateFile, onCreateFolder, onRename, onDelete, onChangeWorkspace,
     onOpenDiff,
     settings, onUpdateSettings,
-    onChangeProvider, onExportBackup,
+    onExportBackup,
     bottomPanelTabs,
     saveState, activeProfile,
     onClickProfile, apiKeyMissing, onClickApiKeyWarning,
@@ -174,15 +172,7 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
                     return (
                       <SettingsTab
                         settings={settings}
-                        onUpdate={(patch) => {
-                          if ('provider' in patch && patch.provider !== undefined) {
-                            void onChangeProvider(patch.provider as ChatProvider)
-                            const { provider: _p, ...rest } = patch
-                            if (Object.keys(rest).length > 0) onUpdateSettings(rest)
-                          } else {
-                            onUpdateSettings(patch)
-                          }
-                        }}
+                        onUpdate={onUpdateSettings}
                         onExportBackup={onExportBackup}
                       />
                     )

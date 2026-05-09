@@ -4,11 +4,21 @@ import { useState, useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { runChatTurn, type ApprovalDecision, type WritePreview } from './chatRunner'
 import { truncateForRetry, truncateForEditAndRetry } from './retryOrchestrator'
-import { ChatPanel, type ChatMessage, type PendingApproval } from '../components/ChatPanel'
+import { ChatPanel, type ChatMessage, type PendingApproval, type ChatProvider } from '../components/ChatPanel'
 import { DialogProvider } from '../lib/dialogs'
 import { ContextMenuProvider } from '../lib/contextMenu'
 import { makeMockFs, makeCtx } from '../test/fixtures'
 import type { LLMAdapter, CompleteParams, CompleteResult, ToolCall, Message } from '../adapters/types'
+
+const stubSessionProps = {
+  sessions: [{ id: 's1', title: 'New chat', busy: false, pendingApprovalCount: 0 }],
+  activeId: 's1',
+  onCreateSession: () => {},
+  onSelectSession: () => {},
+  onCloseSession: () => {},
+  onChangeProviderModel: (_p: ChatProvider, _m: string) => {},
+  availableModels: { anthropic: ['claude-sonnet-4-6'], openai: ['gpt-4o'] } as Record<ChatProvider, string[]>,
+}
 
 beforeAll(() => {
   // jsdom doesn't implement scrollTo
@@ -76,7 +86,7 @@ function Host({ adapter }: { adapter: LLMAdapter }) {
     <ChatPanel
       messages={messages}
       busy={busy}
-      provider="Anthropic"
+      provider="anthropic"
       model="m"
       onSend={() => {}}
       onClear={() => {}}
@@ -90,6 +100,7 @@ function Host({ adapter }: { adapter: LLMAdapter }) {
       onSetFollowLatest={setFollowLatest}
       contextFileName={null}
       chatFontSize={14}
+      {...stubSessionProps}
     />
   )
 }
@@ -223,7 +234,7 @@ function RetryHost({
     <ChatPanel
       messages={messages}
       busy={busy}
-      provider="Anthropic"
+      provider="anthropic"
       model="m"
       onSend={() => {}}
       onClear={() => {}}
@@ -237,6 +248,7 @@ function RetryHost({
       onSetFollowLatest={() => {}}
       contextFileName={null}
       chatFontSize={14}
+      {...stubSessionProps}
     />
   )
 }

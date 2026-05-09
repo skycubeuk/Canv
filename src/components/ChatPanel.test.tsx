@@ -3,7 +3,7 @@ import { render as rtlRender, screen, fireEvent } from '@testing-library/react'
 import { useState } from 'react'
 import type { ComponentProps, ReactElement, ReactNode } from 'react'
 import { ChatPanel } from './ChatPanel'
-import type { ChatMessage } from './ChatPanel'
+import type { ChatMessage, ChatProvider } from './ChatPanel'
 import { DialogProvider } from '../lib/dialogs'
 import { ContextMenuProvider } from '../lib/contextMenu'
 
@@ -24,7 +24,7 @@ function Providers({ children }: { children: ReactNode }) {
 const render = (ui: ReactElement) => rtlRender(ui, { wrapper: Providers })
 
 const baseProps = {
-  busy: false, provider: 'Anthropic', model: 'claude-sonnet-4-6',
+  busy: false, provider: 'anthropic' as ChatProvider, model: 'claude-sonnet-4-6',
   onSend: () => {}, onClear: () => {}, onStop: () => {},
   onRetry: () => {}, onEditAndRetry: () => {},
   pendingApprovals: new Map(),
@@ -34,6 +34,24 @@ const baseProps = {
   onSetFollowLatest: vi.fn(),
   contextFileName: null,
   chatFontSize: 14,
+  // Multi-session props:
+  sessions: [{ id: 's1', title: 'New chat', busy: false, pendingApprovalCount: 0 }],
+  activeId: 's1',
+  onCreateSession: vi.fn(),
+  onSelectSession: vi.fn(),
+  onCloseSession: vi.fn(),
+  onChangeProviderModel: vi.fn(),
+  availableModels: { anthropic: ['claude-sonnet-4-6'], openai: ['gpt-4o'] } as Record<ChatProvider, string[]>,
+}
+
+const sessionProps = {
+  sessions: [{ id: 's1', title: 'New chat', busy: false, pendingApprovalCount: 0 }],
+  activeId: 's1',
+  onCreateSession: vi.fn(),
+  onSelectSession: vi.fn(),
+  onCloseSession: vi.fn(),
+  onChangeProviderModel: vi.fn(),
+  availableModels: { anthropic: ['claude-sonnet-4-6'], openai: ['gpt-4o'] } as Record<ChatProvider, string[]>,
 }
 
 describe('ChatPanel — tool rendering', () => {
@@ -157,6 +175,7 @@ describe('ChatPanel — retry action row', () => {
         onSetFollowLatest={() => {}}
         contextFileName={null}
         chatFontSize={14}
+        {...sessionProps}
       />,
     )
     expect(screen.getByRole('button', { name: /^retry$/i })).toBeInTheDocument()
@@ -185,6 +204,7 @@ describe('ChatPanel — retry action row', () => {
         onSetFollowLatest={() => {}}
         contextFileName={null}
         chatFontSize={14}
+        {...sessionProps}
       />,
     )
     expect(screen.getByRole('button', { name: /^retry$/i })).toBeDisabled()
@@ -216,6 +236,7 @@ describe('ChatPanel — earlier-anchor', () => {
         onSetFollowLatest={() => {}}
         contextFileName={null}
         chatFontSize={14}
+        {...sessionProps}
       />,
     )
     // Both u1 and a1 are earlier; u2 is also earlier (the latest user before
@@ -251,6 +272,7 @@ describe('ChatPanel — inline editor', () => {
         onSetFollowLatest={() => {}}
         contextFileName={null}
         chatFontSize={14}
+        {...sessionProps}
       />,
     )
     fireEvent.click(screen.getByRole('button', { name: /edit & retry/i }))
@@ -282,6 +304,7 @@ describe('ChatPanel — inline editor', () => {
         onSetFollowLatest={() => {}}
         contextFileName={null}
         chatFontSize={14}
+        {...sessionProps}
       />,
     )
     fireEvent.click(screen.getByRole('button', { name: /edit & retry/i }))
@@ -315,6 +338,7 @@ describe('ChatPanel — keyboard R shortcut', () => {
         onSetFollowLatest={() => {}}
         contextFileName={null}
         chatFontSize={14}
+        {...sessionProps}
       />,
     )
     const scroll = screen.getByRole('log')
@@ -377,5 +401,35 @@ describe('ChatPanel — auto-scroll intent', () => {
     setGeometry(list, { scrollTop: 100, scrollHeight: 200, clientHeight: 100 }) // dist = 0
     fireEvent.click(pill)
     expect(screen.queryByRole('button', { name: /jump to latest/i })).not.toBeInTheDocument()
+  })
+})
+
+describe('ChatPanel — sidebar', () => {
+  it('renders the sidebar with one row when there is one session', () => {
+    render(<ChatPanel {...baseProps} messages={[]} />)
+    expect(screen.getByRole('button', { name: 'New chat' })).toBeInTheDocument()
+  })
+
+  it('clicking + New chat invokes onCreateSession', () => {
+    const onCreateSession = vi.fn()
+    render(<ChatPanel {...baseProps} onCreateSession={onCreateSession} messages={[]} />)
+    fireEvent.click(screen.getByRole('button', { name: 'New chat' }))
+    expect(onCreateSession).toHaveBeenCalled()
+  })
+})
+
+describe('ChatPanel — provider/model picker lock', () => {
+  it('is enabled when active session has no messages', () => {
+    render(<ChatPanel {...baseProps} messages={[]} />)
+    const select = screen.getByLabelText(/provider/i) as HTMLSelectElement
+    expect(select).not.toBeDisabled()
+  })
+
+  it('is disabled with a tooltip once active session has messages', () => {
+    const messages: ChatMessage[] = [{ id: 'u1', role: 'user', content: 'hi', provider: 'anthropic' }]
+    render(<ChatPanel {...baseProps} messages={messages} />)
+    const select = screen.getByLabelText(/provider/i) as HTMLSelectElement
+    expect(select).toBeDisabled()
+    expect(select.title).toMatch(/locked/i)
   })
 })

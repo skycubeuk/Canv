@@ -32,9 +32,11 @@ import { useWorkspaceFileOps } from './hooks/useWorkspaceFileOps'
 import { useSelectionAgent } from './hooks/useSelectionAgent'
 import { applyAccent, applyTheme, resolveTheme } from './lib/accent'
 import { TopBar } from './components/ide/TopBar'
-import { useChatSession } from './hooks/useChatSession'
+import { useChatSessions } from './hooks/useChatSessions'
 import { useAppCommands } from './hooks/useAppCommands'
 import { useDockBridgeMain } from './hooks/useDockBridgeMain'
+import type { ChatProvider } from './components/ChatPanel'
+import { getAdapter } from './adapters'
 
 function basename(rel: string): string {
   const i = rel.lastIndexOf('/')
@@ -232,7 +234,7 @@ export default function App() {
     refineRun,
   } = selectionAgent
 
-  const chatSession = useChatSession({
+  const chatSession = useChatSessions({
     settings,
     update,
     workspace,
@@ -249,9 +251,15 @@ export default function App() {
     followLatest, setFollowLatest,
     apiKeyMissing, chatProvider, chatModel, meterTotals,
     sendChat, retryFromAnchor, editAndRetry, undoRetry,
-    stopChat, clearChat, requestProviderChange,
+    stopChat, clearChat,
     onApprovalDecide,
+    sessions, activeId, createSession, selectSession, closeSession, setActiveSessionProviderModel,
   } = chatSession
+
+  const availableModels: Record<ChatProvider, string[]> = useMemo(() => ({
+    anthropic: getAdapter('anthropic').models,
+    openai: getAdapter('openai').models,
+  }), [])
 
   const handleExport = useCallback(
     (fmt: 'txt' | 'md') => {
@@ -379,6 +387,13 @@ export default function App() {
             onSetFollowLatest={setFollowLatest}
             contextFileName={workspace.activeMarkdownRel ? basename(workspace.activeMarkdownRel) : null}
             chatFontSize={settings.chatFontSize}
+            sessions={sessions}
+            activeId={activeId}
+            onCreateSession={createSession}
+            onSelectSession={selectSession}
+            onCloseSession={closeSession}
+            onChangeProviderModel={setActiveSessionProviderModel}
+            availableModels={availableModels}
           />
         ),
       },
@@ -405,7 +420,7 @@ export default function App() {
         render: () => <OutputTab runs={runs} />,
       },
     ]
-  }, [runs, activeTabId, setActiveTabId, handleCloseTab, handleApply, handleRerun, refineRun, chatMessages, chatBusy, chatProvider, chatModel, sendChat, retryFromAnchor, editAndRetry, clearChat, stopChat, pendingApprovals, onApprovalDecide, lintIssuesApi, editorRegistry, settings.pricingOverrides, followLatest, setFollowLatest, workspace.activeMarkdownRel])
+  }, [runs, activeTabId, setActiveTabId, handleCloseTab, handleApply, handleRerun, refineRun, chatMessages, chatBusy, chatProvider, chatModel, sendChat, retryFromAnchor, editAndRetry, clearChat, stopChat, pendingApprovals, onApprovalDecide, lintIssuesApi, editorRegistry, settings.pricingOverrides, settings.chatFontSize, followLatest, setFollowLatest, workspace.activeMarkdownRel, sessions, activeId, createSession, selectSession, closeSession, setActiveSessionProviderModel, availableModels])
 
   // Browser-only build: show a simple banner instead of the workspace UI.
   if (!isElectron()) {
@@ -502,7 +517,6 @@ export default function App() {
         onOpenDiff={handleOpenDiff}
         settings={settings}
         onUpdateSettings={update}
-        onChangeProvider={requestProviderChange}
         onExportBackup={() => {
           workspace.flushAll()
           exportBackup()

@@ -61,7 +61,7 @@ export function SettingsTab(props: Props) {
       keywords: ['provider', 'api', 'key', 'anthropic', 'openai', 'streaming', 'tokens', 'model'],
       body: (
         <>
-          <Field label="Provider">
+          <Field label="Default provider">
             <select
               className="input"
               value={settings.provider}
@@ -71,6 +71,9 @@ export function SettingsTab(props: Props) {
                 <option key={a.id} value={a.id}>{a.name}</option>
               ))}
             </select>
+            <p className="text-xs text-muted mt-1">
+              Used as the default for new chats and runs. Existing chats keep the provider/model they were started with.
+            </p>
           </Field>
 
           <Field label={`${adapter?.name ?? ''} API key`}>

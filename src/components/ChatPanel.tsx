@@ -20,6 +20,7 @@ import { ChatApprovalCard, type ApprovalState } from './ChatApprovalCard'
 import { ChatTodoCard } from './ChatTodoCard'
 import { ChatRetryActions, type RetryActionKind } from './ChatRetryActions'
 import { getTool } from '../tools/registry'
+import { ChatSessionsSidebar, type SidebarSession } from './ChatSessionsSidebar'
 
 export type ChatProvider = 'anthropic' | 'openai'
 
@@ -97,9 +98,16 @@ interface Props {
   /** Base px size for chat text. Bubbles render at 1em; chrome scales
    *  proportionally via em-relative classes. */
   chatFontSize: number
+  sessions: SidebarSession[]
+  activeId: string
+  onCreateSession: () => void
+  onSelectSession: (id: string) => void
+  onCloseSession: (id: string) => void
+  onChangeProviderModel: (provider: ChatProvider, model: string) => void
+  availableModels: Record<ChatProvider, string[]>
 }
 
-export function ChatPanel({ messages, busy, provider, model, onSend, onClear, onStop, onRetry, onEditAndRetry, pendingApprovals, onApprovalDecide, pricingOverrides, followLatest, onSetFollowLatest, contextFileName, chatFontSize }: Props) {
+export function ChatPanel({ messages, busy, provider, model, onSend, onClear, onStop, onRetry, onEditAndRetry, pendingApprovals, onApprovalDecide, pricingOverrides, followLatest, onSetFollowLatest, contextFileName, chatFontSize, sessions, activeId, onCreateSession, onSelectSession, onCloseSession, onChangeProviderModel, availableModels }: Props) {
   const [input, setInput] = useState('')
   const [editingUserId, setEditingUserId] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -196,8 +204,18 @@ export function ChatPanel({ messages, busy, provider, model, onSend, onClear, on
     }
   }
 
+  const locked = messages.length > 0
+
   return (
-    <div className="h-full flex flex-col min-h-0" style={{ fontSize: `${chatFontSize}px` }}>
+    <div className="h-full flex min-h-0" style={{ fontSize: `${chatFontSize}px` }}>
+      <ChatSessionsSidebar
+        sessions={sessions}
+        activeId={activeId}
+        onCreate={onCreateSession}
+        onSelect={onSelectSession}
+        onClose={onCloseSession}
+      />
+      <div className="flex-1 min-w-0 flex flex-col min-h-0">
       <div className="shrink-0 flex items-center gap-2 px-3 py-2 border-b border-default text-[0.85em] text-muted">
         <FileText aria-hidden className="w-2.5 h-2.5" />
         <span className="text-default truncate">{contextFileName ?? 'No active document'}</span>
@@ -206,6 +224,34 @@ export function ChatPanel({ messages, busy, provider, model, onSend, onClear, on
             shared
           </span>
         )}
+        <select
+          aria-label="Provider"
+          title={locked ? `Locked to ${provider}/${model} for this chat — open a new chat to use a different model` : 'Provider for this chat'}
+          className="text-[0.78em] bg-elev border border-default rounded px-1 py-0.5 text-muted disabled:opacity-60"
+          disabled={locked}
+          value={provider}
+          onChange={(e) => {
+            const p = e.target.value as ChatProvider
+            const firstModel = availableModels[p]?.[0] ?? model
+            onChangeProviderModel(p, firstModel)
+          }}
+        >
+          {(Object.keys(availableModels) as ChatProvider[]).map((p) => (
+            <option key={p} value={p}>{p}</option>
+          ))}
+        </select>
+        <select
+          aria-label="Model"
+          title={locked ? `Locked to ${model}` : 'Model for this chat'}
+          className="text-[0.78em] bg-elev border border-default rounded px-1 py-0.5 text-muted disabled:opacity-60"
+          disabled={locked}
+          value={model}
+          onChange={(e) => onChangeProviderModel(provider as ChatProvider, e.target.value)}
+        >
+          {(availableModels[provider as ChatProvider] ?? [model]).map((m) => (
+            <option key={m} value={m}>{m}</option>
+          ))}
+        </select>
         <div className="flex-1" />
         {messages.length > 0 && (
           <button
@@ -344,6 +390,7 @@ export function ChatPanel({ messages, busy, provider, model, onSend, onClear, on
             )}
           </div>
         </div>
+      </div>
       </div>
     </div>
   )
