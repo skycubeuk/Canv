@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { FileText, Sparkles, ChevronDown, ArrowRight } from 'lucide-react'
+import { FileText, Sparkles, ArrowRight } from 'lucide-react'
 import { useDialogs } from '../lib/dialogs'
 import { AutoGrowTextarea } from './AutoGrowTextarea'
 import { ChatMeter } from './ChatMeter'
@@ -355,23 +355,6 @@ export function ChatPanel({ messages, busy, provider, model, onSend, onClear, on
             className="w-full bg-transparent border-none focus:outline-none text-[1em] text-default placeholder:text-subtle resize-none px-1 pb-2"
           />
           <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[0.78em] border border-default text-muted hover:bg-hover"
-              title="Document context shared with this chat"
-            >
-              <FileText aria-hidden className="w-2.5 h-2.5" />
-              Document
-            </button>
-            <button
-              type="button"
-              className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[0.78em] border border-default text-muted hover:bg-hover"
-              title="Active model"
-            >
-              <Sparkles aria-hidden className="w-2.5 h-2.5" />
-              {model}
-              <ChevronDown aria-hidden className="w-2 h-2" />
-            </button>
             <div className="flex-1" />
             {busy ? (
               <button
