@@ -1,5 +1,5 @@
-import { useState, useMemo, useRef, useCallback, type ReactNode } from 'react'
-import { MessageSquare, ChevronDown, ChevronRight, X, RotateCw, CircleHelp } from 'lucide-react'
+import { useState, useMemo, useRef, type ReactNode } from 'react'
+import { ChevronDown, ChevronRight, RotateCw } from 'lucide-react'
 import { computeDiff } from '../lib/diff'
 import { parseAgentResponse } from '../agents/runner'
 import type { Action as AgentDef } from '../config/types'
@@ -14,12 +14,9 @@ import {
   copyFromDom,
   selectAllInDom,
 } from '../lib/contextMenuActions'
-import { ChatPanel, Bubble, type ChatMessage } from './ChatPanel'
-import { timeAgo } from '../lib/timeAgo'
+import { Bubble } from './ChatPanel'
 import type { Message, TokenUsage } from '../adapters/types'
 import { providerName } from '../adapters'
-
-export const CHAT_TAB_ID = '__chat__'
 
 export interface RunFollowup {
   user: string
@@ -62,134 +59,6 @@ export interface RunRecord {
   /** Set true once the rewrite has been written into the editor. Disables
    *  Apply so a second click can't prepend another copy of the change. */
   applied?: boolean
-}
-
-interface ChatBundle {
-  enabled: boolean
-  messages: ChatMessage[]
-  busy: boolean
-  provider: string
-  model: string
-  onSend: (text: string) => void
-  onClear: () => void
-  onStop: () => void
-  onRetry: (anchorId: string) => void
-  onEditAndRetry: (newText: string) => void
-  onCloseChat: () => void
-  pricingOverrides: Record<string, import('../config/pricing').ModelPricing>
-}
-
-interface Props {
-  runs: RunRecord[]
-  activeId: string | null
-  onSelect: (id: string) => void
-  onClose: (id: string) => void
-  onApply: (run: RunRecord, text: string) => void
-  onRerun: (run: RunRecord) => void
-  onRefine: (run: RunRecord, message: string) => void
-  chat: ChatBundle
-}
-
-export function ResultsPanel(props: Props) {
-  const { runs, activeId, onSelect, onClose, onApply, onRerun, onRefine, chat } = props
-  const { modes, defaultModeId } = useModes()
-  const [followLatest, setFollowLatest] = useState(true)
-  const handleSetFollowLatest = useCallback((next: boolean) => setFollowLatest(next), [])
-
-  if (runs.length === 0 && !chat.enabled) return null
-
-  const chatActive = chat.enabled && (activeId === CHAT_TAB_ID || (activeId === null && runs.length === 0))
-  const activeRun = !chatActive ? runs.find((r) => r.id === activeId) ?? runs[0] : undefined
-
-  return (
-    <div className="flex flex-col h-full bg-panel border-l border-default">
-      <div className="flex items-center gap-1 overflow-x-auto border-b border-default px-2 py-1.5">
-        {chat.enabled && (
-          <button
-            key={CHAT_TAB_ID}
-            type="button"
-            onClick={() => onSelect(CHAT_TAB_ID)}
-            className={`group flex items-center gap-1.5 px-2.5 py-1 rounded text-xs whitespace-nowrap transition-colors ${
-              chatActive
-                ? 'bg-active text-default'
-                : 'hover:bg-hover text-muted'
-            }`}
-          >
-            <MessageSquare aria-hidden className="w-4 h-4" />
-            <span className="font-medium">Chat</span>
-            {chat.messages.length > 0 && (
-              <span className="text-subtle">· {chat.messages.length}</span>
-            )}
-            <span
-              role="button"
-              tabIndex={0}
-              onClick={(e) => {
-                e.stopPropagation()
-                chat.onCloseChat()
-              }}
-              className="opacity-0 group-hover:opacity-60 hover:!opacity-100 ml-1"
-              aria-label="Close chat"
-            >
-              <X aria-hidden className="w-3 h-3" />
-            </span>
-          </button>
-        )}
-
-        {runs.map((r) => {
-          const mode = getModeById(modes, r.modeId) ?? getModeById(modes, defaultModeId)
-          const RunIcon = (mode ? getActionById(mode, r.agentId)?.icon : undefined) ?? CircleHelp
-          return (
-            <button
-              key={r.id}
-              type="button"
-              onClick={() => onSelect(r.id)}
-              className={`group flex items-center gap-1.5 px-2.5 py-1 rounded text-xs whitespace-nowrap transition-colors ${
-                r.id === activeRun?.id
-                  ? 'bg-active text-default'
-                  : 'hover:bg-hover text-muted'
-              }`}
-            >
-              <RunIcon aria-hidden className="w-4 h-4" />
-              <span className="font-medium">{r.agentLabel}</span>
-              <span className="text-subtle">· {timeAgo(r.timestamp)}</span>
-              <span
-                role="button"
-                tabIndex={0}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onClose(r.id)
-                }}
-                className="opacity-0 group-hover:opacity-60 hover:!opacity-100 ml-1"
-                aria-label="Close tab"
-              >
-                <X aria-hidden className="w-3 h-3" />
-              </span>
-            </button>
-          )
-        })}
-      </div>
-
-      {chatActive ? (
-        <ChatPanel
-          messages={chat.messages}
-          busy={chat.busy}
-          provider={chat.provider}
-          model={chat.model}
-          onSend={chat.onSend}
-          onClear={chat.onClear}
-          onStop={chat.onStop}
-          onRetry={chat.onRetry}
-          onEditAndRetry={chat.onEditAndRetry}
-          pricingOverrides={chat.pricingOverrides}
-          followLatest={followLatest}
-          onSetFollowLatest={handleSetFollowLatest}
-          contextFileName={null}
-        />
-      ) : activeRun ? (
-        <RunView run={activeRun} onApply={onApply} onRerun={onRerun} onRefine={onRefine} />
-      ) : null}
-    </div>
-  )
 }
 
 export function RunView({
