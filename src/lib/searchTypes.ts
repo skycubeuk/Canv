@@ -24,6 +24,3 @@ export interface SearchResult {
   /** True when the search hit MAX_MATCHES and stopped early. */
   truncated: boolean
 }
-
-export const SEARCH_MAX_FILE_BYTES = 1024 * 1024
-export const SEARCH_MAX_MATCHES = 1000
