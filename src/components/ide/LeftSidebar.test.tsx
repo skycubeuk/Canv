@@ -110,6 +110,18 @@ describe('LeftSidebar', () => {
     expect(onChangeWorkspace).toHaveBeenCalledTimes(1)
   })
 
+  it('shows the Sites tab body when activeTab=sites', () => {
+    const props = { ...baseProps(), activeTab: 'sites' as const }
+    render(
+      <LeftSidebar
+        {...props}
+        sites={<div data-testid="sites-body">sites body</div>}
+        outline={null}
+      />,
+    )
+    expect(screen.getByTestId('sites-body')).toBeInTheDocument()
+  })
+
   it('preserves the file tree subtree when the outline appears', () => {
     // Regression: the outline panel spawning would unmount FileTree and
     // wipe its expanded-folders local state. Verify that a stateful child

@@ -252,6 +252,8 @@ NOTES:
       },
     ],
     "chatSystemPrompt": "You are a thoughtful writing partner for fiction. Talk about voice, character, scene, pacing, tension and craft. Preserve the author's voice in any suggestion. Be specific — point at what's on the page rather than giving generic advice. Don't rewrite passages unless asked.
+
+You can build interactive views of the project — timelines, charts, graphs, kanban boards, heatmaps — as small static sites under .canv/sites/<id>/. When the user asks for a view of their work rather than a written summary, consider building one. To update an existing site, read .canv/site_index.yaml to find its id, then use edit_file (not create_file) on the files in .canv/sites/<id>/ and call site_update. See the site_register and site_update tools for the full contract.
 ",
     "default": false,
     "description": "Stories, novels, short fiction — narrative writing where voice and craft matter.",
@@ -546,6 +548,8 @@ NOTES:
       },
     ],
     "chatSystemPrompt": "You are a careful editor for non-fiction prose. Help the user think through structure, clarity, and accuracy. Flag unsupported claims when you see them. Suggest concrete improvements but don't rewrite unless asked.
+
+You can build interactive views of the project — timelines, charts, graphs, kanban boards, heatmaps — as small static sites under .canv/sites/<id>/. When the user asks for a view of their work rather than a written summary, consider building one. To update an existing site, read .canv/site_index.yaml to find its id, then use edit_file (not create_file) on the files in .canv/sites/<id>/ and call site_update. See the site_register and site_update tools for the full contract.
 ",
     "default": true,
     "description": "Essays, journalism, blog posts, reports — non-fiction prose for a general reader.",
@@ -760,6 +764,8 @@ TEXT TO REWRITE:
       },
     ],
     "chatSystemPrompt": "You are a technical writing reviewer. Prioritise accuracy, precision, and clarity over style. Flag ambiguous terminology, unsupported claims, and structural issues that would confuse a reader trying to use this as a reference. Suggest concrete improvements but don't rewrite unless asked.
+
+You can build interactive views of the project — timelines, charts, graphs, kanban boards, heatmaps — as small static sites under .canv/sites/<id>/. When the user asks for a view of their work rather than a written summary, consider building one. To update an existing site, read .canv/site_index.yaml to find its id, then use edit_file (not create_file) on the files in .canv/sites/<id>/ and call site_update. See the site_register and site_update tools for the full contract.
 ",
     "default": false,
     "description": "Documentation, specs, how-tos, API references — writing where precision and consistency matter most.",

@@ -7,6 +7,7 @@ import { DockPlacementMenu } from './DockPlacementMenu'
 import { FilesTab } from './sidebar/FilesTab'
 import { SearchTab } from './sidebar/SearchTab'
 import { GitTab } from './sidebar/GitTab'
+import { SitesTab } from './sidebar/SitesTab'
 import { OutlinePanel } from './sidebar/OutlinePanel'
 import { Canvas } from '../Canvas'
 import { SettingsTab } from './tabs/SettingsTab'
@@ -101,6 +102,10 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
     wordCount, selectionWordCount,
   } = props
 
+  function setChatDraft(prompt: string) {
+    window.dispatchEvent(new CustomEvent('canv:setChatDraft', { detail: prompt }))
+  }
+
   const outlineNode = outlineNodes.length > 0 ? (
     <OutlinePanel
       nodes={outlineNodes}
@@ -120,6 +125,7 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
             onSelectTab={ideLayout.setSidebarTab}
             search={<SearchTab onJumpToMatch={onJumpToMatch} />}
             git={<GitTab onOpenDiff={onOpenDiff} />}
+            sites={<SitesTab onRegenerate={setChatDraft} />}
             settings={settings}
             onUpdateSettings={onUpdateSettings}
             workspaceName={workspace.root}

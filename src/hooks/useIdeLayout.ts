@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { wsKey } from '../lib/wsKey'
 import '../lib/dockTypes'
 
-export type SidebarTab = 'files' | 'search' | 'git'
+export type SidebarTab = 'files' | 'search' | 'git' | 'sites'
 export type BottomTab = 'runs' | 'chat' | 'problems' | 'output'
 export type DockPlacement = 'bottom' | 'right' | 'popout'
 export type InAppDockPlacement = 'bottom' | 'right'

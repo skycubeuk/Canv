@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { runChatTurn, type ApprovalDecision } from './chatRunner'
+import { runChatTurn, pathIsAutoApproved, type ApprovalDecision } from './chatRunner'
 import type { LLMAdapter, CompleteParams, CompleteResult, Message } from '../adapters/types'
 import type { ChatMessage } from '../components/ChatPanel'
 import { makeMockFs, makeCtx } from '../test/fixtures'
@@ -773,6 +773,37 @@ describe('chatRunner — cancellation', () => {
         for (const c of m.toolCalls) expect(nextIds.has(c.id)).toBe(true)
       }
     }
+  })
+})
+
+describe('pathIsAutoApproved', () => {
+  it('approves site_register and site_update by name', () => {
+    expect(pathIsAutoApproved({ name: 'site_register', input: {} } as never)).toBe(true)
+    expect(pathIsAutoApproved({ name: 'site_update', input: { id: 'x' } } as never)).toBe(true)
+  })
+
+  it('approves file mutations under .canv/sites/', () => {
+    expect(pathIsAutoApproved({ name: 'create_file', input: { path: '.canv/sites/a/index.html' } } as never)).toBe(true)
+    expect(pathIsAutoApproved({ name: 'edit_file', input: { path: '.canv/sites/x/data.json' } } as never)).toBe(true)
+    expect(pathIsAutoApproved({ name: 'create_folder', input: { path: '.canv/sites/a' } } as never)).toBe(true)
+  })
+
+  it('approves writes to the site_index.yaml registry file', () => {
+    expect(pathIsAutoApproved({ name: 'edit_file', input: { path: '.canv/site_index.yaml' } } as never)).toBe(true)
+  })
+
+  it('does NOT approve writes elsewhere', () => {
+    expect(pathIsAutoApproved({ name: 'edit_file', input: { path: 'notes/foo.md' } } as never)).toBe(false)
+    expect(pathIsAutoApproved({ name: 'create_file', input: { path: '.canv/permissions.yaml' } } as never)).toBe(false)
+  })
+
+  it('does NOT approve unrelated tools even on whitelisted paths', () => {
+    expect(pathIsAutoApproved({ name: 'set_todos', input: { path: '.canv/sites/a/x' } } as never)).toBe(false)
+  })
+
+  it('handles rename_file (uses from/to)', () => {
+    expect(pathIsAutoApproved({ name: 'rename_file', input: { from: '.canv/sites/a/x', to: '.canv/sites/a/y' } } as never)).toBe(true)
+    expect(pathIsAutoApproved({ name: 'rename_file', input: { from: '.canv/sites/a/x', to: 'escape.md' } } as never)).toBe(false)
   })
 })
 

@@ -18,6 +18,7 @@ interface Props {
   files: ReactNode
   search?: ReactNode
   git?: ReactNode
+  sites?: ReactNode
   settings: Settings
   onUpdateSettings: (patch: Partial<Settings>) => void
   workspaceName: string | null
@@ -39,7 +40,7 @@ function ComingSoon({ label }: { label: string }) {
 
 export function LeftSidebar(props: Props) {
   const {
-    activeTab, files, search, git, settings, onUpdateSettings,
+    activeTab, files, search, git, sites, settings, onUpdateSettings,
     workspaceName,
     outline, outlineSize, onOutlineSizeChange,
     onNewFile, onNewFolder, onChangeWorkspace,
@@ -48,6 +49,7 @@ export function LeftSidebar(props: Props) {
     { id: 'files', label: 'Files', body: files },
     { id: 'search', label: 'Search', body: search ?? <ComingSoon label="Search" /> },
     { id: 'git', label: 'Git', body: git ?? <ComingSoon label="Source control" /> },
+    { id: 'sites', label: 'Sites', body: sites ?? <ComingSoon label="Sites" /> },
   ]
   const active = tabs.find((t) => t.id === activeTab) ?? tabs[0]
   const showFiles = activeTab === 'files'

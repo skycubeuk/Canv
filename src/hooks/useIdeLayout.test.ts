@@ -48,6 +48,12 @@ describe('useIdeLayout', () => {
     expect(result.current.layout.sidebar.activeTab).toBe('search')
   })
 
+  it('accepts the sites tab', () => {
+    const { result } = renderHook(() => useIdeLayout('/ws/a'))
+    act(() => result.current.setSidebarTab('sites'))
+    expect(result.current.layout.sidebar.activeTab).toBe('sites')
+  })
+
   it('sets the active bottom tab and shows the panel if hidden', () => {
     const { result } = renderHook(() => useIdeLayout('/ws/a'))
     act(() => result.current.showBottomTab('chat'))

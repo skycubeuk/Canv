@@ -22,6 +22,27 @@ function abortableApproval(
 
 export type ApprovalDecision = 'approve' | 'deny' | 'approve-rest'
 
+const FILE_MUTATING_TOOLS = new Set([
+  'create_file', 'edit_file', 'create_folder', 'delete_file', 'rename_file',
+])
+const REGISTRY_TOOLS = new Set(['site_register', 'site_update'])
+
+function pathInSitesSandbox(p: unknown): boolean {
+  if (typeof p !== 'string') return false
+  const norm = p.replace(/\\/g, '/').replace(/^\.\//, '')
+  return norm === '.canv/site_index.yaml' || norm.startsWith('.canv/sites/')
+}
+
+export function pathIsAutoApproved(call: { name: string; input: unknown }): boolean {
+  if (REGISTRY_TOOLS.has(call.name)) return true
+  if (!FILE_MUTATING_TOOLS.has(call.name)) return false
+  const input = (call.input ?? {}) as Record<string, unknown>
+  if (call.name === 'rename_file') {
+    return pathInSitesSandbox(input.from) && pathInSitesSandbox(input.to)
+  }
+  return pathInSitesSandbox(input.path)
+}
+
 export interface WritePreview {
   kind: 'create' | 'edit' | 'delete' | 'rename' | 'mkdir'
   path: string
@@ -230,7 +251,7 @@ async function runChatTurnInner(p: RunChatTurnParams, messages: ChatMessage[]): 
 
       if (tool.mutating) {
         let decision: ApprovalDecision
-        if (approveAll) {
+        if (approveAll || pathIsAutoApproved(call)) {
           decision = 'approve'
         } else {
           try {

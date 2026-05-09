@@ -1,4 +1,4 @@
-import { Folder, Search, GitBranch, PanelRight, PanelBottom } from 'lucide-react'
+import { Folder, Search, GitBranch, LayoutDashboard, PanelRight, PanelBottom } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { SidebarTab, InAppDockPlacement } from '../../hooks/useIdeLayout'
 import { DocumentAgentMenu } from '../DocumentAgentMenu'
@@ -41,6 +41,7 @@ export function TopBar(props: Props) {
     { id: 'files', label: 'Files', icon: Folder },
     { id: 'search', label: 'Search', icon: Search },
     { id: 'git', label: 'Git', icon: GitBranch, badge: gitBadge ?? null },
+    { id: 'sites', label: 'Sites', icon: LayoutDashboard },
   ]
 
   const displayName = workspaceName

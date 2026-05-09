@@ -5,6 +5,11 @@ const { createParser } = require('./inotify-parser.cjs')
 const SKIP_DIRS = new Set(['node_modules', '.git', '.svn', '.hg', '.DS_Store'])
 const PUBLIC_EXTS = new Set(['.md', '.markdown'])
 const INTERNAL_EXTS = new Set(['.json'])
+const SITE_EXTS = new Set([
+  '.html', '.htm', '.css', '.js', '.mjs', '.json', '.svg', '.txt',
+  '.md', '.csv', '.tsv', '.yaml', '.yml',
+  '.png', '.jpg', '.jpeg', '.gif', '.webp', '.ico',
+])
 const MAX_READ_BYTES = 2 * 1024 * 1024
 const MAX_LIST_ENTRIES = 5000
 const MAX_DEPTH = 8
@@ -149,8 +154,15 @@ function safeResolve(root, rel) {
 }
 
 function isInternal(rel) { return rel === '.canv' || rel.startsWith('.canv/') }
+function isSitePath(rel) {
+  if (!rel.startsWith('.canv/sites/')) return false
+  const parts = rel.split('/')
+  return parts.length >= 4 && parts[2].length > 0
+}
 function isAllowedExt(rel, abs) {
   const ext = path.extname(abs).toLowerCase()
+  if (rel === '.canv/site_index.yaml') return ext === '.yaml'
+  if (isSitePath(rel)) return SITE_EXTS.has(ext)
   if (isInternal(rel)) return INTERNAL_EXTS.has(ext)
   return PUBLIC_EXTS.has(ext)
 }

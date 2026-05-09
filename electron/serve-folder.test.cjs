@@ -362,7 +362,8 @@ describe('STYLESHEET', () => {
 })
 
 const http = require('node:http')
-const { start, stop, status, ServeError } = require('./serve-folder.cjs')
+const serve = require('./serve-folder.cjs')
+const { start, stop, status, ServeError } = serve
 
 async function get(url) {
   return new Promise((resolve, reject) => {
@@ -386,13 +387,13 @@ async function withServer(treeSpec, fn) {
     url = (await start(root)).url
     await fn(url, root)
   } finally {
-    await stop()
+    await serve.stopAll()
     fs.rmSync(root, { recursive: true, force: true })
   }
 }
 
 describe('serve-folder server', () => {
-  afterEach(async () => { try { await stop() } catch { /* ignore */ } })
+  afterEach(async () => { try { await serve.stopAll() } catch { /* ignore */ } })
 
   it('rejects with NO_INDEX when index.md is missing', async () => {
     const root = makeTree({ 'foo.md': '# foo' })
@@ -453,18 +454,17 @@ describe('serve-folder server', () => {
     })
   })
 
-  it('start() while running stops the previous server', async () => {
+  it('start() while running switches to the new root', async () => {
     const a = makeTree({ 'index.md': '# a' })
     const b = makeTree({ 'index.md': '# b' })
     try {
-      const first = await start(a)
+      await start(a)
       const second = await start(b)
-      // First port should refuse connections.
-      await expect(get(first.url + '/')).rejects.toBeTruthy()
+      // The shared server stays up; it now serves root b.
       const r = await get(second.url + '/')
       expect(r.body).toContain('<title>b</title>')
     } finally {
-      await stop()
+      await serve.stopAll()
       fs.rmSync(a, { recursive: true, force: true })
       fs.rmSync(b, { recursive: true, force: true })
     }
@@ -502,7 +502,7 @@ async function openSse(url) {
 }
 
 describe('serve-folder live reload', () => {
-  afterEach(async () => { try { await stop() } catch { /* ignore */ } })
+  afterEach(async () => { try { await serve.stopAll() } catch { /* ignore */ } })
 
   it('keeps the SSE stream open and broadcasts reload on file change', async () => {
     const root = makeTree({ 'index.md': '# i' })
@@ -701,7 +701,7 @@ describe('renderNavHtml', () => {
 })
 
 describe('serve-folder nav integration', () => {
-  afterEach(async () => { try { await stop() } catch { /* ignore */ } })
+  afterEach(async () => { try { await serve.stopAll() } catch { /* ignore */ } })
 
   it('serves the nav sidebar on every markdown page', async () => {
     await withServer({
@@ -738,14 +738,14 @@ describe('serve-folder nav integration', () => {
       const r2 = await get(url + '/')
       expect(r2.body).toContain('data-rel="New.md"')
     } finally {
-      await stop()
+      await serve.stopAll()
       fs.rmSync(root, { recursive: true, force: true })
     }
   })
 })
 
 describe('serve-folder auto-stop', () => {
-  afterEach(async () => { try { await stop() } catch { /* ignore */ } })
+  afterEach(async () => { try { await serve.stopAll() } catch { /* ignore */ } })
 
   it('stops itself when the root directory is removed', async () => {
     const root = makeTree({ 'index.md': '# i' })
@@ -755,6 +755,155 @@ describe('serve-folder auto-stop', () => {
     // Wait for chokidar to detect.
     for (let i = 0; i < 30 && status().running; i++) await delay(100)
     expect(status()).toEqual({ running: false })
-    await expect(get(url + '/')).rejects.toBeTruthy()
+    // The shared HTTP server stays up but returns 503 with no markdown root active.
+    const r = await get(url + '/')
+    expect(r.status).toBe(503)
+  })
+})
+
+async function fetchPlain(url) {
+  return new Promise((resolve, reject) => {
+    http.get(url, (res) => {
+      let body = ''
+      res.setEncoding('utf8')
+      res.on('data', (c) => { body += c })
+      res.on('end', () => resolve({ status: res.statusCode, body }))
+      res.on('error', reject)
+    }).on('error', reject)
+  })
+}
+
+describe('serve-folder: site mounts', () => {
+  let tmp
+  beforeEach(() => {
+    tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'canv-site-mount-'))
+  })
+  afterEach(async () => {
+    serve._setSiteLibsDir(path.join(path.dirname(require.resolve('./serve-folder.cjs')), 'site-libs'))
+    await serve.stopAll()
+    fs.rmSync(tmp, { recursive: true, force: true })
+  })
+
+  it('mountSite serves files from the site folder', async () => {
+    const root = path.join(tmp, 'a3f2')
+    fs.mkdirSync(root, { recursive: true })
+    fs.writeFileSync(path.join(root, 'index.html'), '<html>hi</html>')
+    const { url } = await serve.mountSite('a3f2', root)
+    expect(url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/site\/a3f2\/$/)
+    const r = await fetchPlain(url + 'index.html')
+    expect(r.status).toBe(200)
+    expect(r.body).toBe('<html>hi</html>')
+  })
+
+  it('mountSite root URL serves entry index.html if present', async () => {
+    const root = path.join(tmp, 'a3f2')
+    fs.mkdirSync(root, { recursive: true })
+    fs.writeFileSync(path.join(root, 'index.html'), '<html>root</html>')
+    const { url } = await serve.mountSite('a3f2', root)
+    const r = await fetchPlain(url)
+    expect(r.status).toBe(200)
+    expect(r.body).toContain('root')
+  })
+
+  it('refuses path traversal inside a site mount', async () => {
+    const root = path.join(tmp, 'a')
+    fs.mkdirSync(root, { recursive: true })
+    fs.writeFileSync(path.join(tmp, 'secret.txt'), 'nope')
+    fs.writeFileSync(path.join(root, 'ok.txt'), 'ok')
+    const { url } = await serve.mountSite('a', root)
+    const escape = url.replace(/\/site\/a\/$/, '/site/a/../secret.txt')
+    const r = await fetchPlain(escape)
+    expect(r.status).toBe(404)
+  })
+
+  it('does not leak between mounts', async () => {
+    fs.mkdirSync(path.join(tmp, 'a'))
+    fs.mkdirSync(path.join(tmp, 'b'))
+    fs.writeFileSync(path.join(tmp, 'a', 'x.txt'), 'aaa')
+    fs.writeFileSync(path.join(tmp, 'b', 'x.txt'), 'bbb')
+    const a = await serve.mountSite('a', path.join(tmp, 'a'))
+    const b = await serve.mountSite('b', path.join(tmp, 'b'))
+    const ra = await fetchPlain(a.url + 'x.txt')
+    const rb = await fetchPlain(b.url + 'x.txt')
+    expect(ra.body).toBe('aaa')
+    expect(rb.body).toBe('bbb')
+  })
+
+  it('serves /_lib/* from electron/site-libs/', async () => {
+    // Use a temp dir for libs so this test is independent of Task 4 vendoring.
+    const libs = path.join(tmp, 'libs')
+    fs.mkdirSync(libs)
+    fs.writeFileSync(path.join(libs, 'demo.js'), '// demo')
+    serve._setSiteLibsDir(libs)
+    fs.mkdirSync(path.join(tmp, 'a'), { recursive: true })
+    const a = await serve.mountSite('a', path.join(tmp, 'a'))
+    const base = a.url.replace(/\/site\/a\/$/, '')
+    const r = await fetchPlain(base + '/_lib/demo.js')
+    expect(r.status).toBe(200)
+    expect(r.body).toBe('// demo')
+  })
+
+  it('unmountSite stops serving that site', async () => {
+    fs.mkdirSync(path.join(tmp, 'a'))
+    fs.writeFileSync(path.join(tmp, 'a', 'x.txt'), 'a')
+    const a = await serve.mountSite('a', path.join(tmp, 'a'))
+    await serve.unmountSite('a')
+    const r = await fetchPlain(a.url + 'x.txt')
+    expect(r.status).toBe(404)
+  })
+
+  it('mountSite is idempotent', async () => {
+    fs.mkdirSync(path.join(tmp, 'a'))
+    const r1 = await serve.mountSite('a', path.join(tmp, 'a'))
+    const r2 = await serve.mountSite('a', path.join(tmp, 'a'))
+    expect(r2.url).toBe(r1.url)
+  })
+
+  it('mountSite updates root on re-mount with a different folder', async () => {
+    const a1 = path.join(tmp, 'a1')
+    const a2 = path.join(tmp, 'a2')
+    fs.mkdirSync(a1, { recursive: true })
+    fs.mkdirSync(a2, { recursive: true })
+    fs.writeFileSync(path.join(a1, 'x.txt'), 'one')
+    fs.writeFileSync(path.join(a2, 'x.txt'), 'two')
+    const r1 = await serve.mountSite('a', a1)
+    const first = await fetchPlain(r1.url + 'x.txt')
+    expect(first.body).toBe('one')
+    const r2 = await serve.mountSite('a', a2)
+    expect(r2.url).toBe(r1.url)              // URL stable
+    const second = await fetchPlain(r2.url + 'x.txt')
+    expect(second.body).toBe('two')          // content updated
+  })
+
+  it('listSiteMounts reflects current mounts', async () => {
+    fs.mkdirSync(path.join(tmp, 'a'))
+    fs.mkdirSync(path.join(tmp, 'b'))
+    await serve.mountSite('a', path.join(tmp, 'a'))
+    await serve.mountSite('b', path.join(tmp, 'b'))
+    const mounts = serve.listSiteMounts()
+    expect(mounts.map((m) => m.id).sort()).toEqual(['a', 'b'])
+  })
+
+  it('markdown-mode start does not unmount sites', async () => {
+    fs.mkdirSync(path.join(tmp, 'site-a'))
+    await serve.mountSite('a', path.join(tmp, 'site-a'))
+    fs.mkdirSync(path.join(tmp, 'mdroot'))
+    fs.writeFileSync(path.join(tmp, 'mdroot', 'index.md'), '# hi')
+    await serve.start(path.join(tmp, 'mdroot'))
+    expect(serve.listSiteMounts()).toHaveLength(1)
+    await serve.stop()
+    // After stop() the site mount is still served and the server is still up.
+    expect(serve.listSiteMounts()).toHaveLength(1)
+  })
+
+  it('serves the real vendored d3 file via /_lib/', async () => {
+    // Reset to the default site-libs path (a previous test may have overridden it).
+    serve._setSiteLibsDir(path.join(__dirname, 'site-libs'))
+    fs.mkdirSync(path.join(tmp, 'a'), { recursive: true })
+    const a = await serve.mountSite('a', path.join(tmp, 'a'))
+    const base = a.url.replace(/\/site\/a\/$/, '')
+    const r = await fetchPlain(base + '/_lib/d3.v7.min.js')
+    expect(r.status).toBe(200)
+    expect(r.body.length).toBeGreaterThan(10000)
   })
 })

@@ -151,6 +151,21 @@ if (!isDockPopout()) {
       return () => ipcRenderer.removeListener('canvServe:statusChanged', listener)
     },
   })
+
+  contextBridge.exposeInMainWorld('canvSites', {
+    list: () => ipcRenderer.invoke('canvSites:list'),
+    listWithStaleness: () => ipcRenderer.invoke('canvSites:listWithStaleness'),
+    register: (input) => ipcRenderer.invoke('canvSites:register', input),
+    update: (id, patch) => ipcRenderer.invoke('canvSites:update', id, patch),
+    open: (id) => ipcRenderer.invoke('canvSites:open', id),
+    delete: (id) => ipcRenderer.invoke('canvSites:delete', id),
+    setPinned: (id, pinned) => ipcRenderer.invoke('canvSites:setPinned', id, pinned),
+    onRegistryChanged: (cb) => {
+      const listener = () => cb()
+      ipcRenderer.on('canvSites:registryChanged', listener)
+      return () => ipcRenderer.removeListener('canvSites:registryChanged', listener)
+    },
+  })
 }
 
 // Available in both main and pop-out windows.

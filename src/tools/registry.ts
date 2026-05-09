@@ -9,11 +9,14 @@ import { deleteFileTool } from './handlers/deleteFile'
 import { renameFileTool } from './handlers/renameFile'
 import { createFolderTool } from './handlers/createFolder'
 import { setTodosTool } from './handlers/setTodos'
+import { siteRegisterTool } from './handlers/siteRegister'
+import { siteUpdateTool } from './handlers/siteUpdate'
 
 const TOOLS: Tool[] = [
   listDirTool, readFileTool, searchWorkspaceTool,
   createFileTool, editFileTool, deleteFileTool, renameFileTool, createFolderTool,
   setTodosTool,
+  siteRegisterTool, siteUpdateTool,
 ] as Tool[]
 
 const BY_NAME = new Map(TOOLS.map((t) => [t.name, t]))

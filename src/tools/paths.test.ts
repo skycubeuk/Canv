@@ -29,9 +29,31 @@ describe('validateToolPath', () => {
     expect(validateToolPath('a/../../b').ok).toBe(false)
   })
 
-  it('rejects .canv/ paths', () => {
-    expect(validateToolPath('.canv/context-cache.json').ok).toBe(false)
+  it('rejects bare .canv/', () => {
     expect(validateToolPath('.canv').ok).toBe(false)
+  })
+
+  it('accepts paths under .canv/sites/', () => {
+    expect(validateToolPath('.canv/sites/timeline-a3f2/index.html'))
+      .toEqual({ ok: true, rel: '.canv/sites/timeline-a3f2/index.html' })
+    expect(validateToolPath('.canv/sites/x/data.json'))
+      .toEqual({ ok: true, rel: '.canv/sites/x/data.json' })
+  })
+
+  it('accepts the registry file at .canv/site_index.yaml', () => {
+    expect(validateToolPath('.canv/site_index.yaml'))
+      .toEqual({ ok: true, rel: '.canv/site_index.yaml' })
+  })
+
+  it('still rejects other paths under .canv/', () => {
+    expect(validateToolPath('.canv/context-cache.json').ok).toBe(false)
+    expect(validateToolPath('.canv/permissions.yaml').ok).toBe(false)
+    expect(validateToolPath('.canv/config/foo.json').ok).toBe(false)
+  })
+
+  it('rejects .canv/sites itself (must include an id segment + child)', () => {
+    expect(validateToolPath('.canv/sites').ok).toBe(false)
+    expect(validateToolPath('.canv/sites/').ok).toBe(false)
   })
 
   it('rejects empty string', () => {

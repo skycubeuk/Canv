@@ -139,6 +139,21 @@ export function ChatPanel({ messages, busy, provider, model, onSend, onClear, on
   const setFollowLatest = onSetFollowLatest
   const programmaticScroll = useRef(false)
 
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const prompt = (e as CustomEvent<string>).detail
+      if (typeof prompt !== 'string') return
+      setInput(prompt)
+      const el = inputRef.current
+      if (el) {
+        el.focus()
+        el.setSelectionRange(prompt.length, prompt.length)
+      }
+    }
+    window.addEventListener('canv:setChatDraft', handler)
+    return () => window.removeEventListener('canv:setChatDraft', handler)
+  }, [])
+
   // When messages change and we're following, scroll to bottom — and tag the
   // resulting scroll event so our handler doesn't misread it as user intent.
   // Only set the programmatic flag when there's real content (scrollHeight > 0),

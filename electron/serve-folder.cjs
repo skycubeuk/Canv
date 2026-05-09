@@ -582,6 +582,8 @@ const ASSET_EXTS = new Set([
   '.css', '.woff', '.woff2', '.ttf', '.otf',
 ])
 const MIME = {
+  '.html': 'text/html; charset=utf-8',
+  '.htm': 'text/html; charset=utf-8',
   '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
   '.gif': 'image/gif', '.webp': 'image/webp', '.svg': 'image/svg+xml',
   '.avif': 'image/avif',
@@ -589,6 +591,9 @@ const MIME = {
   '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wav': 'audio/wav',
   '.pdf': 'application/pdf',
   '.css': 'text/css; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.json': 'application/json',
+  '.ico': 'image/x-icon',
   '.woff': 'font/woff', '.woff2': 'font/woff2',
   '.ttf': 'font/ttf', '.otf': 'font/otf',
 }
@@ -597,8 +602,26 @@ class ServeError extends Error {
   constructor(code, message) { super(message || code); this.code = code; this.name = 'ServeError' }
 }
 
-let state = null  // { server, root, watcher, sseClients:Set, pageIndex, url }
+let state = null  // { root, watcher, sseClients:Set, pageIndex, url }
 const statusListeners = new Set()
+
+let httpServer = null         // the shared http.Server
+let httpUrl = null            // 'http://127.0.0.1:<port>' once bound
+const siteMounts = new Map()  // id -> { root: absRoot }
+let siteLibsDir = path.join(__dirname, 'site-libs')
+function _setSiteLibsDir(p) { siteLibsDir = p } // test seam
+
+async function ensureServer() {
+  if (httpServer) return
+  const server = http.createServer(handleRequest)
+  await new Promise((resolve, reject) => {
+    server.once('error', reject)
+    server.listen(0, '127.0.0.1', () => { server.removeListener('error', reject); resolve() })
+  })
+  httpServer = server
+  const port = server.address().port
+  httpUrl = `http://127.0.0.1:${port}`
+}
 
 function emitStatus() {
   const s = status()
@@ -643,10 +666,70 @@ function renderEmbedRecursive(rel, depth) {
 }
 
 function handleRequest(req, res) {
-  if (!state) { res.statusCode = 503; res.end(); return }
   let urlPath
   try { urlPath = new URL(req.url, 'http://localhost').pathname }
   catch { res.statusCode = 400; res.end('bad request'); return }
+
+  // /_lib/* → vendored runtime libraries.
+  if (urlPath.startsWith('/_lib/')) {
+    const rel = urlPath.slice('/_lib/'.length)
+    const abs = safeResolve(siteLibsDir, rel)
+    if (!abs) { res.statusCode = 404; res.end('not found'); return }
+    let stat = null
+    try { stat = fs.statSync(abs) } catch { /* */ }
+    if (!stat || !stat.isFile()) { res.statusCode = 404; res.end('not found'); return }
+    const ext = path.extname(abs).toLowerCase()
+    res.writeHead(200, {
+      'content-type': MIME[ext] || 'application/octet-stream',
+      'cache-control': 'no-store',
+    })
+    fs.createReadStream(abs).pipe(res)
+    return
+  }
+
+  // /site/<id>/* → static-passthrough from a registered mount.
+  if (urlPath.startsWith('/site/')) {
+    const rest = urlPath.slice('/site/'.length)
+    const slash = rest.indexOf('/')
+    const id = slash < 0 ? rest : rest.slice(0, slash)
+    const sub = slash < 0 ? '' : rest.slice(slash + 1)
+    const mount = siteMounts.get(id)
+    if (!mount) { res.statusCode = 404; res.end('not found'); return }
+    // If no path or trailing slash, serve index.html.
+    const target = sub === '' ? path.join(mount.root, 'index.html')
+      : safeResolve(mount.root, sub)
+    if (!target) { res.statusCode = 404; res.end('not found'); return }
+    let stat = null
+    try { stat = fs.statSync(target) } catch { /* */ }
+    if (!stat) { res.statusCode = 404; res.end('not found'); return }
+    if (stat.isDirectory()) {
+      const idx = path.join(target, 'index.html')
+      try {
+        const st2 = fs.statSync(idx)
+        if (st2.isFile()) {
+          const ext = path.extname(idx).toLowerCase()
+          res.writeHead(200, {
+            'content-type': MIME[ext] || 'text/html; charset=utf-8',
+            'cache-control': 'no-store',
+          })
+          fs.createReadStream(idx).pipe(res)
+          return
+        }
+      } catch { /* */ }
+      res.statusCode = 404; res.end('not found'); return
+    }
+    if (!stat.isFile()) { res.statusCode = 404; res.end('not found'); return }
+    const ext = path.extname(target).toLowerCase()
+    res.writeHead(200, {
+      'content-type': MIME[ext] || 'application/octet-stream',
+      'cache-control': 'no-store',
+    })
+    fs.createReadStream(target).pipe(res)
+    return
+  }
+
+  // Existing markdown-mode handling.
+  if (!state) { res.statusCode = 503; res.end(); return }
 
   // Internal endpoints.
   if (urlPath === '/__canv/style.css') {
@@ -752,14 +835,9 @@ async function start(absRoot) {
   }
   const marked = await loadMarked()
   const pageIndex = buildPageIndex(absRoot)
-  const server = http.createServer(handleRequest)
-  await new Promise((resolve, reject) => {
-    server.once('error', reject)
-    server.listen(0, '127.0.0.1', () => { server.removeListener('error', reject); resolve() })
-  })
-  const port = server.address().port
-  const url = `http://127.0.0.1:${port}`
-  state = { server, root: absRoot, watcher: null, sseClients: new Set(), pageIndex, url, marked }
+  await ensureServer()
+  const url = httpUrl
+  state = { root: absRoot, watcher: null, sseClients: new Set(), pageIndex, url, marked }
   const broadcast = makeBroadcaster()
   state.broadcast = broadcast
   const watcher = chokidar.watch(absRoot, {
@@ -800,8 +878,43 @@ async function stop() {
   for (const res of local.sseClients) { try { res.end() } catch { /* ignore */ } }
   local.sseClients.clear()
   if (local.watcher) { try { await local.watcher.close() } catch { /* ignore */ } }
-  await new Promise((resolve) => local.server.close(() => resolve()))
+  // NOTE: the shared HTTP server stays up — it may still be serving site mounts.
+  // Call stopAll() to fully tear down.
   emitStatus()
+}
+
+async function mountSite(id, absRoot) {
+  await ensureServer()
+  siteMounts.set(id, { root: path.resolve(absRoot) })
+  return { url: siteUrl(id) }
+}
+
+async function unmountSite(id) {
+  siteMounts.delete(id)
+}
+
+function listSiteMounts() {
+  const out = []
+  for (const [id, { root }] of siteMounts.entries()) {
+    out.push({ id, root, url: siteUrl(id) })
+  }
+  return out
+}
+
+function siteUrl(id) {
+  if (!httpUrl) return null
+  return `${httpUrl}/site/${id}/`
+}
+
+async function stopAll() {
+  if (state) await stop()
+  siteMounts.clear()
+  if (httpServer) {
+    const s = httpServer
+    httpServer = null
+    httpUrl = null
+    await new Promise((resolve) => s.close(() => resolve()))
+  }
 }
 
 module.exports = {
@@ -823,4 +936,7 @@ module.exports = {
   onStatusChange,
   ServeError,
   ASSET_EXTS,
+  // multi-mount API
+  mountSite, unmountSite, listSiteMounts, siteUrl, stopAll,
+  _setSiteLibsDir,
 }
