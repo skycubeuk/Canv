@@ -163,12 +163,12 @@ export function Canvas({
     >
       <div className="flex-1 overflow-auto bg-app min-h-0">
         <div
-          className={`mx-auto px-6 pt-10 pb-20 text-[15px] leading-[1.7] text-default ${widthClass[lineWidth]}`}
+          className={`mx-auto px-6 pt-10 pb-20 text-[15px] leading-[1.7] text-default min-h-full flex flex-col ${widthClass[lineWidth]}`}
           style={{ fontSize: `${fontSize}px` }}
         >
           <div
             ref={containerRef}
-            className="cm-host"
+            className="cm-host flex-1 min-h-0"
             style={{ display: viewMode === 'edit' ? 'block' : 'none' }}
           />
           {viewMode === 'preview' && (

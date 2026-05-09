@@ -103,16 +103,24 @@
   color: inherit !important;
 }
 
+.cm-host {
+  height: 100%;
+}
 .cm-host .cm-editor {
+  height: 100%;
   outline: none;
 }
 .cm-host .cm-editor.cm-focused {
   outline: none;
 }
+.cm-host .cm-scroller {
+  height: 100%;
+}
 .cm-host .cm-content {
   font-family: ui-sans-serif, system-ui, sans-serif;
   padding: 0;
   caret-color: currentColor;
+  min-height: 100%;
 }
 .cm-host .cm-line {
   padding: 0;

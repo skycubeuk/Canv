@@ -14,7 +14,6 @@ import {
   copyFromDom,
   selectAllInDom,
 } from '../lib/contextMenuActions'
-import { Bubble } from './ChatPanel'
 import type { Message, TokenUsage } from '../adapters/types'
 import { providerName } from '../adapters'
 
@@ -262,11 +261,21 @@ export function RunView({
 
       {run.followups && run.followups.length > 0 && (
         <Section title="Refinements">
-          <div className="space-y-3">
+          <div className="space-y-4">
             {run.followups.map((f, i) => (
               <div key={i} className="space-y-2">
-                <Bubble message={{ id: `${run.id}-followup-${i}-user`, role: 'user', content: f.user }} />
-                <Bubble message={{ id: `${run.id}-followup-${i}-assistant`, role: 'assistant', content: f.assistant }} />
+                <div>
+                  <div className="text-xs uppercase tracking-wide text-muted mb-1">You</div>
+                  <div className="text-sm whitespace-pre-wrap leading-relaxed bg-elev border border-default rounded px-3 py-2">
+                    {f.user}
+                  </div>
+                </div>
+                <div>
+                  <div className="text-xs uppercase tracking-wide text-muted mb-1">Reply</div>
+                  <div className="text-sm whitespace-pre-wrap leading-relaxed">
+                    {f.assistant}
+                  </div>
+                </div>
                 {(f.tokenUsage || f.elapsedMs != null) && (
                   <div className="text-[10px] text-subtle pl-1">
                     {f.tokenUsage && (

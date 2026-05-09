@@ -124,4 +124,36 @@ describe('RunView', () => {
     )
     expect(screen.getByRole('button', { name: /copy/i })).toBeInTheDocument()
   })
+
+  it('refinements render as plain panel-scale text, not chat bubbles', () => {
+    const run = baseRun({
+      followups: [
+        { user: 'Make it softer', assistant: 'Here is a softer version.' },
+      ],
+    })
+    render(
+      <ContextMenuProvider>
+        <RunView
+          run={run}
+          onApply={vi.fn()}
+          onRerun={vi.fn()}
+          onRefine={vi.fn()}
+        />
+      </ContextMenuProvider>,
+    )
+
+    expect(screen.getByText('Make it softer')).toBeInTheDocument()
+    expect(screen.getByText('Here is a softer version.')).toBeInTheDocument()
+    expect(screen.getByText('Refinements')).toBeInTheDocument()
+
+    const hasTextSmAncestor = (el: HTMLElement | null): boolean => {
+      while (el) {
+        if (el.className && /\btext-sm\b/.test(el.className)) return true
+        el = el.parentElement
+      }
+      return false
+    }
+    expect(hasTextSmAncestor(screen.getByText('Make it softer'))).toBe(true)
+    expect(hasTextSmAncestor(screen.getByText('Here is a softer version.'))).toBe(true)
+  })
 })
