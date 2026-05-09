@@ -1,32 +1,25 @@
-import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
-import type { ReactNode } from 'react'
-import { BottomPanel, type BottomPanelTabDef } from './BottomPanel'
+import { useEffect, useMemo, useState } from 'react'
+import { BottomPanel } from './BottomPanel'
 import { DockPlacementMenu } from './DockPlacementMenu'
+import { buildBottomPanelTabs, type BottomPanelTabsAdapter } from './bottomPanelTabs'
 import { useDockBridge } from '../../hooks/useDockBridge'
+import { useModesState } from '../../hooks/useModes'
 import type { DockState, UserAction } from '../../lib/dockTypes'
-import { computeDiff } from '../../lib/diff'
+import type { PendingApproval, ChatProvider } from '../ChatPanel'
+import type { RunRecord } from '../ResultsPanel'
+import type { LintIssue } from '../../lib/lintTypes'
 import { applyAccent, applyTheme, resolveTheme } from '../../lib/accent'
-import { providerName } from '../../adapters'
-import { Play, MessageSquare, AlertTriangle } from 'lucide-react'
-import { DialogProvider, useDialogs } from '../../lib/dialogs'
-import {
-  ContextMenuProvider,
-  useContextMenu,
-  type ContextMenuItem,
-} from '../../lib/contextMenu'
-import { AutoGrowTextarea } from '../AutoGrowTextarea'
-import { StatusPill } from '../ResultsPanel'
-import { Bubble } from '../ChatPanel'
-import {
-  cutFromTextarea,
-  copyFromTextarea,
-  pasteIntoTextarea,
-  selectAllInTextarea,
-  copyFromDom,
-  selectAllInDom,
-} from '../../lib/contextMenuActions'
+import { DialogProvider } from '../../lib/dialogs'
+import { ContextMenuProvider } from '../../lib/contextMenu'
 
+/** Pop-out shell. Receives a state snapshot from the main window over the IPC
+ *  bridge, builds a `BottomPanelTabsAdapter` whose handlers dispatch user
+ *  actions back to main, and renders the same `BottomPanel` + tab components
+ *  the main window uses. The only popout-specific affordance is the re-dock
+ *  buttons in the header (`bottom` / `right`), which fold the panel back into
+ *  the main window. */
 export function DockPopoutBoot() {
+  const modesState = useModesState()
   const bridge = useDockBridge({ mode: 'popout' })
   const [state, setState] = useState<DockState | null>(null)
 
@@ -57,60 +50,79 @@ export function DockPopoutBoot() {
     return () => mq.removeEventListener('change', handler)
   }, [theme])
 
-  const dispatch = useCallback(
-    (action: UserAction) => {
-      bridge.sendAction(action)
-    },
-    [bridge],
-  )
+  // Reconstruct the Map<string, PendingApproval> from its entries form.
+  // ChatPanel's prop type is Map<>; we serialise as entries because Maps don't
+  // round-trip cleanly through every postMessage path.
+  const pendingApprovalsMap = useMemo<Map<string, PendingApproval>>(() => {
+    return new Map(state?.pendingApprovals ?? [])
+  }, [state?.pendingApprovals])
 
-  const tabs = useMemo<BottomPanelTabDef[]>(() => {
-    if (!state) return []
-    return [
-      {
-        id: 'runs',
-        label: 'Runs',
-        icon: Play,
-        badge: state.runs.length || undefined,
-        render: () => (
-          <RunsView
-            runs={state.runs}
-            activeRunId={state.activeRunId}
-            streamingRunId={state.streamingRunId}
-            onDispatch={dispatch}
-          />
-        ),
-      },
-      {
-        id: 'chat',
-        label: 'Chat',
-        icon: MessageSquare,
-        render: () => (
-          <ChatView
-            messages={state.chatMessages}
-            provider={state.chatProvider}
-            model={state.chatModel}
-            busy={state.chatBusy}
-            onDispatch={dispatch}
-          />
-        ),
-      },
-      {
-        id: 'problems',
-        label: 'Problems',
-        icon: AlertTriangle,
-        badge: state.problems.length || undefined,
-        render: () => <ProblemsView problems={state.problems} />,
-      },
-    ]
-  }, [state, dispatch])
+  const adapter = useMemo<BottomPanelTabsAdapter | null>(() => {
+    if (!state) return null
+    const dispatch = (a: UserAction) => bridge.sendAction(a)
 
-  if (!state) {
+    // The bridge transports DockRun (extends RunRecord with parsed sections);
+    // RunsTab/OutputTab consume RunRecord. The extra fields are ignored.
+    const runs: RunRecord[] = state.runs
+
+    return {
+      runs,
+      activeRunId: state.activeRunId,
+      selectRun: (id: string) => dispatch({ type: 'select-run', runId: id }),
+      closeRun: (id: string) => dispatch({ type: 'delete-run', runId: id }),
+      // Apply on the popout side ignores the second arg: main resolves the
+      // canonical replacement text from its parsed run cache, so popout-side
+      // editing of a run's parsedRewrite isn't a concept.
+      applyRun: (run: RunRecord) => dispatch({ type: 'apply-run', runId: run.id }),
+      rerunRun: (run: RunRecord) => dispatch({ type: 'rerun-agent', runId: run.id }),
+      refineRun: (run: RunRecord, message: string) => dispatch({ type: 'refine-run', runId: run.id, message }),
+
+      chatMessages: state.chatMessages,
+      chatBusy: state.chatBusy,
+      chatProvider: state.chatProvider,
+      chatModel: state.chatModel,
+      sendChat: (text: string) => dispatch({ type: 'send-chat', text }),
+      clearChat: () => dispatch({ type: 'clear-chat' }),
+      stopChat: () => dispatch({ type: 'stop-chat' }),
+      retryChat: (anchorId: string) => dispatch({ type: 'retry-chat', anchorId }),
+      editAndRetryChat: (newText: string) => dispatch({ type: 'edit-and-retry-chat', newText }),
+      pendingApprovals: pendingApprovalsMap,
+      decideApproval: (callId, decision) => dispatch({ type: 'approval-decide', callId, decision }),
+      followLatest: state.followLatest,
+      setFollowLatest: (value: boolean) => dispatch({ type: 'set-follow-latest', value }),
+      contextFileName: state.contextFileName,
+      chatFontSize: state.chatFontSize,
+
+      sessions: state.sessions,
+      activeSessionId: state.activeSessionId,
+      createSession: () => dispatch({ type: 'create-session' }),
+      selectSession: (id: string) => dispatch({ type: 'select-session', id }),
+      closeSession: (id: string) => dispatch({ type: 'close-session', id }),
+      changeProviderModel: (provider: ChatProvider, model: string) =>
+        dispatch({ type: 'change-provider-model', provider, model }),
+      availableModels: state.availableModels,
+
+      problems: state.problems,
+      lintScanState: state.lintScanState,
+      lintScanError: state.lintScanError,
+      scanProblems: () => dispatch({ type: 'scan-problems' }),
+      clearProblems: () => dispatch({ type: 'clear-problems' }),
+      jumpToProblem: (issue: LintIssue) => dispatch({ type: 'jump-to-problem', issue }),
+
+      pricingOverrides: state.pricingOverrides,
+    }
+  }, [state, bridge, pendingApprovalsMap])
+
+  const tabs = useMemo(() => (adapter ? buildBottomPanelTabs(adapter) : []), [adapter])
+
+  // Modes config not yet ready (cold-load race) — show a placeholder. Same
+  // gate the main window applies; without it RunsTab's useModes() would throw.
+  if (modesState.status !== 'ready' || !state || !adapter) {
     return (
       <DialogProvider>
         <ContextMenuProvider>
           <div className="h-screen flex items-center justify-center text-muted text-sm">
-            Connecting to main window…
+            {modesState.status === 'error' ? 'Config error — open the main window.' : 'Connecting to main window…'}
           </div>
         </ContextMenuProvider>
       </DialogProvider>
@@ -127,555 +139,22 @@ export function DockPopoutBoot() {
           <BottomPanel
             tabs={tabs}
             activeTab={state.activeTab}
-            onSelectTab={(tab) => dispatch({ type: 'select-tab', tabId: tab })}
-            headerRight={
+            onSelectTab={(tab) => bridge.sendAction({ type: 'select-tab', tabId: tab })}
+            headerRight={(
               <DockPlacementMenu
                 placement="popout"
                 canPopOut={false}
                 placements={['bottom', 'right']}
                 onChange={(next) => {
                   if (next === 'bottom' || next === 'right') {
-                    dispatch({ type: 'set-placement', placement: next })
+                    bridge.sendAction({ type: 'set-placement', placement: next })
                   }
                 }}
               />
-            }
+            )}
           />
         </div>
       </ContextMenuProvider>
     </DialogProvider>
-  )
-}
-
-function RunsView({
-  runs,
-  activeRunId,
-  streamingRunId,
-  onDispatch,
-}: {
-  runs: DockState['runs']
-  activeRunId: string | null
-  streamingRunId: string | null
-  onDispatch: (action: UserAction) => void
-}) {
-  // The "active" run is activeRunId if it exists in runs; else the first run.
-  const active = useMemo(() => {
-    if (runs.length === 0) return null
-    if (activeRunId) return runs.find((r) => r.id === activeRunId) ?? runs[0]
-    return runs[0]
-  }, [runs, activeRunId])
-
-  if (!active) {
-    return (
-      <div className="h-full flex items-center justify-center text-muted text-sm">
-        No runs yet.
-      </div>
-    )
-  }
-
-  return (
-    <div className="h-full flex flex-col min-h-0">
-      {/* Run-tab strip */}
-      <div className="shrink-0 flex items-center gap-1 overflow-x-auto border-b border-default px-2 py-1">
-        {runs.map((r) => {
-          const isActive = r.id === active.id
-          const isStreaming = streamingRunId === r.id
-          return (
-            <button
-              key={r.id}
-              type="button"
-              onClick={() => onDispatch({ type: 'select-run', runId: r.id })}
-              className={`group flex items-center gap-1.5 px-2 py-0.5 rounded text-xs whitespace-nowrap ${
-                isActive
-                  ? 'bg-active text-default'
-                  : 'hover:bg-hover text-muted'
-              }`}
-            >
-              <span className="font-medium">{r.agentLabel}</span>
-              {isStreaming && <span className="text-subtle">…</span>}
-              <span
-                role="button"
-                tabIndex={0}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onDispatch({ type: 'delete-run', runId: r.id })
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    e.stopPropagation()
-                    onDispatch({ type: 'delete-run', runId: r.id })
-                  }
-                }}
-                className="opacity-0 group-hover:opacity-60 hover:!opacity-100 ml-1 px-0.5 leading-none"
-                aria-label="Close run"
-              >
-                ×
-              </span>
-            </button>
-          )
-        })}
-      </div>
-
-      {/* Active run content */}
-      <RunDetail run={active} streamingRunId={streamingRunId} onDispatch={onDispatch} />
-    </div>
-  )
-}
-
-function RunDetail({
-  run,
-  streamingRunId,
-  onDispatch,
-}: {
-  run: DockState['runs'][number]
-  streamingRunId: string | null
-  onDispatch: (action: UserAction) => void
-}) {
-  const [refineText, setRefineText] = useState('')
-  const [sourceOpen, setSourceOpen] = useState(false)
-
-  const ctxMenu = useContextMenu()
-  const refineRef = useRef<HTMLTextAreaElement>(null)
-  const responseRef = useRef<HTMLDivElement>(null)
-
-  const busy = run.status === 'streaming' || run.status === 'refining' || streamingRunId === run.id
-  const canRefine = !!run.basePrompt
-  const refineCount = run.followups?.length ?? 0
-
-  const submitRefine = () => {
-    const text = refineText.trim()
-    if (!text || busy) return
-    onDispatch({ type: 'refine-run', runId: run.id, message: text })
-    setRefineText('')
-  }
-
-  const onRefineContextMenu = (e: React.MouseEvent) => {
-    const el = refineRef.current
-    if (!el) return
-    const hasSel = el.selectionStart !== el.selectionEnd
-    const items: ContextMenuItem[] = [
-      { id: 'cut', label: 'Cut', disabled: !hasSel, onClick: () => { void cutFromTextarea(el) } },
-      { id: 'copy', label: 'Copy', disabled: !hasSel, onClick: () => { void copyFromTextarea(el) } },
-      { id: 'paste', label: 'Paste', onClick: () => { void pasteIntoTextarea(el) } },
-      { separator: true },
-      { id: 'select-all', label: 'Select all', onClick: () => selectAllInTextarea(el) },
-    ]
-    ctxMenu.open(e, items)
-  }
-
-  const onResponseContextMenu = (e: React.MouseEvent) => {
-    const root = responseRef.current
-    if (!root) return
-    const hasSel = (window.getSelection()?.toString().length ?? 0) > 0
-    const items: ContextMenuItem[] = [
-      { id: 'copy', label: 'Copy', disabled: !hasSel, onClick: () => { void copyFromDom() } },
-      { separator: true },
-      { id: 'select-all', label: 'Select all', onClick: () => selectAllInDom(root) },
-    ]
-    ctxMenu.open(e, items)
-  }
-
-  return (
-    <div className="flex-1 flex flex-col min-h-0">
-      {/* Header */}
-      <div className="shrink-0 px-3 py-2 border-b border-default flex items-center justify-between">
-        <div className="text-xs text-muted flex items-center gap-2">
-          <StatusPill status={run.status} />
-          <span>{providerName(run.provider)} · {run.model}</span>
-          {refineCount > 0 && (
-            <span className="text-subtle">· refined {refineCount}×</span>
-          )}
-          {run.tokenUsage && (
-            <span className="text-subtle">
-              · {run.tokenUsage.input ?? '?'}+{run.tokenUsage.output ?? '?'} tok
-            </span>
-          )}
-          {run.elapsedMs != null && (
-            <span className="text-subtle">· {(run.elapsedMs / 1000).toFixed(1)}s</span>
-          )}
-        </div>
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => onDispatch({ type: 'rerun-agent', runId: run.id })}
-            disabled={busy}
-            className="text-xs px-2 py-0.5 rounded text-muted hover:bg-hover disabled:opacity-50"
-          >
-            Re-run
-          </button>
-          <button
-            type="button"
-            onClick={() => onDispatch({ type: 'delete-run', runId: run.id })}
-            className="text-xs px-2 py-0.5 rounded text-muted hover:bg-hover"
-          >
-            Delete
-          </button>
-        </div>
-      </div>
-
-      {/* Source (collapsible) */}
-      {run.sourceText && (
-        <div className="shrink-0 border-b border-default">
-          <button
-            type="button"
-            onClick={() => setSourceOpen((v) => !v)}
-            className="w-full px-3 py-1.5 text-left text-xs text-muted hover:bg-hover"
-          >
-            {sourceOpen ? '▾' : '▸'} Source ({run.sourceText.length} chars)
-          </button>
-          {sourceOpen && (
-            <div className="px-3 pb-2 text-xs text-muted whitespace-pre-wrap max-h-40 overflow-y-auto">
-              {run.sourceText}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Status banners */}
-      {run.status === 'error' && (
-        <div className="shrink-0 mx-3 my-2 px-3 py-2 bg-red-950/30 border border-red-900 rounded text-xs text-red-300">
-          {run.error || 'Something went wrong.'}
-        </div>
-      )}
-      {run.status === 'aborted' && (
-        <div className="shrink-0 mx-3 my-2 px-3 py-2 bg-elev border border-default rounded text-xs">
-          Stopped. Partial output above is what was streamed before cancel.
-        </div>
-      )}
-      {run.truncated && run.status !== 'error' && !busy && (
-        <div className="shrink-0 mx-3 my-2 px-3 py-2 bg-amber-950/30 border border-amber-900 rounded text-xs text-amber-200">
-          <strong>Response was cut short.</strong> The model hit the output token
-          limit before finishing. Raise <em>Max output tokens</em> in settings, or
-          split the selection into smaller chunks. The result below is incomplete —
-          review carefully before applying.
-        </div>
-      )}
-
-      {/* Response — main-side parsed sections (Notes / Suggested rewrite / Diff) */}
-      <div
-        ref={responseRef}
-        onContextMenu={onResponseContextMenu}
-        className="flex-1 overflow-y-auto px-3 py-2 text-sm"
-      >
-        {run.parsedFeedback && (
-          <Section
-            title={
-              run.outputMode === 'feedback-only' && run.agentId === 'summarise' ? 'Summary' : 'Notes'
-            }
-          >
-            <div className="whitespace-pre-wrap leading-relaxed">{run.parsedFeedback}</div>
-            {run.outputMode === 'feedback-only' && !busy && (
-              <div className="flex items-center gap-2 mt-3">
-                <button
-                  type="button"
-                  onClick={() => navigator.clipboard.writeText(run.parsedFeedback!)}
-                  className="px-3 py-1 rounded border border-default text-default text-xs"
-                >
-                  Copy
-                </button>
-              </div>
-            )}
-          </Section>
-        )}
-
-        {run.parsedRewrite && run.outputMode !== 'feedback-only' && (
-          <Section title={run.parsedFeedback ? 'Suggested rewrite' : 'Result'}>
-            <div className={`whitespace-pre-wrap leading-relaxed font-serif ${busy ? 'streaming-cursor' : ''}`}>
-              {run.parsedRewrite}
-            </div>
-            {run.sourceText && !busy && (
-              <DiffView original={run.sourceText} updated={run.parsedRewrite} />
-            )}
-            {!busy && (
-              <div className="flex items-center gap-2 mt-3">
-                <button
-                  type="button"
-                  onClick={() => onDispatch({ type: 'apply-run', runId: run.id })}
-                  disabled={run.schemaVersion !== 2 || run.applied === true}
-                  className="px-3 py-1 rounded bg-accent text-accent-fg text-xs disabled:opacity-50"
-                  title={
-                    run.schemaVersion !== 2
-                      ? 'Run was created with the previous editor — re-run to apply'
-                      : run.applied
-                        ? 'Already applied — re-run to produce a fresh edit'
-                        : run.range
-                          ? 'Replace selection with this text'
-                          : 'Replace the entire document with this text'
-                  }
-                >
-                  {run.applied ? 'Applied' : 'Apply'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => navigator.clipboard.writeText(run.parsedRewrite!)}
-                  className="px-3 py-1 rounded border border-default text-default text-xs"
-                >
-                  Copy
-                </button>
-              </div>
-            )}
-          </Section>
-        )}
-
-        {!run.parsedFeedback && !run.parsedRewrite && busy && (
-          <Section title="Working…">
-            <div className="streaming-cursor"> </div>
-          </Section>
-        )}
-
-        {/* Fallback: parser found nothing — show raw so the user sees something */}
-        {!run.parsedFeedback && !run.parsedRewrite && !busy && run.response && (
-          <pre className="whitespace-pre-wrap break-words font-sans">{run.response}</pre>
-        )}
-
-        {/* Followups (refine rounds) — user/assistant pairs below the main response */}
-        {run.followups && run.followups.length > 0 && (
-          <Section title="Refinements">
-            <div className="space-y-3">
-              {run.followups.map((f, i) => (
-                <div key={i} className="space-y-2">
-                  <Bubble key={`u-${i}`} message={{ id: `fu-${i}`, role: 'user', content: f.user }} />
-                  <Bubble key={`a-${i}`} message={{ id: `fa-${i}`, role: 'assistant', content: f.assistant }} />
-                  {(f.tokenUsage || f.elapsedMs != null) && (
-                    <div className="text-[10px] text-subtle pl-1">
-                      {f.tokenUsage && (
-                        <span>{f.tokenUsage.input ?? '?'}+{f.tokenUsage.output ?? '?'} tok</span>
-                      )}
-                      {f.tokenUsage && f.elapsedMs != null && <span> · </span>}
-                      {f.elapsedMs != null && <span>{(f.elapsedMs / 1000).toFixed(1)}s</span>}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </Section>
-        )}
-      </div>
-
-      {/* Refine input */}
-      {canRefine && run.status !== 'error' && (
-        <div className="shrink-0 border-t border-default px-3 py-2 bg-panel/60">
-          <div className="flex items-end gap-2">
-            <AutoGrowTextarea
-              ref={refineRef}
-              value={refineText}
-              onChange={(e) => setRefineText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault()
-                  submitRefine()
-                }
-              }}
-              onContextMenu={onRefineContextMenu}
-              placeholder={busy ? 'Working…' : 'Discuss or refine this edit'}
-              disabled={busy}
-              minRows={2}
-              maxRows={6}
-              className="flex-1 resize-none rounded border border-default bg-elev text-sm px-2 py-1.5 disabled:opacity-50 focus:outline-none focus:ring-1 focus:ring-accent"
-            />
-            <button
-              type="button"
-              onClick={submitRefine}
-              disabled={!refineText.trim() || busy}
-              className="self-end px-3 py-1 rounded bg-accent text-accent-fg text-xs disabled:opacity-50"
-            >
-              Send
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function Section({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="mt-2 first:mt-0">
-      <h3 className="text-[10px] uppercase tracking-wider text-muted mb-1.5">
-        {title}
-      </h3>
-      {children}
-    </section>
-  )
-}
-
-function DiffView({ original, updated }: { original: string; updated: string }) {
-  const parts = useMemo(() => computeDiff(original, updated), [original, updated])
-  return (
-    <details className="mt-3">
-      <summary className="text-xs text-muted cursor-pointer hover:text-default">
-        Show diff
-      </summary>
-      <div className="mt-2 p-3 bg-panel rounded font-serif whitespace-pre-wrap leading-relaxed">
-        {parts.map((p, i) => {
-          if (p.added) {
-            return (
-              <span key={i} className="bg-green-900/40 text-green-200">
-                {p.value}
-              </span>
-            )
-          }
-          if (p.removed) {
-            return (
-              <span key={i} className="bg-red-900/40 text-red-200 line-through">
-                {p.value}
-              </span>
-            )
-          }
-          return <span key={i}>{p.value}</span>
-        })}
-      </div>
-    </details>
-  )
-}
-
-function ChatView({
-  messages,
-  provider,
-  model,
-  busy,
-  onDispatch,
-}: {
-  messages: DockState['chatMessages']
-  provider: string
-  model: string
-  busy: boolean
-  onDispatch: (action: UserAction) => void
-}) {
-  const [input, setInput] = useState('')
-  const scrollRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLTextAreaElement>(null)
-  const dialogs = useDialogs()
-  const ctxMenu = useContextMenu()
-
-  useEffect(() => {
-    const el = scrollRef.current
-    if (el) el.scrollTop = el.scrollHeight
-  }, [messages])
-
-  const send = () => {
-    const text = input.trim()
-    if (!text || busy) return
-    onDispatch({ type: 'send-chat', text })
-    setInput('')
-  }
-
-  const clear = () => {
-    void (async () => {
-      const ok = await dialogs.confirm({
-        title: 'Clear chat history?',
-        message: 'This will remove all messages from the current chat.',
-        confirmLabel: 'Clear',
-        danger: true,
-      })
-      if (ok) onDispatch({ type: 'clear-chat' })
-    })()
-  }
-
-  const onInputContextMenu = (e: React.MouseEvent) => {
-    const el = inputRef.current
-    if (!el) return
-    const hasSel = el.selectionStart !== el.selectionEnd
-    const items: ContextMenuItem[] = [
-      { id: 'cut', label: 'Cut', disabled: !hasSel, onClick: () => { void cutFromTextarea(el) } },
-      { id: 'copy', label: 'Copy', disabled: !hasSel, onClick: () => { void copyFromTextarea(el) } },
-      { id: 'paste', label: 'Paste', onClick: () => { void pasteIntoTextarea(el) } },
-      { separator: true },
-      { id: 'select-all', label: 'Select all', onClick: () => selectAllInTextarea(el) },
-    ]
-    ctxMenu.open(e, items)
-  }
-
-  return (
-    <div className="h-full flex flex-col min-h-0">
-      <div className="px-3 py-1.5 border-b border-default flex items-center justify-between">
-        <div className="text-xs text-muted">
-          {provider} · {model} · the document is shared with this chat
-        </div>
-        <div className="flex items-center gap-1">
-          {messages.length > 0 && (
-            <button
-              type="button"
-              onClick={clear}
-              disabled={busy}
-              className="text-xs px-2 py-0.5 rounded text-muted hover:bg-hover disabled:opacity-50"
-            >
-              Clear
-            </button>
-          )}
-        </div>
-      </div>
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-2 space-y-2 text-sm">
-        {messages.length === 0 && (
-          <div className="text-sm text-muted text-center py-8">
-            Ask anything about the document.<br />
-            Try: <em>"Summarise this in one sentence"</em> or <em>"What's missing from the argument?"</em>
-          </div>
-        )}
-        {messages.map((m) => (
-          <Bubble key={m.id} message={m} />
-        ))}
-      </div>
-      <div className="border-t border-default p-2">
-        <div className="flex items-end gap-2">
-          <AutoGrowTextarea
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault()
-                send()
-              }
-            }}
-            onContextMenu={onInputContextMenu}
-            minRows={2}
-            maxRows={6}
-            placeholder="Message the document…"
-            className="flex-1 resize-none rounded border border-default bg-elev text-sm px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-accent"
-          />
-          {busy ? (
-            <button
-              type="button"
-              onClick={() => onDispatch({ type: 'stop-chat' })}
-              className="self-end px-3 py-1 rounded bg-elev text-default text-sm"
-            >
-              Stop
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={send}
-              disabled={!input.trim()}
-              className="self-end px-3 py-1 rounded bg-accent text-accent-fg disabled:opacity-50 text-sm"
-            >
-              Send
-            </button>
-          )}
-        </div>
-        <p className="text-xs text-subtle mt-1">Enter to send · Shift+Enter for newline</p>
-      </div>
-    </div>
-  )
-}
-
-function ProblemsView({ problems }: { problems: DockState['problems'] }) {
-  if (problems.length === 0) {
-    return (
-      <div className="h-full flex items-center justify-center text-muted text-sm">
-        No problems.
-      </div>
-    )
-  }
-  return (
-    <ul className="h-full overflow-y-auto text-xs px-2 py-2">
-      {problems.map((p, i) => (
-        <li key={i} className="py-0.5">
-          <span className="text-muted mr-2">{p.rel}</span>
-          {p.message}
-        </li>
-      ))}
-    </ul>
   )
 }

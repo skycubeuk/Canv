@@ -3,12 +3,16 @@ import { useDockBridge } from './useDockBridge'
 import { parseAgentResponse } from '../agents/runner'
 import { getActionById, getModeById } from './useModes'
 import type { Mode } from '../config/types'
-import type { ChatMessage } from '../components/ChatPanel'
+import type { ChatMessage, ChatProvider, PendingApproval } from '../components/ChatPanel'
+import type { SidebarSession } from '../components/ChatSessionsSidebar'
+import type { ApprovalDecision } from '../agents/chatRunner'
 import { type RunRecord } from '../components/ResultsPanel'
 import type { LintIssue } from '../lib/lintTypes'
 import type { DockState, DockRun, UserAction } from '../lib/dockTypes'
 import type { useIdeLayout } from './useIdeLayout'
 import type { useSettings } from './useSettings'
+import type { ScanState } from './useLintIssues'
+import type { ModelPricing } from '../config/pricing'
 
 type IdeLayoutApi = ReturnType<typeof useIdeLayout>
 type SettingsApi = ReturnType<typeof useSettings>
@@ -18,22 +22,48 @@ export interface UseDockBridgeMainArgs {
   modes: Mode[]
   defaultModeId: string
   activeProfile: Mode
+  // Runs
   runs: RunRecord[]
   activeTabId: string | null
   setActiveTabId: React.Dispatch<React.SetStateAction<string | null>>
-  chatMessages: ChatMessage[]
-  chatProvider: string
-  chatModel: string
-  chatBusy: boolean
-  problems: LintIssue[]
-  settings: SettingsApi['settings']
-  sendChat: (text: string) => Promise<void>
   handleRerun: (run: RunRecord) => void
   handleCloseTab: (id: string) => void
   handleApply: (run: RunRecord, replacement: string) => void
   refineRun: (run: RunRecord, message: string) => Promise<void>
+  // Chat — base
+  chatMessages: ChatMessage[]
+  chatProvider: ChatProvider
+  chatModel: string
+  chatBusy: boolean
+  pendingApprovals: Map<string, PendingApproval>
+  followLatest: boolean
+  contextFileName: string | null
+  // Chat — sessions
+  sessions: SidebarSession[]
+  activeSessionId: string
+  availableModels: Record<ChatProvider, string[]>
+  // Chat — actions
+  sendChat: (text: string) => Promise<void> | void
   clearChat: () => void
   stopChat: () => void
+  retryFromAnchor: (anchorId: string) => void
+  editAndRetry: (newText: string) => void
+  onApprovalDecide: (callId: string, decision: ApprovalDecision) => void
+  setFollowLatest: (next: boolean) => void
+  createSession: () => void
+  selectSession: (id: string) => void
+  closeSession: (id: string) => void
+  setActiveSessionProviderModel: (provider: ChatProvider, model: string) => void
+  // Problems
+  problems: LintIssue[]
+  lintScanState: ScanState
+  lintScanError: string | null
+  scanProblems: () => void
+  clearProblems: () => void
+  jumpToProblem: (issue: LintIssue) => void
+  // Settings (for serialisable bits the popout needs)
+  settings: SettingsApi['settings']
+  pricingOverrides: Record<string, ModelPricing>
 }
 
 export function useDockBridgeMain(args: UseDockBridgeMainArgs): void {
@@ -45,19 +75,39 @@ export function useDockBridgeMain(args: UseDockBridgeMainArgs): void {
     runs,
     activeTabId,
     setActiveTabId,
-    chatMessages,
-    chatProvider,
-    chatModel,
-    chatBusy,
-    problems,
-    settings,
-    sendChat,
     handleRerun,
     handleCloseTab,
     handleApply,
     refineRun,
+    chatMessages,
+    chatProvider,
+    chatModel,
+    chatBusy,
+    pendingApprovals,
+    followLatest,
+    contextFileName,
+    sessions,
+    activeSessionId,
+    availableModels,
+    sendChat,
     clearChat,
     stopChat,
+    retryFromAnchor,
+    editAndRetry,
+    onApprovalDecide,
+    setFollowLatest,
+    createSession,
+    selectSession,
+    closeSession,
+    setActiveSessionProviderModel,
+    problems,
+    lintScanState,
+    lintScanError,
+    scanProblems,
+    clearProblems,
+    jumpToProblem,
+    settings,
+    pricingOverrides,
   } = args
 
   // Parse each run on the main side so the popout can render Notes / Rewrite / Diff
@@ -77,6 +127,11 @@ export function useDockBridgeMain(args: UseDockBridgeMainArgs): void {
     })
   }, [runs, modes, defaultModeId])
 
+  const pendingApprovalsArr = useMemo<Array<[string, PendingApproval]>>(
+    () => Array.from(pendingApprovals.entries()),
+    [pendingApprovals],
+  )
+
   // Assemble the snapshot the pop-out window mirrors. Recomputed on any input change;
   // useDockBridge throttles broadcasts to ~30fps so streaming token updates don't flood IPC.
   const dockState = useMemo<DockState>(() => {
@@ -89,8 +144,17 @@ export function useDockBridgeMain(args: UseDockBridgeMainArgs): void {
       chatProvider,
       chatModel,
       chatBusy,
+      pendingApprovals: pendingApprovalsArr,
+      followLatest,
+      contextFileName,
+      chatFontSize: settings.chatFontSize,
+      pricingOverrides,
+      sessions,
+      activeSessionId,
+      availableModels,
       problems,
-      output: '', // OutputTab is derived from runs in v1; popout shows runs in its Runs tab.
+      lintScanState,
+      lintScanError,
       streamingRunId,
       ui: {
         theme: settings.theme,
@@ -107,10 +171,20 @@ export function useDockBridgeMain(args: UseDockBridgeMainArgs): void {
     chatProvider,
     chatModel,
     chatBusy,
+    pendingApprovalsArr,
+    followLatest,
+    contextFileName,
+    sessions,
+    activeSessionId,
+    availableModels,
     problems,
+    lintScanState,
+    lintScanError,
     settings.theme,
     settings.accent,
     settings.fontSize,
+    settings.chatFontSize,
+    pricingOverrides,
     activeProfile,
   ])
 
@@ -175,9 +249,6 @@ export function useDockBridgeMain(args: UseDockBridgeMainArgs): void {
         case 'select-run':
           setActiveTabId(action.runId)
           return
-        case 'send-chat':
-          void sendChat(action.text)
-          return
         case 'rerun-agent': {
           const run = runs.find((r) => r.id === action.runId)
           if (run) handleRerun(run)
@@ -199,18 +270,61 @@ export function useDockBridgeMain(args: UseDockBridgeMainArgs): void {
           if (run) void refineRun(run, action.message)
           return
         }
+        case 'send-chat':
+          void sendChat(action.text)
+          return
         case 'clear-chat':
           clearChat()
           return
         case 'stop-chat':
           stopChat()
           return
+        case 'retry-chat':
+          retryFromAnchor(action.anchorId)
+          return
+        case 'edit-and-retry-chat':
+          editAndRetry(action.newText)
+          return
+        case 'approval-decide':
+          onApprovalDecide(action.callId, action.decision)
+          return
+        case 'set-follow-latest':
+          setFollowLatest(action.value)
+          return
+        case 'create-session':
+          createSession()
+          return
+        case 'select-session':
+          selectSession(action.id)
+          return
+        case 'close-session':
+          closeSession(action.id)
+          return
+        case 'change-provider-model':
+          setActiveSessionProviderModel(action.provider, action.model)
+          return
+        case 'scan-problems':
+          scanProblems()
+          return
+        case 'clear-problems':
+          clearProblems()
+          return
+        case 'jump-to-problem':
+          jumpToProblem(action.issue)
+          return
         case 'set-placement':
           ideLayout.setDockPlacement(action.placement)
           return
       }
     })
-  }, [dockBridge, ideLayout, runs, dockRuns, sendChat, handleRerun, handleCloseTab, handleApply, refineRun, clearChat, stopChat, setActiveTabId])
+  }, [
+    dockBridge, ideLayout, runs, dockRuns,
+    sendChat, handleRerun, handleCloseTab, handleApply, refineRun,
+    clearChat, stopChat, retryFromAnchor, editAndRetry, onApprovalDecide,
+    setFollowLatest, createSession, selectSession, closeSession, setActiveSessionProviderModel,
+    scanProblems, clearProblems, jumpToProblem,
+    setActiveTabId,
+  ])
 
   // Push an immediate snapshot when the pop-out signals ready, so the freshly
   // mounted window doesn't render an empty UI before the next state change.

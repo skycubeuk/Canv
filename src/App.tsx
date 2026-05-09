@@ -1,16 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { EditorView } from '@codemirror/view'
-import { Play, MessageSquare, AlertTriangle, FileText } from 'lucide-react'
 import { FloatingToolbar } from './components/FloatingToolbar'
 import { MigrationModal } from './components/MigrationModal'
 import { AppOverlays } from './components/ide/AppOverlays'
 import { legacyStateExists } from './lib/legacyState'
 import { WorkspaceShell } from './components/ide/WorkspaceShell'
-import type { BottomPanelTabDef } from './components/ide/BottomPanel'
-import { RunsTab } from './components/ide/bottom/RunsTab'
-import { ChatTab } from './components/ide/bottom/ChatTab'
-import { ProblemsTab } from './components/ide/bottom/ProblemsTab'
-import { OutputTab } from './components/ide/bottom/OutputTab'
+import { buildBottomPanelTabs, type BottomPanelTabsAdapter } from './components/ide/bottomPanelTabs'
 import { useLintIssues } from './hooks/useLintIssues'
 import { useSettings } from './hooks/useSettings'
 import { useWorkspace } from './hooks/useWorkspace'
@@ -301,6 +296,13 @@ export default function App() {
     setPendingDocAgent,
   })
 
+  const jumpToProblem = useCallback(
+    (issue: import('./lib/lintTypes').LintIssue) => {
+      editorRegistry.jumpToProblem(issue, lintIssuesApi.issues)
+    },
+    [editorRegistry, lintIssuesApi.issues],
+  )
+
   useDockBridgeMain({
     ideLayout,
     modes,
@@ -309,19 +311,39 @@ export default function App() {
     runs,
     activeTabId,
     setActiveTabId,
-    chatMessages,
-    chatProvider,
-    chatModel,
-    chatBusy,
-    problems: lintIssuesApi.issues,
-    settings,
-    sendChat,
     handleRerun,
     handleCloseTab,
     handleApply,
     refineRun,
+    chatMessages,
+    chatProvider,
+    chatModel,
+    chatBusy,
+    pendingApprovals,
+    followLatest,
+    contextFileName: workspace.activeMarkdownRel ? basename(workspace.activeMarkdownRel) : null,
+    sessions,
+    activeSessionId: activeId,
+    availableModels,
+    sendChat,
     clearChat,
     stopChat,
+    retryFromAnchor,
+    editAndRetry,
+    onApprovalDecide,
+    setFollowLatest,
+    createSession,
+    selectSession,
+    closeSession,
+    setActiveSessionProviderModel,
+    problems: lintIssuesApi.issues,
+    lintScanState: lintIssuesApi.scanState,
+    lintScanError: lintIssuesApi.scanError,
+    scanProblems: () => { void lintIssuesApi.scanWorkspace() },
+    clearProblems: lintIssuesApi.clearWorkspaceIssues,
+    jumpToProblem,
+    settings,
+    pricingOverrides: settings.pricingOverrides,
   })
 
   const openRels = useMemo(() => {
@@ -344,83 +366,54 @@ export default function App() {
       ? 'saving' as const
       : 'saved' as const
 
-  const bottomPanelTabs = useMemo<BottomPanelTabDef[]>(() => {
-    return [
-      {
-        id: 'runs',
-        label: 'Runs',
-        icon: Play,
-        badge: runs.length > 0 ? runs.length : undefined,
-        render: () => (
-          <RunsTab
-            runs={runs}
-            activeId={activeTabId}
-            onSelect={setActiveTabId}
-            onClose={handleCloseTab}
-            onApply={handleApply}
-            onRerun={handleRerun}
-            onRefine={refineRun}
-            pricingOverrides={settings.pricingOverrides}
-          />
-        ),
-      },
-      {
-        id: 'chat',
-        label: 'Chat',
-        icon: MessageSquare,
-        badge: chatMessages.length > 0 ? chatMessages.length : undefined,
-        render: () => (
-          <ChatTab
-            messages={chatMessages}
-            busy={chatBusy}
-            provider={chatProvider}
-            model={chatModel}
-            onSend={sendChat}
-            onClear={clearChat}
-            onStop={stopChat}
-            onRetry={retryFromAnchor}
-            onEditAndRetry={editAndRetry}
-            pendingApprovals={pendingApprovals}
-            onApprovalDecide={onApprovalDecide}
-            pricingOverrides={settings.pricingOverrides}
-            followLatest={followLatest}
-            onSetFollowLatest={setFollowLatest}
-            contextFileName={workspace.activeMarkdownRel ? basename(workspace.activeMarkdownRel) : null}
-            chatFontSize={settings.chatFontSize}
-            sessions={sessions}
-            activeId={activeId}
-            onCreateSession={createSession}
-            onSelectSession={selectSession}
-            onCloseSession={closeSession}
-            onChangeProviderModel={setActiveSessionProviderModel}
-            availableModels={availableModels}
-          />
-        ),
-      },
-      {
-        id: 'problems',
-        label: 'Problems',
-        icon: AlertTriangle,
-        badge: lintIssuesApi.issues.length > 0 ? lintIssuesApi.issues.length : undefined,
-        render: () => (
-          <ProblemsTab
-            issues={lintIssuesApi.issues}
-            scanState={lintIssuesApi.scanState}
-            scanError={lintIssuesApi.scanError}
-            onScan={() => { void lintIssuesApi.scanWorkspace() }}
-            onClear={lintIssuesApi.clearWorkspaceIssues}
-            onJump={(issue) => editorRegistry.jumpToProblem(issue, lintIssuesApi.issues)}
-          />
-        ),
-      },
-      {
-        id: 'output',
-        label: 'Output',
-        icon: FileText,
-        render: () => <OutputTab runs={runs} />,
-      },
-    ]
-  }, [runs, activeTabId, setActiveTabId, handleCloseTab, handleApply, handleRerun, refineRun, chatMessages, chatBusy, chatProvider, chatModel, sendChat, retryFromAnchor, editAndRetry, clearChat, stopChat, pendingApprovals, onApprovalDecide, lintIssuesApi, editorRegistry, settings.pricingOverrides, settings.chatFontSize, followLatest, setFollowLatest, workspace.activeMarkdownRel, sessions, activeId, createSession, selectSession, closeSession, setActiveSessionProviderModel, availableModels])
+  const bottomPanelAdapter = useMemo<BottomPanelTabsAdapter>(() => ({
+    runs,
+    activeRunId: activeTabId,
+    selectRun: setActiveTabId,
+    closeRun: handleCloseTab,
+    applyRun: handleApply,
+    rerunRun: handleRerun,
+    refineRun,
+    chatMessages,
+    chatBusy,
+    chatProvider,
+    chatModel,
+    sendChat,
+    clearChat,
+    stopChat,
+    retryChat: retryFromAnchor,
+    editAndRetryChat: editAndRetry,
+    pendingApprovals,
+    decideApproval: onApprovalDecide,
+    followLatest,
+    setFollowLatest,
+    contextFileName: workspace.activeMarkdownRel ? basename(workspace.activeMarkdownRel) : null,
+    chatFontSize: settings.chatFontSize,
+    sessions,
+    activeSessionId: activeId,
+    createSession,
+    selectSession,
+    closeSession,
+    changeProviderModel: setActiveSessionProviderModel,
+    availableModels,
+    problems: lintIssuesApi.issues,
+    lintScanState: lintIssuesApi.scanState,
+    lintScanError: lintIssuesApi.scanError,
+    scanProblems: () => { void lintIssuesApi.scanWorkspace() },
+    clearProblems: lintIssuesApi.clearWorkspaceIssues,
+    jumpToProblem,
+    pricingOverrides: settings.pricingOverrides,
+  }), [
+    runs, activeTabId, setActiveTabId, handleCloseTab, handleApply, handleRerun, refineRun,
+    chatMessages, chatBusy, chatProvider, chatModel,
+    sendChat, clearChat, stopChat, retryFromAnchor, editAndRetry,
+    pendingApprovals, onApprovalDecide, followLatest, setFollowLatest,
+    workspace.activeMarkdownRel, settings.chatFontSize, settings.pricingOverrides,
+    sessions, activeId, createSession, selectSession, closeSession, setActiveSessionProviderModel, availableModels,
+    lintIssuesApi, jumpToProblem,
+  ])
+
+  const bottomPanelTabs = useMemo(() => buildBottomPanelTabs(bottomPanelAdapter), [bottomPanelAdapter])
 
   // Browser-only build: show a simple banner instead of the workspace UI.
   if (!isElectron()) {

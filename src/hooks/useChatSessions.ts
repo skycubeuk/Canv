@@ -58,7 +58,7 @@ export interface SessionSummary {
 
 export interface UseChatSessionsApi {
   chatMessages: ChatMessage[]
-  chatProvider: string
+  chatProvider: ChatProvider
   chatModel: string
   sessions: SessionSummary[]
   activeId: ChatSessionId
