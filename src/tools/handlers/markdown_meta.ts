@@ -108,7 +108,7 @@ export function parseMarkdownMeta(src: string, _opts: ParseOpts): ParsedMeta {
 // Task 8 truncates large files mid-fence).
 function stripFencedBlocks(body: string): string {
   // Closed fences first.
-  const closed = body.replace(/(```|~~~)[^\n]*\n[\s\S]*?\n\1/g, (m) => m.replace(/[^\n]/g, ' '))
+  const closed = body.replace(/(```|~~~)[^\n]*\n[\s\S]*?\n\1[ \t]*(?=\n|$)/g, (m) => m.replace(/[^\n]/g, ' '))
   // Then any remaining (unclosed) fence runs to EOF.
   return closed.replace(/(```|~~~)[^\n]*\n[\s\S]*$/g, (m) => m.replace(/[^\n]/g, ' '))
 }
@@ -126,12 +126,12 @@ function extractHeadings(body: string): Heading[] {
   const lines = stripFencedBlocks(body).split('\n')
   const out: Heading[] = []
   const seen = new Map<string, number>()
-  const re = /^(#{1,6})\s+(.+?)\s*#*\s*$/
+  const re = /^(#{1,6})\s+(.+?)(?:\s+#+)?\s*$/
   for (const line of lines) {
     const m = line.match(re)
     if (!m) continue
     const level = m[1].length as 1 | 2 | 3 | 4 | 5 | 6
-    const text = m[2].trim()
+    const text = m[2]
     if (text === '') continue
     const base = slugify(text)
     const seenCount = seen.get(base) ?? 0

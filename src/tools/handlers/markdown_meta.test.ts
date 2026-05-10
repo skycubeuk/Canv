@@ -98,4 +98,10 @@ describe('parseMarkdownMeta — headings', () => {
     const m = parseMarkdownMeta(src, { fields: [] })
     expect(m.headings[0]).toEqual({ level: 2, text: 'Heading', anchor: 'heading' })
   })
+
+  it('ignores headings inside an unclosed fenced block', () => {
+    const src = '# Real\n\n```\n# Not a heading\n'  // no closing ```
+    const m = parseMarkdownMeta(src, { fields: [] })
+    expect(m.headings).toEqual([{ level: 1, text: 'Real', anchor: 'real' }])
+  })
 })
