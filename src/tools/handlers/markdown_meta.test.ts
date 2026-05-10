@@ -29,4 +29,11 @@ describe('parseMarkdownMeta — frontmatter', () => {
     expect(m.frontmatter).toBeNull()
     expect(m.bodyAfterFrontmatter).toBe(src)
   })
+
+  it('handles a frontmatter block that ends at EOF without a trailing newline', () => {
+    const src = '---\ntitle: A\n---'
+    const m = parseMarkdownMeta(src, { fields: [] })
+    expect(m.frontmatter).toEqual({ title: 'A' })
+    expect(m.bodyAfterFrontmatter).toBe('')
+  })
 })

@@ -33,6 +33,21 @@ interface FrontmatterSplit {
   body: string
 }
 
+/**
+ * Split a markdown source into optional YAML frontmatter + body.
+ *
+ * Contract: when a well-formed `---` fence pair is found at the start of the
+ * file but the YAML between them fails to parse, we return
+ * `frontmatter: null` AND a body with the fenced region stripped. This is
+ * intentional — the consumer asked for metadata, not prose, so echoing
+ * malformed frontmatter back as body content would be wrong. The two
+ * outcomes "no frontmatter present" and "frontmatter present but unparseable"
+ * both yield `frontmatter: null`; callers that need to distinguish them can
+ * compare body length to the input.
+ *
+ * If `---\n` does not appear at byte 0, the source is returned untouched as
+ * the body.
+ */
 function splitFrontmatter(src: string): FrontmatterSplit {
   // Must start at byte 0 with `---\n`.
   if (!src.startsWith('---\n')) return { frontmatter: null, body: src }
@@ -64,6 +79,9 @@ function splitFrontmatter(src: string): FrontmatterSplit {
   return { frontmatter: fm, body: src.slice(bodyStart) }
 }
 
+// `_opts.fields` will gate the optional `links`/`images`/`code_blocks`/`todos`
+// computations in later tasks; for now this scaffold only emits the always-on
+// fields, so the parameter is accepted but unused.
 export function parseMarkdownMeta(src: string, _opts: ParseOpts): ParsedMeta {
   const { frontmatter, body } = splitFrontmatter(src)
   return {
