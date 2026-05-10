@@ -5,8 +5,6 @@ and OpenAI). Pick a profile (fiction, technical, factual), open a folder of
 markdown files, and run agents over a selection or the whole document — with
 streaming output, an inline diff, and a one-click apply.
 
-![Canv canvas with floating toolbar](docs/screenshots/the-editor/floating-toolbar.png)
-
 ## Install
 
 Pre-built binaries are on the [Releases page](https://github.com/skycubeuk/Canv/releases).
@@ -100,16 +98,6 @@ jobs build in parallel and publish to a draft GitHub Release. After ~10–15
 minutes, review the draft and click **Publish**.
 
 macOS builds are currently unsigned. Code signing is planned.
-
-### Regenerating documentation screenshots
-
-```bash
-npm run screenshots                    # all pages
-npm run screenshots -- --only=the-editor  # one page
-```
-
-Requires Linux/macOS desktop and (optionally) `.env.screenshots` populated
-from `.env.screenshots.example`.
 
 ## Tech
 
