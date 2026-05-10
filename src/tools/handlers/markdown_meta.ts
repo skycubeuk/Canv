@@ -98,7 +98,7 @@ export function parseMarkdownMeta(src: string, _opts: ParseOpts): ParsedMeta {
     paragraphs,
     readingTimeMin,
     headings: extractHeadings(body),
-    excerpt: '',
+    excerpt: extractExcerpt(body),
   }
 }
 
@@ -140,6 +140,40 @@ function extractHeadings(body: string): Heading[] {
     out.push({ level, text, anchor })
   }
   return out
+}
+
+const EXCERPT_LIMIT = 280
+
+function extractExcerpt(body: string): string {
+  const stripped = stripFencedBlocks(body)
+  const paragraphs = stripped.split(/\n\s*\n/)
+  for (const raw of paragraphs) {
+    // Drop leading lines that are purely ATX headings.
+    const lines = raw.split('\n').filter((l) => !/^#{1,6}\s/.test(l.trim()))
+    const joined = lines.join(' ').trim()
+    if (joined === '') continue
+    return truncateAtWord(stripInlineMarkdown(joined), EXCERPT_LIMIT)
+  }
+  return ''
+}
+
+function stripInlineMarkdown(s: string): string {
+  return s
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')      // images → alt
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1')       // links → text
+    .replace(/`([^`]+)`/g, '$1')                   // inline code
+    .replace(/\*\*([^*]+)\*\*/g, '$1')             // **bold**
+    .replace(/__([^_]+)__/g, '$1')                 // __bold__
+    .replace(/\*([^*]+)\*/g, '$1')                 // *italic*
+    .replace(/(^|[^_])_([^_]+)_(?!_)/g, '$1$2')    // _italic_
+}
+
+function truncateAtWord(s: string, limit: number): string {
+  if (s.length <= limit) return s
+  const slice = s.slice(0, limit + 1)
+  const lastSpace = slice.lastIndexOf(' ')
+  const cut = lastSpace > 0 ? slice.slice(0, lastSpace) : slice.slice(0, limit)
+  return cut + '…'
 }
 
 function countWords(body: string): number {

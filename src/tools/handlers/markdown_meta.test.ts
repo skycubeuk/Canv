@@ -105,3 +105,31 @@ describe('parseMarkdownMeta — headings', () => {
     expect(m.headings).toEqual([{ level: 1, text: 'Real', anchor: 'real' }])
   })
 })
+
+describe('parseMarkdownMeta — excerpt', () => {
+  it('uses the first paragraph after frontmatter and any leading heading', () => {
+    const src = '---\ntitle: T\n---\n# Heading\n\nThis is the first paragraph.\n\nSecond paragraph.\n'
+    const m = parseMarkdownMeta(src, { fields: [] })
+    expect(m.excerpt).toBe('This is the first paragraph.')
+  })
+
+  it('strips markdown emphasis, links, and inline code', () => {
+    const src = 'See **bold**, *italic*, [a link](http://x), and `code`.\n'
+    const m = parseMarkdownMeta(src, { fields: [] })
+    expect(m.excerpt).toBe('See bold, italic, a link, and code.')
+  })
+
+  it('truncates at a word boundary near 280 chars and appends an ellipsis', () => {
+    const long = ('word '.repeat(200)).trim()
+    const m = parseMarkdownMeta(long, { fields: [] })
+    expect(m.excerpt.length).toBeLessThanOrEqual(281)
+    expect(m.excerpt.endsWith('…')).toBe(true)
+    // Does not break in the middle of "word":
+    expect(m.excerpt.slice(0, -1)).toMatch(/word$/)
+  })
+
+  it('returns "" when there is no body paragraph', () => {
+    expect(parseMarkdownMeta('# Heading only\n', { fields: [] }).excerpt).toBe('')
+    expect(parseMarkdownMeta('', { fields: [] }).excerpt).toBe('')
+  })
+})
