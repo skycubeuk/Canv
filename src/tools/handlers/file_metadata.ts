@@ -117,11 +117,7 @@ async function processOne(
   const entry = findEntry(root, rel)
   if (!entry) return { path: rel, error: 'not_found' }
   if (entry.kind !== 'file') {
-    return {
-      path: rel,
-      error: 'not_a_file',
-      mtime_ms: entry.mtimeMs,
-    }
+    return { path: rel, error: 'not_a_file' }
   }
   return {
     path: rel,

@@ -35,4 +35,10 @@ describe('file_metadata — input validation', () => {
     expect(out.files).toHaveLength(1)
     expect(out.files[0].path).toBe('a.md')
   })
+
+  it('returns not_a_file when path resolves to a directory', async () => {
+    const fs = makeMockFs({ 'folder/inside.md': { content: 'x', mtimeMs: 1, size: 1, binary: false } })
+    const out = await fileMetadataTool.handler({ paths: ['folder'] }, makeCtx({ fs }))
+    expect(out.files).toEqual([{ path: 'folder', error: 'not_a_file' }])
+  })
 })
