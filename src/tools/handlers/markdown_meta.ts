@@ -84,15 +84,31 @@ function splitFrontmatter(src: string): FrontmatterSplit {
 // fields, so the parameter is accepted but unused.
 export function parseMarkdownMeta(src: string, _opts: ParseOpts): ParsedMeta {
   const { frontmatter, body } = splitFrontmatter(src)
+  const chars = body.length
+  const lines = body.length === 0 ? 0 : (body.match(/\n/g)?.length ?? 0) + 1
+  const paragraphs = body.split(/\n\s*\n/).filter((p) => /\S/.test(p)).length
+  const words = countWords(body)
+  const readingTimeMin = words === 0 ? 0 : Math.max(1, Math.round(words / 200))
   return {
     frontmatter,
     bodyAfterFrontmatter: body,
-    words: 0,
-    chars: 0,
-    lines: 0,
-    paragraphs: 0,
-    readingTimeMin: 0,
+    words,
+    chars,
+    lines,
+    paragraphs,
+    readingTimeMin,
     headings: [],
     excerpt: '',
   }
+}
+
+function countWords(body: string): number {
+  // Strip fenced code blocks first (``` or ~~~).
+  const noFences = body.replace(/(```|~~~)[^\n]*\n[\s\S]*?\n\1/g, ' ')
+  // Strip inline code spans.
+  const noInline = noFences.replace(/`[^`]*`/g, ' ')
+  // Strip HTML tags (a single pass is enough for word counting).
+  const noTags = noInline.replace(/<[^>]+>/g, ' ')
+  const tokens = noTags.split(/\s+/).filter((t) => /[A-Za-z0-9]/.test(t))
+  return tokens.length
 }
