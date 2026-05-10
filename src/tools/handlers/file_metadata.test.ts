@@ -135,3 +135,35 @@ describe('file_metadata — body parsing', () => {
     expect(out.files[0].links).toEqual([])
   })
 })
+
+describe('file_metadata — live editor buffer', () => {
+  it('parses live editor content when the path is the active doc', async () => {
+    const fs = makeMockFs({
+      'active.md': {
+        content: '# Disk version\n\nstale content.\n',
+        mtimeMs: 9, size: 30, binary: false,
+      },
+    })
+    const ctx = makeCtx({
+      fs,
+      activeDocPath: 'active.md',
+      getEditorContent: (p) => (p === 'active.md' ? '# Live version\n\nfresh words.\n' : null),
+    })
+    const out = await fileMetadataTool.handler({ paths: ['active.md'] }, ctx)
+    expect(out.files[0].headings).toEqual([{ level: 1, text: 'Live version', anchor: 'live-version' }])
+    expect(out.files[0].excerpt).toBe('fresh words.')
+  })
+
+  it('falls back to disk when the active path differs', async () => {
+    const fs = makeMockFs({
+      'other.md': { content: '# Other\n', mtimeMs: 1, size: 8, binary: false },
+    })
+    const ctx = makeCtx({
+      fs,
+      activeDocPath: 'somewhere-else.md',
+      getEditorContent: () => 'WRONG',
+    })
+    const out = await fileMetadataTool.handler({ paths: ['other.md'] }, ctx)
+    expect(out.files[0].headings).toEqual([{ level: 1, text: 'Other', anchor: 'other' }])
+  })
+})
