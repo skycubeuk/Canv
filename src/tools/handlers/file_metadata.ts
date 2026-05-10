@@ -8,7 +8,7 @@ const MAX_PATHS = 200
 const MAX_PARSE_BYTES = 1024 * 1024
 const VALID_FIELDS: OptionalField[] = ['links', 'images', 'code_blocks', 'todos']
 
-type ErrorCode = 'not_found' | 'not_a_file' | 'binary' | 'too_large' | 'read_failed'
+type ErrorCode = 'not_found' | 'not_a_file' | 'binary' | 'read_failed'
 
 interface Heading { level: 1 | 2 | 3 | 4 | 5 | 6; text: string; anchor: string }
 interface LinkRef { text: string; target: string }
@@ -50,10 +50,10 @@ interface Output {
 export const fileMetadataTool: Tool<Input, Output> = {
   name: 'file_metadata',
   description: [
-    'Get structured metadata for one or more workspace files — word/heading/frontmatter/excerpt — without reading the bodies.',
+    'Get structured metadata for one or more workspace files — word/heading/frontmatter/excerpt — without returning the file bodies in the response.',
     'Use this instead of read_file when you only need to know things *about* the files (counts, structure, titles, draft status) rather than their prose. Accepts 1–200 paths per call.',
     '',
-    'Default output for .md / .mdx files: size, mtime, binary flag, extension, word/char/line/paragraph counts, reading_time_min, parsed YAML frontmatter, heading outline (level + text + slug), and a ~280-char excerpt. For non-markdown files only the size/mtime/binary/extension fields are returned.',
+    'Default output for .md / .mdx files: size, mtime, binary flag, extension, word/char/line/paragraph counts, reading_time_min, parsed YAML frontmatter, heading outline (level + text + slug), and a ~280-char excerpt. For non-markdown files only `size_bytes`, `mtime_ms`, `binary`, and `extension` are returned.',
     '',
     'Pass fields: ["links", "images", "code_blocks", "todos"] (any subset) to request the heavier opt-in fields when you actually need them.',
     '',

@@ -41,6 +41,19 @@ describe('file_metadata — input validation', () => {
     const out = await fileMetadataTool.handler({ paths: ['folder'] }, makeCtx({ fs }))
     expect(out.files).toEqual([{ path: 'folder', error: 'not_a_file' }])
   })
+
+  it('returns error="read_failed" when fs.readFile throws', async () => {
+    const fs = makeMockFs({ 'a.md': { content: '# x', mtimeMs: 1, size: 3, binary: false } })
+    fs.readFile = async () => { throw new Error('disk on fire') }
+    const out = await fileMetadataTool.handler({ paths: ['a.md'] }, makeCtx({ fs }))
+    expect(out.files[0].path).toBe('a.md')
+    expect(out.files[0].error).toBe('read_failed')
+    // Base fields should still be present:
+    expect(out.files[0].size_bytes).toBe(3)
+    expect(out.files[0].extension).toBe('.md')
+    // Body fields should NOT be present:
+    expect(out.files[0].words).toBeUndefined()
+  })
 })
 
 describe('file_metadata — body parsing', () => {
