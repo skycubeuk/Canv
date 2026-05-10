@@ -2,10 +2,11 @@ import { describe, it, expect } from 'vitest'
 import { allTools, getTool, mutatingNames, toolSchemas } from './registry'
 
 describe('registry', () => {
-  it('exports all 11 tools', () => {
+  it('exports all 12 tools', () => {
     const names = allTools().map((t) => t.name)
     expect(names.sort()).toEqual([
       'create_file', 'create_folder', 'delete_file', 'edit_file',
+      'file_metadata',
       'list_dir', 'read_file', 'rename_file', 'search_workspace', 'set_todos',
       'site_register', 'site_update',
     ])
@@ -25,7 +26,7 @@ describe('registry', () => {
 
   it('produces schemas with name/description/inputSchema only', () => {
     const schemas = toolSchemas()
-    expect(schemas).toHaveLength(11)
+    expect(schemas).toHaveLength(12)
     for (const s of schemas) {
       expect(typeof s.name).toBe('string')
       expect(typeof s.description).toBe('string')
