@@ -1,130 +1,97 @@
 # Troubleshooting
 
-This page covers the bumps you might hit on first launch and what to do
-when something goes wrong.
+Most things in Canv just work. The few that catch people out are
+listed here, with what to do about them.
 
----
+## "App can't be opened" or "publisher unknown" on first launch
 
-## First launch
+Canv builds aren't signed by Apple or Microsoft, so the operating
+system warns you the first time you open the app.
 
-### macOS — "Canv can't be opened because Apple cannot check it for malicious software"
+- **macOS**: right-click the app in Applications and choose **Open**.
+  Confirm in the dialog. After this once, double-click works for
+  every future launch.
+- **Windows**: SmartScreen shows a blue panel saying the publisher
+  is unknown. Click **More info** and then **Run anyway**.
+- **Linux**: with the AppImage, run `chmod +x canv-*.AppImage` once
+  before double-clicking it. With the `.deb` or `.rpm`, install
+  through your usual package tool.
 
-Canv builds are currently unsigned. To open the app the first time:
+These are first-launch warnings, not errors. The app itself is the
+same as the project's published release.
 
-1. Right-click (or Control-click) **Canv.app**.
-2. Choose **Open**.
-3. In the warning dialog, click **Open** again.
+## "No API key" warning in the status bar
 
-You only need to do this once. After that, Canv opens normally.
+If the status bar shows an amber warning at the bottom of the screen,
+Canv hasn't been given an API key for the active provider. Click
+the warning to jump straight to the settings tab, or open settings
+yourself from the cog at the bottom-right of the status bar.
 
-> _Screenshot pending — see [MANUAL.md](screenshots/MANUAL.md)._
+- Pick the provider you want to use in the **Default provider**
+  dropdown.
+- Paste your key into the field below it. Follow the provider's
+  instructions to create one if you don't have it yet.
 
-### Windows — "Windows protected your PC"
+Without a key, AI actions and the conversation will fail. Everything
+else (writing, file management, search, Git) keeps working.
 
-The installer is unsigned, so SmartScreen warns you. To proceed:
+## A run errored, was rate-limited, or got cut off
 
-1. Click **More info** in the warning.
-2. Click **Run anyway**.
+The conversation panel and the runs list both show what happened,
+including the message the provider returned. The most common causes:
 
-> _Screenshot pending — see [MANUAL.md](screenshots/MANUAL.md)._
+- **Rate-limited** — you've made too many requests too quickly. The
+  retry button shows a countdown to when it's safe to try again.
+- **Network error** — your connection dropped or the provider is
+  unreachable. Wait a moment and retry.
+- **Max tokens** — the response got cut off before the model
+  finished. Open settings, raise the **Max output tokens** slider,
+  and re-run.
 
-### Linux
+If the same call keeps failing the same way, switch the conversation
+to a different model and try once. That's usually enough to tell
+whether the problem is your network, the provider, or the request.
 
-`.AppImage`: make it executable, then run:
+## Conflict — the file changed on disk while you were editing
 
-```bash
-chmod +x canv-*.AppImage
-./canv-*.AppImage
-```
+If something else writes to the same file (an editor, a sync tool,
+a colleague over a shared folder), Canv shows **Conflict** in the
+status bar and stops auto-saving so it doesn't trample the other
+change. To resolve it, close and re-open the file. Canv shows you
+the current contents on disk; you can paste your unsaved edits back
+in if you want them.
 
-`.deb` (Debian, Ubuntu, and derivatives):
+## A view didn't update after I changed the source files
 
-```bash
-sudo dpkg -i canv_*.deb
-```
+Generated views don't track file changes automatically. The sidebar
+will show a "stale" badge on the view, but the view itself won't
+update until you ask the AI to regenerate it. Use the regenerate
+icon on the view's row, or describe the changes you'd like in the
+conversation.
 
-`.rpm` (Fedora, RHEL):
+## I want to start over without losing anything
 
-```bash
-sudo rpm -i canv-*.rpm
-```
+Export a backup first. Settings tab → **Export backup** writes
+everything to a JSON file. Once you have that, you can:
 
----
+- Switch workspace folders to a fresh one — your old folder is
+  untouched and Canv's data goes with the new workspace.
+- Or import the backup back later if you change your mind.
 
-## Common errors
+## Where the logs are
 
-### "API key invalid" / 401 from the provider
+If you need to file a bug, the developers will probably ask for
+logs. Logs live alongside Canv's other application data:
 
-When an agent run fails because the API rejected your key, a red error box
-appears inside the results panel with the provider's error message — for
-example:
+- macOS: `~/Library/Application Support/Canv/`
+- Linux: `~/.config/Canv/` (or `$XDG_CONFIG_HOME/Canv/`)
+- Windows: `%APPDATA%\Canv\`
 
-> `Anthropic 401: {"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}`
+Inside that folder you'll find a `logs/` subfolder.
 
-> _Screenshot pending — see [MANUAL.md](screenshots/MANUAL.md)._
+## Profile changes I made aren't showing up
 
-Check, in order:
-
-1. **The right key for the right provider.** Anthropic keys begin with
-   `sk-ant-`; OpenAI keys begin with `sk-`. Make sure the provider selected
-   in Settings matches the key you pasted.
-2. **Spaces or quotes pasted in.** Open the Settings tab, clear the API key
-   field, paste again, and save.
-3. **Key scope.** Some keys are restricted to specific models or
-   organisations. Confirm your key has access to the model selected in
-   Settings.
-4. **Networking.** Canv talks directly from your machine to
-   `api.anthropic.com` or `api.openai.com`. A corporate proxy, firewall, or
-   VPN can block these endpoints.
-
-### "Workspace looks empty"
-
-If the file tree shows no files after opening a folder:
-
-1. Confirm the folder actually contains `.md` or `.markdown` files. Canv
-   shows only markdown files in the file tree (binary files, images, and
-   other formats are hidden).
-2. Check that the folder is readable by your user account. Canv uses your
-   OS account's file permissions; a folder you don't own (for example a
-   system folder) may not list its contents.
-
-### Chat stops calling tools mid-task
-
-Chat stops using tools after it reaches the **Chat tool budget per message**
-limit (default: 10 rounds). When the budget is reached, the model is asked
-to write a final answer without further tool calls rather than stopping
-abruptly — so the reply may appear shorter or less complete than expected.
-
-To change the limit: open the **Settings** tab, find **Chat tool budget per
-message**, and increase the value. See [Settings and data](settings-and-data.md)
-for details.
-
----
-
-## Where to find diagnostic information
-
-Canv does not write a log file. The main diagnostic surface is the browser
-developer tools console inside the app:
-
-**View → Toggle Developer Tools** (or press `F12` / `Cmd+Option+I` on
-macOS)
-
-The **Console** tab shows renderer-process messages. The **Network** tab
-shows API requests and their responses, which is the fastest way to confirm
-what error code the provider is returning.
-
-> Note: **View** menu items may not appear if Canv has removed the menu bar
-> on your platform. In that case, right-click anywhere in the app window and
-> choose **Inspect Element** to open the DevTools panel.
-
----
-
-## Filing a bug
-
-Open an issue at <https://github.com/skycubeuk/Canv/issues> and include:
-
-- What you were doing (one or two sentences).
-- Your OS and Canv version (check `package.json` `version` field if you
-  built from source, or look in the window title bar).
-- The error message verbatim, if any.
-- Relevant output from the DevTools Console or Network tab.
+Profiles are read from a YAML file at startup. If you (or a
+developer) edited a profile file and your changes aren't visible,
+restart Canv. The settings tab has an **Open config folder** button
+to take you straight to the file.

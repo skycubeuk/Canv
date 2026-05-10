@@ -1,72 +1,98 @@
 # Getting started
 
-This page walks you from a fresh install to running your first agent — about
-five minutes once you have an API key.
+This page walks you from a fresh install to writing a paragraph and asking
+the AI to rewrite it. Five minutes, end to end.
 
-## 1. Install Canv
+## Installing Canv
 
-See [Install](../README.md#install). Open the app once it's installed.
+Download the build for your operating system from the project's releases
+page:
 
-## 2. Pick a profile
+- macOS: a `.dmg`. The build is unsigned, so on first launch right-click
+  the app and choose **Open** to bypass Gatekeeper. After that it opens
+  normally.
+- Windows: an installer or a portable executable. SmartScreen may warn
+  "publisher unknown". Click **More info → Run anyway**.
+- Linux: an `AppImage`, `.deb`, or `.rpm`. Make the AppImage executable
+  (`chmod +x`) before double-clicking it; install the `.deb` or `.rpm`
+  through your usual package tool.
 
-On first launch a **Welcome to Canv** dialog appears asking what kind of
-writing you're doing. Three profiles are bundled:
+Canv does not phone home. Your writing stays on your computer. When you
+ask an AI for help, the request goes from your machine straight to the
+provider you chose.
 
-- **Fiction** — Grammar & Spelling, Story Reviewer, Logic Checker, Test
-  Reader, Refine, Free Edit, plus presets like Polish, Make Shorter, Make
-  Longer, Simplify, More Sophisticated, and Brainstorm.
-- **Factual** — agents tuned for essays, journalism, blog posts, and reports.
-- **Technical** — agents tuned for documentation, specs, READMEs, and
-  how-to guides.
+## Choosing the kind of writing this is
 
-You can switch profiles later. For this walkthrough, choose **Fiction**.
+The first time you launch Canv, it asks what kind of writing this is.
+There are three built-in profiles:
 
-![Profile picker](screenshots/getting-started/profile-picker.png)
+- **Fiction** — stories, novels, short fiction. Voice and craft matter.
+- **Technical** — software docs, API guides, how-tos.
+- **Factual** — essays, journalism, reference work.
 
-## 3. Open or create a workspace
+Pick whichever fits. The AI's tone, the names of the editing actions, and
+the system prompts the model receives all change to suit the kind of
+writing you're doing. You can switch later — every new document asks
+again, and you can change the active profile from the bottom-left of the
+window.
 
-A **workspace** is a folder of markdown files on your computer. Pick an
-empty folder to start fresh, or open one with existing `.md` files. Canv
-never copies your files anywhere — they stay where you put them.
+The rest of this guide uses the Fiction profile in its examples.
 
-## 4. Add an API key
+## Pointing Canv at a folder of writing
 
-Click the gear icon at the bottom of the left sidebar to open **Settings**.
-Go to the **Provider & Keys** section. Select your provider (Anthropic or
-OpenAI) from the dropdown, then paste your API key into the matching field.
-Keys are stored on your computer only; Canv has no backend.
+Canv treats one folder on disk as your workspace. Every file inside it
+shows up in the sidebar; new files you create land in that folder.
 
-![Settings — API key](screenshots/getting-started/settings-api-key.png)
+After you pick a profile, choose a workspace folder. An empty folder is
+fine — Canv will drop a short `Welcome.md` into it. If you already have a
+folder of markdown files, point Canv at it and your existing files appear
+straight away.
 
-You don't need both keys. Add the one you have; Canv will use it.
+To switch to a different folder later, click the workspace name in the
+top bar.
 
-## 5. Write something
+## Adding an API key
 
-Click a file in the sidebar to open it. The editor is markdown — `**bold**`,
-`# headings`, lists, links, all of it works. You can also create a new file
-with the new-file button at the top of the sidebar.
+To get help from the AI, Canv needs an API key from a provider. Two
+providers are supported out of the box: Anthropic and OpenAI. You only
+need a key for the one you actually want to use.
 
-![A new document](screenshots/getting-started/first-document-empty.png)
+1. Open the settings tab (the cog at the bottom-right of the status bar).
+2. Pick your provider in the **Default provider** dropdown.
+3. Paste your key into the field below. Follow the provider's
+   instructions if you don't have one yet.
 
-## 6. Run your first agent
+The key is stored on your computer. Canv calls the provider directly from
+your machine — there's no Canv server in between.
 
-Select some text. A floating toolbar appears above the selection with the
-agents for the current profile. Click **Grammar & Spelling** (or any other
-agent) to run it.
+## Writing your first paragraph
 
-![First agent run](screenshots/getting-started/first-agent-run.png)
+Click any markdown file in the sidebar to open it, or right-click in the
+file tree and create a new one. The middle of the window is where you
+write.
 
-The result streams into the panel at the bottom. When it finishes, you see
-a **before/after diff** and an **Apply** button.
+Type as you would in any text editor. Canv saves automatically as you
+write — the indicator on the left of the bottom status bar flips between
+**Saving…** and **Saved**. There's a word count, an estimated reading
+time, and your current line and column down there too.
 
-![Apply the result](screenshots/getting-started/apply-result.png)
+## Asking the AI to do something with what you wrote
 
-Click **Apply** to replace your selection with the agent's rewrite.
+Select a paragraph by dragging across it. A small toolbar appears just
+above the selection. The buttons on it depend on your profile, but in
+Fiction you'll see things like **Polish**, **Make Shorter**, **Make
+Longer**, **Refine**, **Brainstorm**, and **Free Edit**. Click one.
 
-## What next
+For most actions, the AI starts working straight away and you watch its
+reply stream in. Some actions ask for a one-line instruction first —
+**Refine**, **Free Edit**, and **Brainstorm** all want to know what you'd
+like done. Type the note and press Enter.
 
-- [The editor](the-editor.md) — formatting, themes, the document menu.
-- [Profiles and agents](profiles-and-agents.md) — what each agent does and
-  how to customise them.
-- [Chat and tools](chat-and-tools.md) — for tasks bigger than a single
-  selection.
+When the response is ready, you can paste the rewrite back into the page
+with the **Apply** button, or keep both versions side by side and decide
+later. Reviewing past results is covered on
+[its own page](reviewing-and-applying-suggestions.md).
+
+That's the loop: write, select, ask, apply.
+
+Next: [Writing and editing text](writing-and-editing-text.md).

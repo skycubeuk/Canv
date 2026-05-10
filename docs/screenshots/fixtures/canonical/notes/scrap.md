@@ -1,3 +1,0 @@
-- chapter break before the storm
-- check ferry schedules circa 2003
-- the dog needs a name
