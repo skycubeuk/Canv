@@ -52,28 +52,15 @@ export function OutputTab({ runs, sessions, activeSessionId, getSession, chatSys
       {/* Toolbar */}
       <div className="shrink-0 flex items-center gap-2 px-3 py-1.5 border-b border-default bg-panel">
         {chatAvailable && (
-          <div role="radiogroup" aria-label="Output source" className="flex border border-default rounded overflow-hidden">
-            <button
-              role="radio"
-              aria-checked={source === 'runs'}
-              aria-label="Runs"
-              type="button"
-              onClick={() => setSource('runs')}
-              className={`px-2 py-0.5 ${source === 'runs' ? 'bg-hover text-default' : 'text-muted'}`}
-            >
-              Runs
-            </button>
-            <button
-              role="radio"
-              aria-checked={source === 'chats'}
-              aria-label="Chats"
-              type="button"
-              onClick={() => setSource('chats')}
-              className={`px-2 py-0.5 ${source === 'chats' ? 'bg-hover text-default' : 'text-muted'}`}
-            >
-              Chats
-            </button>
-          </div>
+          <select
+            aria-label="Output source"
+            className="input text-xs"
+            value={source}
+            onChange={(e) => setSource(e.target.value as Source)}
+          >
+            <option value="runs">Runs</option>
+            <option value="chats">Chats</option>
+          </select>
         )}
 
         {source === 'runs' ? (

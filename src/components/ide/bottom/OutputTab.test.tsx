@@ -24,15 +24,15 @@ describe('OutputTab', () => {
   it('renders the empty state when there are no runs and chat props are absent', () => {
     render(<OutputTab runs={[]} />)
     expect(screen.getByText(/Run an agent/i)).toBeInTheDocument()
-    expect(screen.queryByRole('radiogroup')).toBeNull()
+    expect(screen.queryByLabelText(/output source/i)).toBeNull()
   })
 
-  it('hides the source toggle when chat props are absent', () => {
+  it('hides the source dropdown when chat props are absent', () => {
     render(<OutputTab runs={[baseRun()]} />)
-    expect(screen.queryByRole('radio', { name: /chats/i })).toBeNull()
+    expect(screen.queryByLabelText(/output source/i)).toBeNull()
   })
 
-  it('shows the source toggle when chat props are present', () => {
+  it('shows the source dropdown when chat props are present', () => {
     const session = sess('cs-1', [u('u1', 'hi'), a('a1', 'hello')])
     render(
       <OutputTab
@@ -43,8 +43,10 @@ describe('OutputTab', () => {
         chatSystemPreamble="SYSTEM"
       />,
     )
-    expect(screen.getByRole('radio', { name: /runs/i })).toBeInTheDocument()
-    expect(screen.getByRole('radio', { name: /chats/i })).toBeInTheDocument()
+    const sourceSel = screen.getByLabelText<HTMLSelectElement>(/output source/i)
+    expect(sourceSel).toBeInTheDocument()
+    expect(sourceSel.value).toBe('runs')
+    expect(Array.from(sourceSel.options).map((o) => o.value)).toEqual(['runs', 'chats'])
   })
 
   it('switches body to ChatInspector when Chats source is selected', () => {
@@ -58,7 +60,8 @@ describe('OutputTab', () => {
         chatSystemPreamble="SYSTEM"
       />,
     )
-    fireEvent.click(screen.getByRole('radio', { name: /chats/i }))
+    const sourceSel = screen.getByLabelText<HTMLSelectElement>(/output source/i)
+    fireEvent.change(sourceSel, { target: { value: 'chats' } })
     expect(screen.getByTestId('chat-meta')).toBeInTheDocument()
   })
 
@@ -78,7 +81,8 @@ describe('OutputTab', () => {
       />,
     )
     // No runs → defaults to Chats source, picks active session.
-    expect(screen.getByRole<HTMLSelectElement>('combobox').value).toBe('cs-2')
+    const sessionSel = screen.getByLabelText<HTMLSelectElement>(/select chat session/i)
+    expect(sessionSel.value).toBe('cs-2')
   })
 
   it('Copy session (JSON) button is present in Chats mode', () => {
