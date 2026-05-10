@@ -175,4 +175,13 @@ describe('parseMarkdownMeta — links and images (opt-in)', () => {
       { text: 'different', target: 'x' },
     ])
   })
+
+  it('does not collide de-dup on space-shifted text/target pairs', () => {
+    const src = '[foo bar](baz) and [foo](bar baz).\n'
+    const m = parseMarkdownMeta(src, { fields: ['links'] })
+    expect(m.links).toEqual([
+      { text: 'foo bar', target: 'baz' },
+      { text: 'foo', target: 'bar baz' },
+    ])
+  })
 })

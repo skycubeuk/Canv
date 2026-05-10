@@ -185,7 +185,7 @@ function extractLinks(body: string): LinkRef[] {
   let m: RegExpExecArray | null
   while ((m = re.exec(stripped)) !== null) {
     const ref = { text: m[2], target: m[3] }
-    const key = `${ref.text} ${ref.target}`
+    const key = `${ref.text}\0${ref.target}`
     if (seen.has(key)) continue
     seen.add(key)
     out.push(ref)
