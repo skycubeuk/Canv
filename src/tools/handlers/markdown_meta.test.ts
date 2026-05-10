@@ -217,4 +217,10 @@ describe('parseMarkdownMeta — code_blocks and todos (opt-in)', () => {
     const m = parseMarkdownMeta(src, { fields: ['todos'] })
     expect(m.todos).toEqual({ open: 1, done: 0 })
   })
+
+  it('reports lines: 0 for an empty fenced block (blank-line body)', () => {
+    const src = '```\n\n```\n'
+    const m = parseMarkdownMeta(src, { fields: ['code_blocks'] })
+    expect(m.codeBlocks).toEqual([{ lang: null, lines: 0 }])
+  })
 })
