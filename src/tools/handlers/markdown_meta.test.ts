@@ -185,3 +185,36 @@ describe('parseMarkdownMeta — links and images (opt-in)', () => {
     ])
   })
 })
+
+describe('parseMarkdownMeta — code_blocks and todos (opt-in)', () => {
+  it('reports fenced code blocks with language and line count', () => {
+    const src = '```ts\nconst x = 1\nconst y = 2\n```\n\nprose\n\n```\nplain\n```\n'
+    const off = parseMarkdownMeta(src, { fields: [] })
+    expect(off.codeBlocks).toBeUndefined()
+    const on = parseMarkdownMeta(src, { fields: ['code_blocks'] })
+    expect(on.codeBlocks).toEqual([
+      { lang: 'ts', lines: 2 },
+      { lang: null, lines: 1 },
+    ])
+  })
+
+  it('handles ~~~ fences as well', () => {
+    const src = '~~~py\nprint(1)\n~~~\n'
+    const m = parseMarkdownMeta(src, { fields: ['code_blocks'] })
+    expect(m.codeBlocks).toEqual([{ lang: 'py', lines: 1 }])
+  })
+
+  it('counts open vs done todos', () => {
+    const src = '- [ ] one\n- [x] two\n* [X] three\n+ [ ] four\nplain line\n'
+    const off = parseMarkdownMeta(src, { fields: [] })
+    expect(off.todos).toBeUndefined()
+    const on = parseMarkdownMeta(src, { fields: ['todos'] })
+    expect(on.todos).toEqual({ open: 2, done: 2 })
+  })
+
+  it('ignores would-be todos that lack the leading list marker', () => {
+    const src = '[ ] not a todo\n- [ ] real todo\n'
+    const m = parseMarkdownMeta(src, { fields: ['todos'] })
+    expect(m.todos).toEqual({ open: 1, done: 0 })
+  })
+})

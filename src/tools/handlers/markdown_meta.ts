@@ -99,6 +99,8 @@ export function parseMarkdownMeta(src: string, opts: ParseOpts): ParsedMeta {
   }
   if (opts.fields.includes('links')) meta.links = extractLinks(body)
   if (opts.fields.includes('images')) meta.images = extractImages(body)
+  if (opts.fields.includes('code_blocks')) meta.codeBlocks = extractCodeBlocks(body)
+  if (opts.fields.includes('todos')) meta.todos = extractTodos(body)
   return meta
 }
 
@@ -202,6 +204,35 @@ function extractImages(body: string): ImageRef[] {
     out.push({ alt: m[1], src: m[2] })
   }
   return out
+}
+
+function extractCodeBlocks(body: string): CodeBlock[] {
+  const out: CodeBlock[] = []
+  const re = /(```|~~~)([^\n]*)\n([\s\S]*?)\n\1[ \t]*(?=\n|$)/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(body)) !== null) {
+    const info = m[2].trim().split(/\s+/)[0]
+    const lang = info === '' ? null : info
+    const inner = m[3]
+    const lines = inner === '' ? 0 : inner.split('\n').length
+    out.push({ lang, lines })
+  }
+  return out
+}
+
+function extractTodos(body: string): TodoCounts {
+  const stripped = stripFencedBlocks(body)
+  const lines = stripped.split('\n')
+  let open = 0
+  let done = 0
+  const re = /^\s*[-*+]\s+\[( |x|X)\]\s+/
+  for (const line of lines) {
+    const m = line.match(re)
+    if (!m) continue
+    if (m[1] === ' ') open++
+    else done++
+  }
+  return { open, done }
 }
 
 function countWords(body: string): number {
