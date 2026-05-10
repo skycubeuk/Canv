@@ -42,3 +42,96 @@ describe('file_metadata — input validation', () => {
     expect(out.files).toEqual([{ path: 'folder', error: 'not_a_file' }])
   })
 })
+
+describe('file_metadata — body parsing', () => {
+  it('populates base-tier fields for .md', async () => {
+    const fs = makeMockFs({
+      'a.md': {
+        content: '---\ntitle: A\n---\n# Heading\n\nBody paragraph here.\n',
+        mtimeMs: 1, size: 50, binary: false,
+      },
+    })
+    const out = await fileMetadataTool.handler({ paths: ['a.md'] }, makeCtx({ fs }))
+    const f = out.files[0]
+    expect(f.path).toBe('a.md')
+    expect(f.extension).toBe('.md')
+    expect(f.frontmatter).toEqual({ title: 'A' })
+    expect(f.headings).toEqual([{ level: 1, text: 'Heading', anchor: 'heading' }])
+    expect(f.excerpt).toBe('Body paragraph here.')
+    expect(f.words).toBe(4)
+    expect(f.reading_time_min).toBe(1)
+    expect(f.links).toBeUndefined()
+  })
+
+  it('treats .mdx the same as .md', async () => {
+    const fs = makeMockFs({
+      'a.mdx': { content: '# Hi\n\nWords here.\n', mtimeMs: 1, size: 18, binary: false },
+    })
+    const out = await fileMetadataTool.handler({ paths: ['a.mdx'] }, makeCtx({ fs }))
+    expect(out.files[0].headings).toEqual([{ level: 1, text: 'Hi', anchor: 'hi' }])
+    expect(out.files[0].words).toBe(3)
+  })
+
+  it('returns base fields only for non-markdown extensions', async () => {
+    const fs = makeMockFs({
+      'notes.txt': { content: 'whatever', mtimeMs: 5, size: 8, binary: false },
+    })
+    const out = await fileMetadataTool.handler({ paths: ['notes.txt'] }, makeCtx({ fs }))
+    const f = out.files[0]
+    expect(f.extension).toBe('.txt')
+    expect(f.size_bytes).toBe(8)
+    expect(f.words).toBeUndefined()
+    expect(f.headings).toBeUndefined()
+    expect(f.frontmatter).toBeUndefined()
+    expect(f.error).toBeUndefined()
+  })
+
+  it('marks binary files with error="binary" and skips parsing', async () => {
+    const fs = makeMockFs({
+      'img.png': { content: '', mtimeMs: 1, size: 100, binary: true },
+    })
+    const out = await fileMetadataTool.handler({ paths: ['img.png'] }, makeCtx({ fs }))
+    expect(out.files[0]).toEqual({
+      path: 'img.png', error: 'binary',
+      size_bytes: 100, mtime_ms: 1, binary: true, extension: '.png',
+    })
+  })
+
+  it('sets truncated:true when the body exceeds 1 MB', async () => {
+    const big = '# Title\n\n' + 'word '.repeat(300000) // ~1.5 MB
+    const fs = makeMockFs({
+      'big.md': { content: big, mtimeMs: 1, size: big.length, binary: false },
+    })
+    const out = await fileMetadataTool.handler({ paths: ['big.md'] }, makeCtx({ fs }))
+    const f = out.files[0]
+    expect(f.truncated).toBe(true)
+    expect(f.words).toBeGreaterThan(0) // counts the truncated body
+  })
+
+  it('returns each opt-in field only when requested', async () => {
+    const fs = makeMockFs({
+      'a.md': {
+        content: 'See [docs](u) and ![](p).\n\n- [ ] open\n- [x] done\n',
+        mtimeMs: 1, size: 20, binary: false,
+      },
+    })
+    const base = await fileMetadataTool.handler({ paths: ['a.md'] }, makeCtx({ fs }))
+    expect(base.files[0].links).toBeUndefined()
+    expect(base.files[0].todos).toBeUndefined()
+    const opted = await fileMetadataTool.handler(
+      { paths: ['a.md'], fields: ['links', 'todos'] },
+      makeCtx({ fs }),
+    )
+    expect(opted.files[0].links).toEqual([{ text: 'docs', target: 'u' }])
+    expect(opted.files[0].todos).toEqual({ open: 1, done: 1 })
+  })
+
+  it('ignores unknown opt-in field names', async () => {
+    const fs = makeMockFs({ 'a.md': { content: '# x\n', mtimeMs: 1, size: 4, binary: false } })
+    const out = await fileMetadataTool.handler(
+      { paths: ['a.md'], fields: ['links', 'bogus'] },
+      makeCtx({ fs }),
+    )
+    expect(out.files[0].links).toEqual([])
+  })
+})

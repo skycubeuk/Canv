@@ -111,21 +111,60 @@ export const fileMetadataTool: Tool<Input, Output> = {
 async function processOne(
   rel: string,
   root: DirNode,
-  _fields: OptionalField[],
-  _ctx: ToolCtx,
+  fields: OptionalField[],
+  ctx: ToolCtx,
 ): Promise<FileMeta> {
   const entry = findEntry(root, rel)
   if (!entry) return { path: rel, error: 'not_found' }
   if (entry.kind !== 'file') {
     return { path: rel, error: 'not_a_file' }
   }
-  return {
+  const base: FileMeta = {
     path: rel,
     size_bytes: entry.size,
     mtime_ms: entry.mtimeMs,
     binary: entry.binary,
     extension: extensionOf(rel),
   }
+  if (entry.binary) return { ...base, error: 'binary' }
+  if (!isMarkdownExt(base.extension!)) return base
+
+  let body: string
+  try {
+    if (ctx.activeDocPath === rel) {
+      const live = ctx.getEditorContent(rel)
+      body = live ?? (await ctx.fs.readFile(rel)).content
+    } else {
+      body = (await ctx.fs.readFile(rel)).content
+    }
+  } catch {
+    return { ...base, error: 'read_failed' }
+  }
+
+  let truncated = false
+  if (body.length > MAX_PARSE_BYTES) {
+    body = body.slice(0, MAX_PARSE_BYTES)
+    truncated = true
+  }
+
+  const parsed = parseMarkdownMeta(body, { fields })
+  const out: FileMeta = {
+    ...base,
+    words: parsed.words,
+    chars: parsed.chars,
+    lines: parsed.lines,
+    paragraphs: parsed.paragraphs,
+    reading_time_min: parsed.readingTimeMin,
+    frontmatter: parsed.frontmatter,
+    headings: parsed.headings,
+    excerpt: parsed.excerpt,
+  }
+  if (truncated) out.truncated = true
+  if (parsed.links !== undefined) out.links = parsed.links
+  if (parsed.images !== undefined) out.images = parsed.images
+  if (parsed.codeBlocks !== undefined) out.code_blocks = parsed.codeBlocks
+  if (parsed.todos !== undefined) out.todos = parsed.todos
+  return out
 }
 
 function extensionOf(rel: string): string {
@@ -136,6 +175,6 @@ function extensionOf(rel: string): string {
   return name.slice(dot).toLowerCase()
 }
 
-// Body parsing wired up in Task 8.
-void MAX_PARSE_BYTES
-void parseMarkdownMeta
+function isMarkdownExt(ext: string): boolean {
+  return ext === '.md' || ext === '.mdx'
+}
