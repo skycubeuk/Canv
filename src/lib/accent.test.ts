@@ -1,0 +1,64 @@
+import { describe, it, expect, beforeEach } from 'vitest'
+import { ACCENTS, DEFAULT_ACCENT, applyAccent, applyTheme, resolveTheme } from './accent'
+
+describe('accent palette', () => {
+  it('exposes 6 swatches in declared order', () => {
+    expect(ACCENTS.map((a) => a.name)).toEqual([
+      'Indigo', 'Emerald', 'Amber', 'Rose', 'Violet', 'Slate',
+    ])
+  })
+
+  it('default is Indigo #6366f1', () => {
+    expect(DEFAULT_ACCENT).toBe('#6366f1')
+    expect(ACCENTS[0]).toEqual({ name: 'Indigo', hex: '#6366f1' })
+  })
+})
+
+describe('applyAccent', () => {
+  beforeEach(() => {
+    document.documentElement.removeAttribute('style')
+  })
+
+  it('writes --accent to the documentElement as an RGB triplet', () => {
+    applyAccent('#10b981')
+    expect(document.documentElement.style.getPropertyValue('--accent')).toBe('16 185 129')
+  })
+
+  it('passes through values that already look like triplets', () => {
+    applyAccent('99 102 241')
+    expect(document.documentElement.style.getPropertyValue('--accent')).toBe('99 102 241')
+  })
+})
+
+describe('resolveTheme + applyTheme', () => {
+  beforeEach(() => {
+    document.documentElement.removeAttribute('data-theme')
+  })
+
+  it('resolves "dark" to "dark"', () => {
+    expect(resolveTheme('dark')).toBe('dark')
+  })
+
+  it('resolves "light" to "light"', () => {
+    expect(resolveTheme('light')).toBe('light')
+  })
+
+  it('applyTheme sets the data-theme attribute', () => {
+    applyTheme('dark')
+    expect(document.documentElement.dataset.theme).toBe('dark')
+  })
+
+  it('resolves "system" via prefers-color-scheme matchMedia', () => {
+    // jsdom does not implement matchMedia; stub it to return matches: false so "system" → "light".
+    const original = window.matchMedia
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: (query: string) => ({ matches: false, media: query }),
+    })
+    try {
+      expect(resolveTheme('system')).toBe('light')
+    } finally {
+      Object.defineProperty(window, 'matchMedia', { writable: true, value: original })
+    }
+  })
+})

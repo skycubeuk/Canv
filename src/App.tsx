@@ -1,0 +1,573 @@
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { EditorView } from '@codemirror/view'
+import { FloatingToolbar } from './components/FloatingToolbar'
+import { MigrationModal } from './components/MigrationModal'
+import { AppOverlays } from './components/ide/AppOverlays'
+import { legacyStateExists } from './lib/legacyState'
+import { WorkspaceShell } from './components/ide/WorkspaceShell'
+import { buildBottomPanelTabs, type BottomPanelTabsAdapter } from './components/ide/bottomPanelTabs'
+import { useLintIssues } from './hooks/useLintIssues'
+import { useSettings } from './hooks/useSettings'
+import { useWorkspace } from './hooks/useWorkspace'
+import { useLocalStorage } from './hooks/useLocalStorage'
+import { useIdeLayout } from './hooks/useIdeLayout'
+import type { OutlineNode } from './lib/outline'
+import { useEditorStats } from './hooks/useEditorStats'
+import { useCommands } from './hooks/useCommands'
+import type { PaletteMode, PaletteFile } from './components/ide/CommandPalette'
+import type { Action as AgentDef } from './config/types'
+import { useModes } from './hooks/useModes'
+import { useProfilePicker } from './hooks/useProfilePicker'
+import { isElectron, flattenTree } from './lib/fs'
+import { exportBackup } from './lib/backup'
+import { useDialogs } from './lib/dialogs'
+import { useNotifications } from './hooks/useNotifications'
+import { useEditorRegistry, editorMapKey } from './hooks/useEditorRegistry'
+import { useWorkspaceFileOps } from './hooks/useWorkspaceFileOps'
+import { useSelectionAgent } from './hooks/useSelectionAgent'
+import { applyAccent, applyTheme, resolveTheme } from './lib/accent'
+import { TopBar } from './components/ide/TopBar'
+import { useChatSessions } from './hooks/useChatSessions'
+import { useAppCommands } from './hooks/useAppCommands'
+import { useDockBridgeMain } from './hooks/useDockBridgeMain'
+import type { ChatProvider } from './components/ChatPanel'
+import { getAdapter } from './adapters'
+
+function basename(rel: string): string {
+  const i = rel.lastIndexOf('/')
+  return i >= 0 ? rel.slice(i + 1) : rel
+}
+
+export default function App() {
+  const dialogs = useDialogs()
+  const notifications = useNotifications()
+  const { showToast } = notifications
+  const { settings, update, modelForAgent } = useSettings()
+
+  useEffect(() => {
+    applyAccent(settings.accent)
+    applyTheme(resolveTheme(settings.theme))
+  }, [settings.accent, settings.theme])
+
+  useEffect(() => {
+    if (settings.theme !== 'system') return
+    const mq = window.matchMedia('(prefers-color-scheme: dark)')
+    const onChange = () => applyTheme(mq.matches ? 'dark' : 'light')
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [settings.theme])
+
+  const [profile, setProfile] = useLocalStorage<string | null>('canv:profile', null)
+  const { modes, defaultModeId } = useModes()
+  const activeProfileId = profile ?? defaultModeId
+  const activeProfile = modes.find((m) => m.id === activeProfileId) ?? modes.find((m) => m.id === defaultModeId)!
+  const [migrationOpen, setMigrationOpen] = useState(() => isElectron() && legacyStateExists())
+
+  const workspace = useWorkspace({ onToast: showToast })
+  const { openSettingsTab } = workspace
+
+  const fileOps = useWorkspaceFileOps({
+    workspace,
+    dialogs,
+    showToast: notifications.showToast,
+  })
+
+  const editorRegistry = useEditorRegistry({ workspace })
+  const {
+    editorsRef, jumpersRef,
+    selectionTick,
+    getActiveEditor, getActiveEditorForGroup,
+    handleEditorReady, handleEditorDestroy,
+    handleJumperReady, handleJumperDestroy,
+    handleEditorChange, handleEditorSelectionChange,
+    openSources, outlineNodes, focusedKey,
+    jumpToMatch,
+  } = editorRegistry
+
+  const ideLayout = useIdeLayout(workspace.root)
+
+  const profilePicker = useProfilePicker({
+    profile,
+    setProfile,
+    workspaceReady: workspace.ready,
+    migrationOpen,
+  })
+
+  const commands = useCommands()
+  const [paletteOpen, setPaletteOpen] = useState(false)
+  const [paletteMode, setPaletteMode] = useState<PaletteMode>('commands')
+  const [recentFiles, setRecentFiles] = useState<string[]>([])
+  const [revealFolderRel, setRevealFolderRel] = useState<string | null>(null)
+  const [pendingDocAgent, setPendingDocAgent] = useState<AgentDef | null>(null)
+
+  const lintIssuesApi = useLintIssues({
+    openSources,
+    tree: workspace.tree,
+    opts: settings.lintRules,
+  })
+
+  const handleClickBreadcrumbFolder = useCallback((folderRel: string) => {
+    ideLayout.setSidebarTab('files')
+    if (!ideLayout.layout.sidebar.visible) ideLayout.toggleSidebar()
+    setRevealFolderRel(folderRel)
+    // Clear in a microtask so consecutive clicks on the same folder still
+    // bump the prop and re-trigger the FileTree expand effect.
+    setTimeout(() => setRevealFolderRel(null), 0)
+  }, [ideLayout])
+
+  const handleOpenDiff = useCallback((rel: string, baseRef: string = 'HEAD') => {
+    workspace.openDiffTab(rel, baseRef)
+  }, [workspace])
+
+  const handleOutlineJump = useCallback((node: OutlineNode) => {
+    const rel = workspace.activeMarkdownRel
+    if (!rel) return
+    const key = editorMapKey(workspace.activeGroupId, rel)
+    const jumper = jumpersRef.current.get(key)
+    if (jumper) {
+      jumper(node.line, node.index)
+      return
+    }
+    // Fallback: no Canvas-registered jumper (no current code path hits this,
+    // but keeps the contract well-defined). Drive CodeMirror directly.
+    const view = editorsRef.current.get(key)
+    if (!view) return
+    const doc = view.state.doc
+    const safeLine = Math.max(1, Math.min(node.line, doc.lines))
+    const linePos = doc.line(safeLine).from
+    view.dispatch({
+      selection: { anchor: linePos },
+      effects: EditorView.scrollIntoView(linePos, { y: 'start', yMargin: 8 }),
+    })
+    view.focus()
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- editorsRef and jumpersRef are stable refs; omitting them is correct
+  }, [workspace.activeGroupId, workspace.activeMarkdownRel])
+
+  // Surface localStorage QuotaExceededError as a toast.
+  useEffect(() => {
+    const handler = () =>
+      showToast('Storage full — export your runs/chat or trim them')
+    window.addEventListener('canv:quota-error', handler)
+    return () => window.removeEventListener('canv:quota-error', handler)
+  }, [showToast])
+
+  // Track recent files for the palette file-open mode.
+  useEffect(() => {
+    const rel = workspace.activeMarkdownRel
+    if (!rel) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- functional updater; runs only when activeMarkdownRel changes, no cascade risk
+    setRecentFiles((prev) => {
+      if (prev[0] === rel) return prev
+      const next = [rel, ...prev.filter((r) => r !== rel)]
+      return next.slice(0, 30)
+    })
+  }, [workspace.activeMarkdownRel])
+
+  const paletteFiles = useMemo<PaletteFile[]>(() => {
+    if (!workspace.tree) return []
+    const out: PaletteFile[] = []
+    for (const entry of flattenTree(workspace.tree)) {
+      if (entry.kind === 'file' && /\.(md|markdown)$/i.test(entry.relPath)) {
+        out.push({ rel: entry.relPath, basename: entry.name })
+      }
+    }
+    return out
+  }, [workspace.tree])
+
+  const paletteRecents = useMemo<PaletteFile[]>(() => {
+    return recentFiles.map((rel) => {
+      const i = rel.lastIndexOf('/')
+      return { rel, basename: i >= 0 ? rel.slice(i + 1) : rel }
+    })
+  }, [recentFiles])
+
+  const { showBottomTab } = ideLayout
+
+  // Mirror the sidebar toggle: clicking the active placement collapses the
+  // dock; clicking an inactive placement switches and ensures it's visible.
+  const setBottomPlacementBottom = useCallback(() => {
+    const { visible, placement } = ideLayout.layout.bottom
+    if (visible && placement === 'bottom') {
+      ideLayout.toggleBottom()
+      return
+    }
+    ideLayout.setDockPlacement('bottom')
+    if (!visible) ideLayout.toggleBottom()
+  }, [ideLayout])
+
+  const setBottomPlacementRight = useCallback(() => {
+    const { visible, placement } = ideLayout.layout.bottom
+    if (visible && placement === 'right') {
+      ideLayout.toggleBottom()
+      return
+    }
+    ideLayout.setDockPlacement('right')
+    if (!visible) ideLayout.toggleBottom()
+  }, [ideLayout])
+
+  const gitBadge = null  // TODO(0.7.1): wire to actual git diff count
+
+  // TODO(0.7.1): wire cursor line/col from Canvas's CodeMirror via onCursorChange prop.
+  const [cursorPos] = useState<{ line: number; col: number } | null>(null)
+
+  const selectionAgent = useSelectionAgent({
+    settings,
+    modelForAgent,
+    activeProfile,
+    activeProfileId,
+    workspace,
+    getActiveEditor,
+    getActiveEditorForGroup,
+    showToast: notifications.showToast,
+    openSettingsTab,
+    showBottomTab,
+  })
+  const {
+    runs, activeTabId, setActiveTabId,
+    handleAgentFromToolbar, handleAgentOnDocument,
+    handleApply, handleRerun, handleCloseTab,
+    refineRun,
+  } = selectionAgent
+
+  const chatSession = useChatSessions({
+    settings,
+    update,
+    workspace,
+    activeProfile,
+    getActiveEditor,
+    showToast: notifications.showToast,
+    openSettingsTab,
+    showRetryUndoToast: notifications.showRetryUndoToast,
+    dismissRetryUndo: notifications.dismissRetryUndo,
+    dialogs,
+  })
+  const {
+    chatMessages, chatBusy, pendingApprovals,
+    followLatest, setFollowLatest,
+    apiKeyMissing, chatProvider, chatModel, meterTotals,
+    sendChat, retryFromAnchor, editAndRetry, undoRetry,
+    stopChat, clearChat,
+    onApprovalDecide,
+    sessions, activeId, createSession, selectSession, closeSession, setActiveSessionProviderModel,
+  } = chatSession
+
+  const availableModels: Record<ChatProvider, string[]> = useMemo(() => ({
+    anthropic: getAdapter('anthropic').models,
+    openai: getAdapter('openai').models,
+  }), [])
+
+  const handleExport = useCallback(
+    (fmt: 'txt' | 'md') => {
+      const view = getActiveEditor()
+      if (!view || !workspace.activeMarkdownRel) return
+      const text = view.state.doc.toString()
+      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      const name = basename(workspace.activeMarkdownRel).replace(/\.(md|markdown)$/i, '')
+      a.href = url
+      a.download = `${name || 'document'}.${fmt}`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    },
+    [getActiveEditor, workspace.activeMarkdownRel],
+  )
+
+  const activeEditor = editorRegistry.getActiveEditor()
+  const { wordCount, selectionWordCount } = useEditorStats(activeEditor)
+
+  useAppCommands({
+    commands,
+    ideLayout,
+    workspace,
+    activeProfile,
+    dialogs,
+    openSettingsTab,
+    openSwitcher: profilePicker.openSwitcher,
+    changeWorkspace: fileOps.changeWorkspace,
+    openRemoteWorkspace: fileOps.openRemoteWorkspace,
+    handleExport,
+    getActiveEditor,
+    handleAgentOnDocument,
+    setPaletteMode,
+    setPaletteOpen,
+    setPendingDocAgent,
+  })
+
+  const jumpToProblem = useCallback(
+    (issue: import('./lib/lintTypes').LintIssue) => {
+      editorRegistry.jumpToProblem(issue, lintIssuesApi.issues)
+    },
+    [editorRegistry, lintIssuesApi.issues],
+  )
+
+  useDockBridgeMain({
+    ideLayout,
+    modes,
+    defaultModeId,
+    activeProfile,
+    runs,
+    activeTabId,
+    setActiveTabId,
+    handleRerun,
+    handleCloseTab,
+    handleApply,
+    refineRun,
+    chatMessages,
+    chatProvider,
+    chatModel,
+    chatBusy,
+    pendingApprovals,
+    followLatest,
+    contextFileName: workspace.activeMarkdownRel ? basename(workspace.activeMarkdownRel) : null,
+    sessions,
+    activeSessionId: activeId,
+    availableModels,
+    sendChat,
+    clearChat,
+    stopChat,
+    retryFromAnchor,
+    editAndRetry,
+    onApprovalDecide,
+    setFollowLatest,
+    createSession,
+    selectSession,
+    closeSession,
+    setActiveSessionProviderModel,
+    problems: lintIssuesApi.issues,
+    lintScanState: lintIssuesApi.scanState,
+    lintScanError: lintIssuesApi.scanError,
+    scanProblems: () => { void lintIssuesApi.scanWorkspace() },
+    clearProblems: lintIssuesApi.clearWorkspaceIssues,
+    jumpToProblem,
+    settings,
+    pricingOverrides: settings.pricingOverrides,
+  })
+
+  const openRels = useMemo(() => {
+    const out = new Set<string>()
+    for (const g of workspace.editorGroups) {
+      for (const t of g.openTabs) {
+        if (t.kind === 'markdown') out.add(t.relPath)
+      }
+    }
+    return out
+  }, [workspace.editorGroups])
+  const pinnedRels = useMemo(
+    () => new Set(workspace.pinned.map((p) => p.relPath)),
+    [workspace.pinned],
+  )
+
+  const saveState = workspace.conflict
+    ? 'conflict' as const
+    : workspace.dirtySet.size > 0
+      ? 'saving' as const
+      : 'saved' as const
+
+  const bottomPanelAdapter = useMemo<BottomPanelTabsAdapter>(() => ({
+    runs,
+    activeRunId: activeTabId,
+    selectRun: setActiveTabId,
+    closeRun: handleCloseTab,
+    applyRun: handleApply,
+    rerunRun: handleRerun,
+    refineRun,
+    chatMessages,
+    chatBusy,
+    chatProvider,
+    chatModel,
+    sendChat,
+    clearChat,
+    stopChat,
+    retryChat: retryFromAnchor,
+    editAndRetryChat: editAndRetry,
+    pendingApprovals,
+    decideApproval: onApprovalDecide,
+    followLatest,
+    setFollowLatest,
+    contextFileName: workspace.activeMarkdownRel ? basename(workspace.activeMarkdownRel) : null,
+    chatFontSize: settings.chatFontSize,
+    sessions,
+    activeSessionId: activeId,
+    createSession,
+    selectSession,
+    closeSession,
+    changeProviderModel: setActiveSessionProviderModel,
+    availableModels,
+    problems: lintIssuesApi.issues,
+    lintScanState: lintIssuesApi.scanState,
+    lintScanError: lintIssuesApi.scanError,
+    scanProblems: () => { void lintIssuesApi.scanWorkspace() },
+    clearProblems: lintIssuesApi.clearWorkspaceIssues,
+    jumpToProblem,
+    pricingOverrides: settings.pricingOverrides,
+  }), [
+    runs, activeTabId, setActiveTabId, handleCloseTab, handleApply, handleRerun, refineRun,
+    chatMessages, chatBusy, chatProvider, chatModel,
+    sendChat, clearChat, stopChat, retryFromAnchor, editAndRetry,
+    pendingApprovals, onApprovalDecide, followLatest, setFollowLatest,
+    workspace.activeMarkdownRel, settings.chatFontSize, settings.pricingOverrides,
+    sessions, activeId, createSession, selectSession, closeSession, setActiveSessionProviderModel, availableModels,
+    lintIssuesApi, jumpToProblem,
+  ])
+
+  const bottomPanelTabs = useMemo(() => buildBottomPanelTabs(bottomPanelAdapter), [bottomPanelAdapter])
+
+  // Browser-only build: show a simple banner instead of the workspace UI.
+  if (!isElectron()) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center text-center px-6 bg-app text-default">
+        <div className="max-w-md space-y-3">
+          <h1 className="text-2xl font-semibold">Canv 0.2 needs the desktop app</h1>
+          <p className="text-sm opacity-80">
+            This version stores your writing on disk, which the browser preview can't do.
+            Download the desktop build (macOS / Windows / Linux) to use file workspaces.
+          </p>
+          {legacyStateExists() && (
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={() => setMigrationOpen(true)}
+            >
+              Export legacy backup
+            </button>
+          )}
+        </div>
+        {migrationOpen && (
+          <MigrationModal
+            onComplete={() => {
+              setMigrationOpen(false)
+              window.location.reload()
+            }}
+          />
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <div className="h-full flex flex-col">
+      {workspace.remoteStatus?.state === 'offline' && (
+        <div className="bg-amber-900/40 text-amber-100 px-3 py-1.5 text-sm flex items-center justify-between border-b border-amber-800">
+          <span>Remote workspace offline — attempting to reconnect…</span>
+          <button
+            type="button"
+            onClick={() => workspace.reconnect()}
+            className="underline hover:no-underline"
+          >
+            Reconnect now
+          </button>
+        </div>
+      )}
+      <TopBar
+        workspaceName={workspace.root}
+        activeSidebarTab={ideLayout.layout.sidebar.activeTab}
+        onSelectSidebarTab={(tab) => {
+          const { visible, activeTab } = ideLayout.layout.sidebar
+          if (visible && activeTab === tab) {
+            ideLayout.toggleSidebar()
+            return
+          }
+          ideLayout.setSidebarTab(tab)
+          if (!visible) ideLayout.toggleSidebar()
+        }}
+        onOpenCommandPalette={() => { setPaletteMode('commands'); setPaletteOpen(true) }}
+        profile={activeProfile}
+        hasMarkdownTab={workspace.activeMarkdownRel != null}
+        activeFileName={workspace.activeMarkdownRel ? basename(workspace.activeMarkdownRel) : null}
+        onRunDocAgent={(agent, instruction) => handleAgentOnDocument(workspace.activeGroupId, agent, instruction)}
+        sidebarVisible={ideLayout.layout.sidebar.visible}
+        bottomVisible={ideLayout.layout.bottom.visible}
+        bottomPlacement={ideLayout.layout.bottom.placement}
+        onSetBottomPlacementBottom={setBottomPlacementBottom}
+        onSetBottomPlacementRight={setBottomPlacementRight}
+        gitBadge={gitBadge}
+      />
+      <WorkspaceShell
+        ideLayout={ideLayout}
+        workspace={workspace}
+        openRels={openRels}
+        pinnedRels={pinnedRels}
+        onEditorReady={handleEditorReady}
+        onEditorDestroy={handleEditorDestroy}
+        onJumperReady={handleJumperReady}
+        onJumperDestroy={handleJumperDestroy}
+        onEditorChange={handleEditorChange}
+        onEditorSelectionChange={handleEditorSelectionChange}
+        onJumpToMatch={jumpToMatch}
+        outlineNodes={outlineNodes}
+        focusedKey={focusedKey}
+        onOutlineJump={handleOutlineJump}
+        onClickBreadcrumbFolder={handleClickBreadcrumbFolder}
+        revealFolderRel={revealFolderRel}
+        onCreateFile={fileOps.createFile}
+        onCreateFolder={fileOps.createFolder}
+        onRename={fileOps.rename}
+        onDelete={fileOps.remove}
+        onChangeWorkspace={fileOps.changeWorkspace}
+        onOpenDiff={handleOpenDiff}
+        settings={settings}
+        onUpdateSettings={update}
+        onExportBackup={() => {
+          workspace.flushAll()
+          exportBackup()
+        }}
+        bottomPanelTabs={bottomPanelTabs}
+        saveState={saveState}
+        activeProfile={activeProfile}
+        onClickProfile={profilePicker.openSwitcher}
+        apiKeyMissing={apiKeyMissing}
+        onClickApiKeyWarning={() => openSettingsTab()}
+        cursorLine={cursorPos?.line ?? null}
+        cursorCol={cursorPos?.col ?? null}
+        onOpenSettings={() => openSettingsTab()}
+        onToggleChat={() => {
+          const { visible, activeTab } = ideLayout.layout.bottom
+          if (visible && activeTab === 'chat') {
+            ideLayout.toggleBottom()
+          } else {
+            if (!visible) ideLayout.toggleBottom()
+            ideLayout.showBottomTab('chat')
+          }
+        }}
+        meterTokens={meterTotals.tokens || null}
+        meterCostUsd={meterTotals.costUsd || null}
+        wordCount={wordCount}
+        selectionWordCount={selectionWordCount}
+      />
+
+      <FloatingToolbar
+        view={activeEditor}
+        selectionVersion={selectionTick}
+        profile={activeProfile}
+        onAgent={handleAgentFromToolbar}
+      />
+
+      <AppOverlays
+        profilePicker={profilePicker}
+        migrationOpen={migrationOpen}
+        onMigrationComplete={() => { setMigrationOpen(false); window.location.reload() }}
+        workspace={workspace}
+        editorsRef={editorsRef}
+        fileOps={fileOps}
+        pendingDocAgent={pendingDocAgent}
+        onSubmitDocAgent={(instruction) => {
+          handleAgentOnDocument(workspace.activeGroupId, pendingDocAgent!, instruction)
+          setPendingDocAgent(null)
+        }}
+        onCancelDocAgent={() => setPendingDocAgent(null)}
+        notifications={notifications}
+        onUndoRetry={undoRetry}
+        paletteOpen={paletteOpen}
+        paletteMode={paletteMode}
+        paletteFiles={paletteFiles}
+        paletteRecents={paletteRecents}
+        onClosePalette={() => setPaletteOpen(false)}
+        commands={commands}
+        onOpenFile={(rel) => { void workspace.openTab(rel) }}
+      />
+    </div>
+  )
+}

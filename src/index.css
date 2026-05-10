@@ -1,0 +1,172 @@
+:root {
+  --accent: 99 102 241;        /* #6366f1 */
+  --accent-fg: 255 255 255;    /* #ffffff */
+  --accent-soft: color-mix(in oklab, rgb(var(--accent)) 18%, transparent);
+  --accent-hover: color-mix(in oklab, rgb(var(--accent)) 80%, white 20%);
+}
+
+[data-theme="dark"] {
+  --bg-app: 10 11 13;           /* #0a0b0d */
+  --bg-panel: 16 18 22;         /* #101216 */
+  --bg-elev: 21 24 29;          /* #15181d */
+  --bg-hover: 28 32 39;         /* #1c2027 */
+  --bg-active: 35 39 50;        /* #232732 */
+  --border-default: 29 32 39;   /* #1d2027 */
+  --border-strong: 42 46 55;    /* #2a2e37 */
+  --text-default: 231 234 240;  /* #e7eaf0 */
+  --text-muted: 154 160 171;    /* #9aa0ab */
+  --text-subtle: 107 114 128;   /* #6b7280 */
+  --shadow-lg: 0 20px 60px rgba(0,0,0,.5), 0 4px 12px rgba(0,0,0,.4);
+  --syntax-string: #c5e3a4;
+  --syntax-keyword: #b8a8ff;
+  --syntax-comment: #6b7280;
+}
+
+[data-theme="light"] {
+  --bg-app: 255 255 255;         /* #ffffff */
+  --bg-panel: 247 248 250;       /* #f7f8fa */
+  --bg-elev: 241 243 246;        /* #f1f3f6 */
+  --bg-hover: 235 237 241;       /* #ebedf1 */
+  --bg-active: 225 228 234;      /* #e1e4ea */
+  --border-default: 232 234 239; /* #e8eaef */
+  --border-strong: 209 213 219;  /* #d1d5db */
+  --text-default: 15 23 42;      /* #0f172a */
+  --text-muted: 75 85 99;        /* #4b5563 */
+  --text-subtle: 156 163 175;    /* #9ca3af */
+  --shadow-lg: 0 20px 50px rgba(15,23,42,.10), 0 4px 12px rgba(15,23,42,.05);
+  --syntax-string: #2f7a3a;
+  --syntax-keyword: #6f42c1;
+  --syntax-comment: #94a3b8;
+}
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body, #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-app text-default antialiased;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-feature-settings: 'cv11', 'ss01', 'ss03';
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md transition-colors;
+  }
+  .btn-primary {
+    @apply btn bg-accent text-accent-fg hover:opacity-90;
+  }
+  .btn-secondary {
+    @apply btn bg-elev text-default hover:bg-hover border border-default;
+  }
+  .btn-ghost {
+    @apply btn text-muted hover:bg-hover;
+  }
+  .btn-icon {
+    @apply inline-flex items-center justify-center w-8 h-8 rounded-md text-muted hover:bg-hover hover:text-default transition-colors;
+  }
+  .input {
+    @apply w-full px-3 py-2 text-sm rounded-md border border-default bg-elev text-default focus:outline-none focus:ring-2 focus:ring-accent-soft;
+  }
+  .panel-section {
+    @apply px-4 py-3 border-b border-default;
+  }
+}
+
+.streaming-cursor::after {
+  content: '▋';
+  @apply text-subtle ml-0.5 animate-pulse;
+}
+
+/* Force a visible selection on rendered markdown. Without this the browser
+   reports the computed ::selection background as transparent, so highlights
+   vanish on mouseup — the selection persists in the DOM but the paint is
+   gone. Scoping to `.prose` keeps CodeMirror's own selection drawing
+   (which deliberately hides the native ::selection inside `.cm-content`)
+   untouched. !important to win against any host stylesheet making it
+   transparent. */
+.prose ::selection,
+.prose::selection,
+.prose *::selection {
+  background-color: rgba(96, 165, 250, 0.45) !important; /* blue-400 / 45% */
+  color: inherit !important;
+}
+[data-theme="dark"] .prose ::selection,
+[data-theme="dark"] .prose::selection,
+[data-theme="dark"] .prose *::selection {
+  background-color: rgba(59, 130, 246, 0.6) !important; /* blue-500 / 60% */
+  color: inherit !important;
+}
+
+.cm-host {
+  height: 100%;
+}
+.cm-host .cm-editor {
+  height: 100%;
+  outline: none;
+}
+.cm-host .cm-editor.cm-focused {
+  outline: none;
+}
+.cm-host .cm-scroller {
+  height: 100%;
+}
+.cm-host .cm-content {
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  padding: 0;
+  caret-color: currentColor;
+  min-height: 100%;
+}
+.cm-host .cm-line {
+  padding: 0;
+}
+
+/* Theme-aware scrollbars (light) */
+* {
+  scrollbar-color: rgb(214 211 209) transparent; /* stone-300 */
+  scrollbar-width: thin;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: rgb(214 211 209); /* stone-300 */
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(168 162 158); /* stone-400 */
+  background-clip: padding-box;
+  border: 2px solid transparent;
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.tabs-scroller {
+  scrollbar-width: none;
+}
+.tabs-scroller::-webkit-scrollbar {
+  display: none;
+}
+
+/* Theme-aware scrollbars (dark) */
+[data-theme="dark"] * {
+  scrollbar-color: rgb(64 64 64) transparent; /* neutral-700 */
+}
+[data-theme="dark"] *::-webkit-scrollbar-thumb {
+  background-color: rgb(64 64 64); /* neutral-700 */
+}
+[data-theme="dark"] *::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(82 82 82); /* neutral-600 */
+}
