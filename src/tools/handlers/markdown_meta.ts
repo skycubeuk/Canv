@@ -79,17 +79,14 @@ function splitFrontmatter(src: string): FrontmatterSplit {
   return { frontmatter: fm, body: src.slice(bodyStart) }
 }
 
-// `_opts.fields` will gate the optional `links`/`images`/`code_blocks`/`todos`
-// computations in later tasks; for now this scaffold only emits the always-on
-// fields, so the parameter is accepted but unused.
-export function parseMarkdownMeta(src: string, _opts: ParseOpts): ParsedMeta {
+export function parseMarkdownMeta(src: string, opts: ParseOpts): ParsedMeta {
   const { frontmatter, body } = splitFrontmatter(src)
   const chars = body.length
   const lines = body.length === 0 ? 0 : (body.match(/\n/g)?.length ?? 0) + 1
   const paragraphs = body.split(/\n\s*\n/).filter((p) => /\S/.test(p)).length
   const words = countWords(body)
   const readingTimeMin = words === 0 ? 0 : Math.max(1, Math.round(words / 200))
-  return {
+  const meta: ParsedMeta = {
     frontmatter,
     bodyAfterFrontmatter: body,
     words,
@@ -100,6 +97,9 @@ export function parseMarkdownMeta(src: string, _opts: ParseOpts): ParsedMeta {
     headings: extractHeadings(body),
     excerpt: extractExcerpt(body),
   }
+  if (opts.fields.includes('links')) meta.links = extractLinks(body)
+  if (opts.fields.includes('images')) meta.images = extractImages(body)
+  return meta
 }
 
 // Replace fenced-code regions with same-shape whitespace so headings inside
@@ -174,6 +174,34 @@ function truncateAtWord(s: string, limit: number): string {
   const lastSpace = slice.lastIndexOf(' ')
   const cut = lastSpace > 0 ? slice.slice(0, lastSpace) : slice.slice(0, limit)
   return cut + '…'
+}
+
+function extractLinks(body: string): LinkRef[] {
+  const stripped = stripFencedBlocks(body)
+  // Match [text](target), but not when preceded by '!' (which is an image).
+  const re = /(^|[^!])\[([^\]]+)\]\(([^)]+)\)/g
+  const seen = new Set<string>()
+  const out: LinkRef[] = []
+  let m: RegExpExecArray | null
+  while ((m = re.exec(stripped)) !== null) {
+    const ref = { text: m[2], target: m[3] }
+    const key = `${ref.text} ${ref.target}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(ref)
+  }
+  return out
+}
+
+function extractImages(body: string): ImageRef[] {
+  const stripped = stripFencedBlocks(body)
+  const re = /!\[([^\]]*)\]\(([^)]+)\)/g
+  const out: ImageRef[] = []
+  let m: RegExpExecArray | null
+  while ((m = re.exec(stripped)) !== null) {
+    out.push({ alt: m[1], src: m[2] })
+  }
+  return out
 }
 
 function countWords(body: string): number {

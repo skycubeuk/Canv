@@ -139,3 +139,40 @@ describe('parseMarkdownMeta — excerpt', () => {
     expect(m.excerpt).toBe('See my_snake_case_var in action.')
   })
 })
+
+describe('parseMarkdownMeta — links and images (opt-in)', () => {
+  it('returns links only when "links" is in fields', () => {
+    const src = 'See [docs](http://example.com) and ![pic](/p.png).\n'
+    const off = parseMarkdownMeta(src, { fields: [] })
+    expect(off.links).toBeUndefined()
+    const on = parseMarkdownMeta(src, { fields: ['links'] })
+    expect(on.links).toEqual([{ text: 'docs', target: 'http://example.com' }])
+  })
+
+  it('returns images only when "images" is in fields and includes alt text', () => {
+    const src = '![cover](a.png) and ![](b.png) and [link](c).\n'
+    const off = parseMarkdownMeta(src, { fields: [] })
+    expect(off.images).toBeUndefined()
+    const on = parseMarkdownMeta(src, { fields: ['images'] })
+    expect(on.images).toEqual([
+      { alt: 'cover', src: 'a.png' },
+      { alt: '', src: 'b.png' },
+    ])
+  })
+
+  it('does not classify images as links', () => {
+    const src = '![alt](img.png)\n'
+    const m = parseMarkdownMeta(src, { fields: ['links', 'images'] })
+    expect(m.links).toEqual([])
+    expect(m.images).toEqual([{ alt: 'alt', src: 'img.png' }])
+  })
+
+  it('de-duplicates identical link {text, target} pairs', () => {
+    const src = '[same](x) and again [same](x) and [different](x).\n'
+    const m = parseMarkdownMeta(src, { fields: ['links'] })
+    expect(m.links).toEqual([
+      { text: 'same', target: 'x' },
+      { text: 'different', target: 'x' },
+    ])
+  })
+})
