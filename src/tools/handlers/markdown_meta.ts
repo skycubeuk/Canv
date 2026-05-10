@@ -97,14 +97,54 @@ export function parseMarkdownMeta(src: string, _opts: ParseOpts): ParsedMeta {
     lines,
     paragraphs,
     readingTimeMin,
-    headings: [],
+    headings: extractHeadings(body),
     excerpt: '',
   }
 }
 
+// Replace fenced-code regions with same-shape whitespace so headings inside
+// them are ignored. Handles both ``` and ~~~ fences, AND unclosed fences
+// (which would otherwise leak code into the prose body — important once
+// Task 8 truncates large files mid-fence).
+function stripFencedBlocks(body: string): string {
+  // Closed fences first.
+  const closed = body.replace(/(```|~~~)[^\n]*\n[\s\S]*?\n\1/g, (m) => m.replace(/[^\n]/g, ' '))
+  // Then any remaining (unclosed) fence runs to EOF.
+  return closed.replace(/(```|~~~)[^\n]*\n[\s\S]*$/g, (m) => m.replace(/[^\n]/g, ' '))
+}
+
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^\w\s-]/g, '')   // strip non-word, non-space, non-hyphen
+    .trim()
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+}
+
+function extractHeadings(body: string): Heading[] {
+  const lines = stripFencedBlocks(body).split('\n')
+  const out: Heading[] = []
+  const seen = new Map<string, number>()
+  const re = /^(#{1,6})\s+(.+?)\s*#*\s*$/
+  for (const line of lines) {
+    const m = line.match(re)
+    if (!m) continue
+    const level = m[1].length as 1 | 2 | 3 | 4 | 5 | 6
+    const text = m[2].trim()
+    if (text === '') continue
+    const base = slugify(text)
+    const seenCount = seen.get(base) ?? 0
+    const anchor = seenCount === 0 ? base : `${base}-${seenCount + 1}`
+    seen.set(base, seenCount + 1)
+    out.push({ level, text, anchor })
+  }
+  return out
+}
+
 function countWords(body: string): number {
-  // Strip fenced code blocks first (``` or ~~~).
-  const noFences = body.replace(/(```|~~~)[^\n]*\n[\s\S]*?\n\1/g, ' ')
+  // Strip fenced code blocks (closed and unclosed) via the shared helper.
+  const noFences = stripFencedBlocks(body)
   // Strip inline code spans.
   const noInline = noFences.replace(/`[^`]*`/g, ' ')
   // Strip HTML tags (a single pass is enough for word counting).

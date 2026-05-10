@@ -69,3 +69,33 @@ describe('parseMarkdownMeta — counts', () => {
     expect(parseMarkdownMeta(longBody, { fields: [] }).readingTimeMin).toBe(2)
   })
 })
+
+describe('parseMarkdownMeta — headings', () => {
+  it('extracts headings with level, text, and slug anchor', () => {
+    const src = '# Top\n\n## A section\n\n### Sub-section!\n\nbody'
+    const m = parseMarkdownMeta(src, { fields: [] })
+    expect(m.headings).toEqual([
+      { level: 1, text: 'Top', anchor: 'top' },
+      { level: 2, text: 'A section', anchor: 'a-section' },
+      { level: 3, text: 'Sub-section!', anchor: 'sub-section' },
+    ])
+  })
+
+  it('disambiguates duplicate anchors with -2, -3 suffixes', () => {
+    const src = '# Notes\n\n# Notes\n\n# Notes\n'
+    const m = parseMarkdownMeta(src, { fields: [] })
+    expect(m.headings.map((h) => h.anchor)).toEqual(['notes', 'notes-2', 'notes-3'])
+  })
+
+  it('ignores lines inside fenced code blocks that look like headings', () => {
+    const src = '# Real\n\n```\n# Not a heading\n```\n'
+    const m = parseMarkdownMeta(src, { fields: [] })
+    expect(m.headings).toEqual([{ level: 1, text: 'Real', anchor: 'real' }])
+  })
+
+  it('strips closing # markers from ATX headings', () => {
+    const src = '## Heading ##\n'
+    const m = parseMarkdownMeta(src, { fields: [] })
+    expect(m.headings[0]).toEqual({ level: 2, text: 'Heading', anchor: 'heading' })
+  })
+})
