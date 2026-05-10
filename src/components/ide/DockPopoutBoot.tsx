@@ -102,6 +102,9 @@ export function DockPopoutBoot() {
         dispatch({ type: 'change-provider-model', provider, model }),
       availableModels: state.availableModels,
 
+      getSession: (id: string) => state.chatSessionsFull.find((s) => s.id === id) ?? null,
+      chatSystemPreamble: state.chatSystemPreamble,
+
       problems: state.problems,
       lintScanState: state.lintScanState,
       lintScanError: state.lintScanError,

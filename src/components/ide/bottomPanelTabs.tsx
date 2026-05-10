@@ -56,6 +56,10 @@ export interface BottomPanelTabsAdapter {
   changeProviderModel: (provider: ChatProvider, model: string) => void
   availableModels: Record<ChatProvider, string[]>
 
+  // Output tab — chat inspector (optional; popout window omits these for v1)
+  getSession?: (id: string) => import('../../hooks/useChatSessions').ChatSession | null
+  chatSystemPreamble?: string
+
   // Problems
   problems: LintIssue[]
   lintScanState: ScanState
@@ -141,7 +145,15 @@ export function buildBottomPanelTabs(adapter: BottomPanelTabsAdapter): BottomPan
       id: 'output',
       label: 'Output',
       icon: FileText,
-      render: () => <OutputTab runs={adapter.runs} />,
+      render: () => (
+        <OutputTab
+          runs={adapter.runs}
+          sessions={adapter.sessions}
+          activeSessionId={adapter.activeSessionId}
+          getSession={adapter.getSession}
+          chatSystemPreamble={adapter.chatSystemPreamble}
+        />
+      ),
     },
   ]
 }

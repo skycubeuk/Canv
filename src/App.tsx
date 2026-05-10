@@ -26,6 +26,7 @@ import { useEditorRegistry, editorMapKey } from './hooks/useEditorRegistry'
 import { useWorkspaceFileOps } from './hooks/useWorkspaceFileOps'
 import { useSelectionAgent } from './hooks/useSelectionAgent'
 import { applyAccent, applyTheme, resolveTheme } from './lib/accent'
+import { buildChatSystemPreamble } from './lib/buildChatSystemPreamble'
 import { TopBar } from './components/ide/TopBar'
 import { useChatSessions } from './hooks/useChatSessions'
 import { useAppCommands } from './hooks/useAppCommands'
@@ -248,7 +249,8 @@ export default function App() {
     sendChat, retryFromAnchor, editAndRetry, undoRetry,
     stopChat, clearChat,
     onApprovalDecide,
-    sessions, activeId, createSession, selectSession, closeSession, setActiveSessionProviderModel,
+    sessions, allSessions, activeId, createSession, selectSession, closeSession, setActiveSessionProviderModel,
+    getSession,
   } = chatSession
 
   const availableModels: Record<ChatProvider, string[]> = useMemo(() => ({
@@ -303,6 +305,11 @@ export default function App() {
     [editorRegistry, lintIssuesApi.issues],
   )
 
+  const chatSystemPreamble = useMemo(
+    () => buildChatSystemPreamble({ activeProfile }),
+    [activeProfile],
+  )
+
   useDockBridgeMain({
     ideLayout,
     modes,
@@ -323,6 +330,8 @@ export default function App() {
     followLatest,
     contextFileName: workspace.activeMarkdownRel ? basename(workspace.activeMarkdownRel) : null,
     sessions,
+    chatSessionsFull: allSessions,
+    chatSystemPreamble,
     activeSessionId: activeId,
     availableModels,
     sendChat,
@@ -396,6 +405,8 @@ export default function App() {
     closeSession,
     changeProviderModel: setActiveSessionProviderModel,
     availableModels,
+    getSession,
+    chatSystemPreamble,
     problems: lintIssuesApi.issues,
     lintScanState: lintIssuesApi.scanState,
     lintScanError: lintIssuesApi.scanError,
@@ -410,6 +421,7 @@ export default function App() {
     pendingApprovals, onApprovalDecide, followLatest, setFollowLatest,
     workspace.activeMarkdownRel, settings.chatFontSize, settings.pricingOverrides,
     sessions, activeId, createSession, selectSession, closeSession, setActiveSessionProviderModel, availableModels,
+    getSession, chatSystemPreamble,
     lintIssuesApi, jumpToProblem,
   ])
 
