@@ -165,7 +165,7 @@ function stripInlineMarkdown(s: string): string {
     .replace(/\*\*([^*]+)\*\*/g, '$1')             // **bold**
     .replace(/__([^_]+)__/g, '$1')                 // __bold__
     .replace(/\*([^*]+)\*/g, '$1')                 // *italic*
-    .replace(/(^|[^_])_([^_]+)_(?!_)/g, '$1$2')    // _italic_
+    .replace(/(^|[^A-Za-z0-9_])_([^_]+)_(?![A-Za-z0-9_])/g, '$1$2')    // _italic_
 }
 
 function truncateAtWord(s: string, limit: number): string {

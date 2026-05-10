@@ -132,4 +132,10 @@ describe('parseMarkdownMeta — excerpt', () => {
     expect(parseMarkdownMeta('# Heading only\n', { fields: [] }).excerpt).toBe('')
     expect(parseMarkdownMeta('', { fields: [] }).excerpt).toBe('')
   })
+
+  it('does not strip underscores from snake_case identifiers', () => {
+    const src = 'See my_snake_case_var in action.\n'
+    const m = parseMarkdownMeta(src, { fields: [] })
+    expect(m.excerpt).toBe('See my_snake_case_var in action.')
+  })
 })
