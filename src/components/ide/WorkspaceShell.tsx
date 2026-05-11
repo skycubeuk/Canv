@@ -43,6 +43,7 @@ export interface WorkspaceShellProps {
   onJumperDestroy: (groupId: EditorGroupId, rel: string) => void
   onEditorChange: (groupId: EditorGroupId, rel: string, markdown: string) => void
   onEditorSelectionChange: () => void
+  readLiveBuffer: (groupId: EditorGroupId, rel: string) => string | undefined
   onJumpToMatch: (match: SearchMatch, q: { query: string; regex: boolean; caseSensitive: boolean }, ordinalInFile: number) => Promise<void>
   // Outline
   outlineNodes: OutlineNode[]
@@ -86,6 +87,7 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
     ideLayout, workspace, openRels, pinnedRels,
     onEditorReady, onEditorDestroy, onJumperReady, onJumperDestroy,
     onEditorChange, onEditorSelectionChange,
+    readLiveBuffer,
     onJumpToMatch,
     outlineNodes, focusedKey, onOutlineJump,
     onClickBreadcrumbFolder, revealFolderRel,
@@ -200,6 +202,7 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
                       onEditorDestroy={onEditorDestroy}
                       onJumperReady={onJumperReady}
                       onJumperDestroy={onJumperDestroy}
+                      getInitialBuffer={readLiveBuffer}
                     />
                   )
                 }}

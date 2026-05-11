@@ -37,6 +37,13 @@ export interface UseEditorRegistryApi {
   handleEditorSelectionChange: () => void
   jumpToMatch: (match: SearchMatch, q: { query: string; regex: boolean; caseSensitive: boolean }, ordinalInFile: number) => Promise<void>
   jumpToProblem: (issue: LintIssue, allIssues: LintIssue[]) => Promise<void>
+  /**
+   * Latest known buffer text for a given (group, file). Reads from the
+   * live-docs channel that's published on every keystroke. Returns undefined
+   * when no edits have been observed — callers should fall back to the disk
+   * snapshot in that case. Used by Canvas to seed CodeMirror across remount.
+   */
+  readLiveBuffer: (groupId: EditorGroupId, rel: string) => string | undefined
   openSources: OpenTabSource[]
   outlineNodes: ReturnType<typeof useOutline>
   focusedKey: string | null
@@ -173,6 +180,35 @@ export function useEditorRegistry(args: UseEditorRegistryArgs): UseEditorRegistr
     [workspace, liveDocsChannel],
   )
 
+  const readLiveBuffer = useCallback(
+    (groupId: EditorGroupId, rel: string): string | undefined =>
+      liveDocsChannel.read(`${groupId}:${rel}`),
+    [liveDocsChannel],
+  )
+
+  // When a tab's loadedMarkdown moves on (file reloaded, written by tool,
+  // freshly opened), invalidate the matching live-buffer entry so a later
+  // Canvas remount doesn't replay a stale edit on top of fresh disk content.
+  // Also drops entries for tabs that have closed.
+  const prevLoadedRef = useRef<Map<string, string>>(new Map())
+  useEffect(() => {
+    const next = new Map<string, string>()
+    for (const g of workspace.editorGroups) {
+      for (const t of g.openTabs) {
+        if (t.kind !== 'markdown') continue
+        next.set(editorMapKey(g.id, t.relPath), t.loadedMarkdown)
+      }
+    }
+    const prev = prevLoadedRef.current
+    for (const [key, beforeText] of prev) {
+      const afterText = next.get(key)
+      if (afterText === undefined || afterText !== beforeText) {
+        liveDocsChannel.clear(key)
+      }
+    }
+    prevLoadedRef.current = next
+  }, [workspace.editorGroups, liveDocsChannel])
+
   const [selectionTick, setSelectionTick] = useState(0)
   const handleEditorSelectionChange = useCallback(() => {
     setSelectionTick((n) => n + 1)
@@ -295,6 +331,7 @@ export function useEditorRegistry(args: UseEditorRegistryArgs): UseEditorRegistr
     handleJumperReady, handleJumperDestroy,
     handleEditorChange, handleEditorSelectionChange,
     jumpToMatch, jumpToProblem,
+    readLiveBuffer,
     openSources, outlineNodes, focusedKey,
   }), [
     selectionTick,
@@ -303,6 +340,7 @@ export function useEditorRegistry(args: UseEditorRegistryArgs): UseEditorRegistr
     handleJumperReady, handleJumperDestroy,
     handleEditorChange, handleEditorSelectionChange,
     jumpToMatch, jumpToProblem,
+    readLiveBuffer,
     openSources, outlineNodes, focusedKey,
   ])
 }

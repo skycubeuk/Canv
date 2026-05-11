@@ -81,6 +81,7 @@ export default function App() {
     handleEditorReady, handleEditorDestroy,
     handleJumperReady, handleJumperDestroy,
     handleEditorChange, handleEditorSelectionChange,
+    readLiveBuffer,
     openSources, outlineNodes, focusedKey,
     jumpToMatch,
   } = editorRegistry
@@ -508,6 +509,7 @@ export default function App() {
         onJumperDestroy={handleJumperDestroy}
         onEditorChange={handleEditorChange}
         onEditorSelectionChange={handleEditorSelectionChange}
+        readLiveBuffer={readLiveBuffer}
         onJumpToMatch={jumpToMatch}
         outlineNodes={outlineNodes}
         focusedKey={focusedKey}

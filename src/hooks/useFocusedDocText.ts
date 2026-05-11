@@ -3,6 +3,10 @@ import { useEffect, useState } from 'react'
 export interface LiveDocsChannel {
   publish: (key: string, text: string) => void
   read: (key: string) => string | undefined
+  /** Drop any stored text for `key`. Used when the underlying file's disk
+   *  snapshot moves on (reload, external write, tool write) — the channel
+   *  entry is no longer a safe seed for a fresh editor. */
+  clear: (key: string) => void
   subscribe: (listener: (key: string) => void) => () => void
 }
 
@@ -16,6 +20,10 @@ export function createLiveDocsChannel(): LiveDocsChannel {
     },
     read(key) {
       return map.get(key)
+    },
+    clear(key) {
+      if (!map.delete(key)) return
+      for (const l of listeners) l(key)
     },
     subscribe(l) {
       listeners.add(l)

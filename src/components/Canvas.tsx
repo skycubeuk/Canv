@@ -25,6 +25,11 @@ interface Props {
   onEditorDestroy: (groupId: EditorGroupId, rel: string) => void
   onJumperReady: (groupId: EditorGroupId, rel: string, jumper: Jumper) => void
   onJumperDestroy: (groupId: EditorGroupId, rel: string) => void
+  // Looked up once on mount. If it returns a string, that text seeds the
+  // editor instead of tab.loadedMarkdown — the live buffer registry holds the
+  // user's in-flight edits, while loadedMarkdown is only the disk snapshot.
+  // Without this, a layout-driven remount resets the view to the disk text.
+  getInitialBuffer?: (groupId: EditorGroupId, rel: string) => string | undefined
 }
 
 const widthClass: Record<LineWidth, string> = {
@@ -47,7 +52,7 @@ const editorTypographyTheme = EditorView.theme({
 export function Canvas({
   groupId, tab, isActive, fontSize, lineWidth, viewMode,
   onChange, onSelectionChange, onEditorReady, onEditorDestroy,
-  onJumperReady, onJumperDestroy,
+  onJumperReady, onJumperDestroy, getInitialBuffer,
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const viewRef = useRef<EditorView | null>(null)
@@ -58,6 +63,11 @@ export function Canvas({
   // entering preview mode or when the tab's loadedMarkdown changes — keystrokes
   // in edit mode do NOT touch React state, since previewDoc is unread there.
   const [previewDoc, setPreviewDoc] = useState<string>(tab.loadedMarkdown)
+  // Read once into a ref so the layout effect and the editor stay coupled to
+  // the same lookup result. Kept here (not inside the effect) so React's
+  // double-invoke under StrictMode still resolves to the same text.
+  const getInitialBufferRef = useRef(getInitialBuffer)
+  useEffect(() => { getInitialBufferRef.current = getInitialBuffer }, [getInitialBuffer])
   // Latest callbacks via ref so the editor construction doesn't capture stale closures.
   const onChangeRef = useRef(onChange)
   const onSelectionChangeRef = useRef(onSelectionChange)
@@ -73,8 +83,12 @@ export function Canvas({
   useLayoutEffect(() => {
     const container = containerRef.current
     if (!container) return
+    // Prefer the live buffer if one exists — it's the user's in-flight edits,
+    // potentially newer than the disk snapshot in tab.loadedMarkdown.
+    const initialDoc = getInitialBufferRef.current?.(groupId, tab.relPath) ?? tab.loadedMarkdown
+    lastLoadedRef.current = tab.loadedMarkdown
     const state = makeMarkdownState({
-      initialDoc: tab.loadedMarkdown,
+      initialDoc,
       onDocChange: (doc) => {
         onChangeRef.current(groupId, tab.relPath, doc)
       },
