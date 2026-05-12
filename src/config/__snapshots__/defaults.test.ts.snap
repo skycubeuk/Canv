@@ -22,7 +22,7 @@ ISSUES:
 - [bullet list of specific errors found, or "None" if clean. Distinguish errors from voice — don't flag deliberate fragments or unconventional punctuation that's clearly stylistic.]
 
 CORRECTED:
-[the corrected version of the text — preserve voice, dialogue style, and rhythm; only fix actual errors]
+[the corrected text only. Preserve voice, dialogue style, and rhythm; only fix actual errors. Output exactly the replacement text — nothing before it, nothing after it. Do not add \`[Note: ...]\`, \`[NB: ...]\`, footnotes, brackets, or any commentary. If the passage is incomplete, cut off mid-sentence, or you can't edit it confidently, put that observation in ISSUES — never append a note after the CORRECTED text.]
 
 TEXT TO EDIT:
 {{text}}
@@ -135,7 +135,7 @@ NOTES:
 - [bulleted explanation: what you changed and why, calling out anything you couldn't address]
 
 SUGGESTED REWRITE:
-[the edited passage — no preamble, no commentary]
+[the edited passage only. Output exactly the replacement text — nothing before it, nothing after it. Do not add \`[Note: ...]\`, \`[NB: ...]\`, footnotes, brackets, or any commentary. If the passage is incomplete or you can't edit it confidently, put that observation in NOTES — never append a note after the SUGGESTED REWRITE text.]
 
 TEXT TO EDIT:
 {{text}}
@@ -283,7 +283,7 @@ ISSUES:
 - [bullet list of specific errors found, or "None" if clean]
 
 CORRECTED:
-[the corrected version of the text — no preamble, no explanation, just the corrected text]
+[the corrected text only. Output exactly the replacement text — nothing before it, nothing after it. Do not add \`[Note: ...]\`, \`[NB: ...]\`, footnotes, brackets, or any commentary. If the passage is incomplete, cut off mid-sentence, or you can't edit it confidently, put that observation in ISSUES — never append a note after the CORRECTED text.]
 
 TEXT TO EDIT:
 {{text}}
@@ -375,7 +375,7 @@ NOTES:
 - [bulleted explanation: what you changed and why, calling out anything you couldn't address]
 
 SUGGESTED REWRITE:
-[the edited passage — no preamble, no commentary]
+[the edited passage only. Output exactly the replacement text — nothing before it, nothing after it. Do not add \`[Note: ...]\`, \`[NB: ...]\`, footnotes, brackets, or any commentary. If the passage is incomplete or you can't edit it confidently, put that observation in NOTES — never append a note after the SUGGESTED REWRITE text.]
 
 TEXT TO EDIT:
 {{text}}
@@ -579,7 +579,7 @@ ISSUES:
 - [bullet list of specific errors and inconsistencies found, or "None" if clean]
 
 CORRECTED:
-[the corrected version of the text — no preamble, no explanation]
+[the corrected text only. Output exactly the replacement text — nothing before it, nothing after it. Do not add \`[Note: ...]\`, \`[NB: ...]\`, footnotes, brackets, or any commentary. If the passage is incomplete, cut off mid-sentence, or you can't edit it confidently, put that observation in ISSUES — never append a note after the CORRECTED text.]
 
 TEXT TO EDIT:
 {{text}}
@@ -671,7 +671,7 @@ NOTES:
 - [bulleted explanation: what you changed and why, calling out anything you couldn't address]
 
 SUGGESTED REWRITE:
-[the edited passage — no preamble, no commentary]
+[the edited passage only. Output exactly the replacement text — nothing before it, nothing after it. Do not add \`[Note: ...]\`, \`[NB: ...]\`, footnotes, brackets, or any commentary. If the passage is incomplete or you can't edit it confidently, put that observation in NOTES — never append a note after the SUGGESTED REWRITE text.]
 
 TEXT TO EDIT:
 {{text}}

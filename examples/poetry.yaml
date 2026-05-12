@@ -62,7 +62,7 @@ actions:
       - [bullets identifying specific images that work, images that go vague, and abstractions that could be made physical. Quote the original phrase.]
 
       SUGGESTED REWRITE:
-      [the text with imagery sharpened — keep voice, line breaks, and rhythm intact; only change what was vague]
+      [the text with imagery sharpened — keep voice, line breaks, and rhythm intact; only change what was vague. Output exactly the replacement text — nothing before it, nothing after it. Do not add `[Note: ...]`, `[NB: ...]`, footnotes, brackets, or any commentary. If the passage is incomplete or you can't edit it confidently, put that observation in NOTES — never append a note after the SUGGESTED REWRITE text.]
 
       TEXT TO EDIT:
       {{text}}
