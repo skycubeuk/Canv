@@ -44,7 +44,7 @@ actions:
       - [bullet list of specific errors found, or "None" if clean]
 
       CORRECTED:
-      [the corrected version of the text — no preamble, no explanation, just the corrected text]
+      [the corrected text only. Output exactly the replacement text — nothing before it, nothing after it. Do not add `[Note: ...]`, `[NB: ...]`, footnotes, brackets, or any commentary. If the passage is incomplete, cut off mid-sentence, or you can't edit it confidently, put that observation in ISSUES — never append a note after the CORRECTED text.]
 
       TEXT TO EDIT:
       {{text}}
@@ -126,7 +126,7 @@ actions:
       - [bulleted explanation: what you changed and why, calling out anything you couldn't address]
 
       SUGGESTED REWRITE:
-      [the edited passage — no preamble, no commentary]
+      [the edited passage only. Output exactly the replacement text — nothing before it, nothing after it. Do not add `[Note: ...]`, `[NB: ...]`, footnotes, brackets, or any commentary. If the passage is incomplete or you can't edit it confidently, put that observation in NOTES — never append a note after the SUGGESTED REWRITE text.]
 
       TEXT TO EDIT:
       {{text}}
