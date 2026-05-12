@@ -18,7 +18,7 @@
 id: solo-author
 label: Solo Author
 icon: BookOpen
-description: Fiction with a focused popout — Spelling, Grammar, Refine, Free Edit on top; everything else tucked under the overflow.
+description: Fiction with a focused popout — Grammar & Spelling, Refine, Free Edit on top; everything else tucked under the overflow.
 examples: Drafts where you do the craft yourself · light AI assistance only
 order: 15
 default: false
@@ -27,45 +27,24 @@ chatSystemPrompt: |
 
   You can build interactive views of the project — timelines, charts, graphs, kanban boards, heatmaps — as small static sites under .canv/sites/<id>/. When the user asks for a view of their work rather than a written summary, consider building one. To update an existing site, read .canv/site_index.yaml to find its id, then use edit_file (not create_file) on the files in .canv/sites/<id>/ and call site_update. See the site_register and site_update tools for the full contract.
 actions:
-  - id: spelling
-    label: Spelling
-    icon: SpellCheck
-    group: core
-    inputMode: selection-or-document
-    outputMode: feedback-and-rewrite
-    prompt: |
-      You are a proofreader for fiction. Find spelling and typo errors only — do not touch grammar, punctuation, or style. Flag misspellings, wrong-word typos ("there/their", "its/it's"), repeated words, and obvious keyboard slips. Preserve dialect, made-up names, and intentional non-standard spellings.
-
-      {{context}}
-
-      Respond in this exact format:
-
-      ISSUES:
-      - [bullet list of spelling/typo errors found, or "None" if clean. Quote the offending word and give the correction.]
-
-      CORRECTED:
-      [the corrected version of the text — only spelling and typo fixes; leave everything else exactly as written]
-
-      TEXT TO EDIT:
-      {{text}}
   - id: grammar
-    label: Grammar
+    label: Grammar & Spelling
     icon: PencilLine
     group: core
     inputMode: selection-or-document
     outputMode: feedback-and-rewrite
     prompt: |
-      You are a copy editor for fiction. Review the text for grammar, punctuation, and clarity errors — but be light-handed with style. Preserve the author's voice, dialogue conventions, intentional fragments, and rhythm. Flag actual mistakes, not stylistic choices. Skip spelling (a separate action handles that).
+      You are a copy editor for fiction. Review the text for grammar, spelling, punctuation, and clarity errors — but be light-handed with style. Preserve the author's voice, dialogue conventions, intentional fragments, and rhythm. Flag actual mistakes, not stylistic choices.
 
       {{context}}
 
       Respond in this exact format:
 
       ISSUES:
-      - [bullet list of specific grammar/punctuation issues, or "None" if clean. Distinguish errors from voice — don't flag deliberate fragments or unconventional punctuation that's clearly stylistic.]
+      - [bullet list of specific errors found, or "None" if clean. Distinguish errors from voice — don't flag deliberate fragments or unconventional punctuation that's clearly stylistic.]
 
       CORRECTED:
-      [the corrected version of the text — preserve voice, dialogue style, and rhythm; only fix actual grammar and punctuation errors]
+      [the corrected version of the text — preserve voice, dialogue style, and rhythm; only fix actual errors]
 
       TEXT TO EDIT:
       {{text}}
