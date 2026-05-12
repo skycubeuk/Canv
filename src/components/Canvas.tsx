@@ -40,7 +40,6 @@ const widthClass: Record<LineWidth, string> = {
 
 const editorTypographyTheme = EditorView.theme({
   '.cm-content': {
-    fontSize: '15px',
     lineHeight: '1.7',
     fontFamily: 'Inter, system-ui, sans-serif',
   },
@@ -177,7 +176,7 @@ export function Canvas({
     >
       <div className="flex-1 overflow-auto bg-app min-h-0">
         <div
-          className={`mx-auto px-6 pt-10 pb-20 text-[15px] leading-[1.7] text-default min-h-full flex flex-col ${widthClass[lineWidth]}`}
+          className={`mx-auto px-6 pt-10 pb-20 leading-[1.7] text-default min-h-full flex flex-col ${widthClass[lineWidth]}`}
           style={{ fontSize: `${fontSize}px` }}
         >
           <div
@@ -190,6 +189,7 @@ export function Canvas({
             <div
               ref={previewRef}
               className="prose prose-invert max-w-none"
+              style={{ fontSize: `${fontSize}px` }}
               onContextMenu={(e) => {
                 const root = previewRef.current
                 if (!root) return
