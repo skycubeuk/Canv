@@ -121,22 +121,6 @@ export function SettingsTab(props: Props) {
             </label>
           </Field>
 
-          <Field label="Stream chunk delay">
-            <select
-              className="input"
-              value={settings.streamChunkDelayMs}
-              onChange={(e) => onUpdate({ streamChunkDelayMs: Number(e.target.value) as 0 | 50 | 100 | 200 })}
-            >
-              <option value={0}>Off</option>
-              <option value={50}>Slow (50ms)</option>
-              <option value={100}>Slower (100ms)</option>
-              <option value={200}>Slowest (200ms)</option>
-            </select>
-            <p className="text-xs text-muted mt-1">
-              Pace streaming output for reading along. Off by default.
-            </p>
-          </Field>
-
           <Field label={`Max output tokens: ${settings.maxOutputTokens[provider]}`}>
             <input
               type="range"
