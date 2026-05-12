@@ -3,6 +3,7 @@ import type { Tool } from './types'
 import { listDirTool } from './handlers/listDir'
 import { readFileTool } from './handlers/readFile'
 import { searchWorkspaceTool } from './handlers/searchWorkspace'
+import { fileMetadataTool } from './handlers/file_metadata'
 import { createFileTool } from './handlers/createFile'
 import { editFileTool } from './handlers/editFile'
 import { deleteFileTool } from './handlers/deleteFile'
@@ -13,7 +14,7 @@ import { siteRegisterTool } from './handlers/siteRegister'
 import { siteUpdateTool } from './handlers/siteUpdate'
 
 const TOOLS: Tool[] = [
-  listDirTool, readFileTool, searchWorkspaceTool,
+  listDirTool, readFileTool, searchWorkspaceTool, fileMetadataTool,
   createFileTool, editFileTool, deleteFileTool, renameFileTool, createFolderTool,
   setTodosTool,
   siteRegisterTool, siteUpdateTool,

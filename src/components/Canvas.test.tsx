@@ -123,6 +123,61 @@ describe('Canvas', () => {
     expect(spies[1]).not.toHaveBeenCalled()
   })
 
+  it('seeds the editor from getInitialBuffer when provided, so a remount after unsaved edits keeps the live text', async () => {
+    // Regression: layout changes (chat popout, dock toggle, sidebar flip) can
+    // unmount/remount Canvas. Without a live-buffer source, the new editor
+    // re-seeds from tab.loadedMarkdown — the stale disk snapshot from open
+    // time — losing the user's in-flight edits.
+    let view: EditorView | null = null
+    const onEditorReady = (_g: unknown, _r: unknown, v: EditorView) => { view = v }
+    const tab: MarkdownTab = {
+      kind: 'markdown',
+      relPath: 'doc.md',
+      loadedMarkdown: 'original',
+      mtimeMs: 1,
+    }
+    const { unmount } = render(
+      <ContextMenuProvider>
+        <Canvas {...baseProps} tab={tab} onEditorReady={onEditorReady} />
+      </ContextMenuProvider>,
+    )
+    if (!view) throw new Error('editor view was not registered')
+    const v1: EditorView = view
+    v1.dispatch({ changes: { from: v1.state.doc.length, insert: ' + live edits' } })
+    expect(v1.state.doc.toString()).toBe('original + live edits')
+    unmount()
+
+    view = null
+    const getInitialBuffer = vi.fn((_g: string, _r: string) => 'original + live edits')
+    render(
+      <ContextMenuProvider>
+        <Canvas {...baseProps} tab={tab} onEditorReady={onEditorReady} getInitialBuffer={getInitialBuffer} />
+      </ContextMenuProvider>,
+    )
+    expect(getInitialBuffer).toHaveBeenCalledWith('g1', 'doc.md')
+    if (!view) throw new Error('editor view was not registered on remount')
+    const v2: EditorView = view
+    expect(v2.state.doc.toString()).toBe('original + live edits')
+  })
+
+  it('falls back to tab.loadedMarkdown when getInitialBuffer returns undefined', () => {
+    let view: EditorView | null = null
+    const onEditorReady = (_g: unknown, _r: unknown, v: EditorView) => { view = v }
+    render(
+      <ContextMenuProvider>
+        <Canvas
+          {...baseProps}
+          tab={{ kind: 'markdown', relPath: 'doc.md', loadedMarkdown: 'from disk', mtimeMs: 0 }}
+          onEditorReady={onEditorReady}
+          getInitialBuffer={() => undefined}
+        />
+      </ContextMenuProvider>,
+    )
+    if (!view) throw new Error('editor view was not registered')
+    const v: EditorView = view
+    expect(v.state.doc.toString()).toBe('from disk')
+  })
+
   it('edit-mode jumper moves the CodeMirror selection to the requested line', async () => {
     let captured: Jumper | null = null
     const onJumperReady = (_g: unknown, _r: unknown, j: Jumper) => { captured = j }

@@ -1,6 +1,7 @@
 import type { RunRecord } from '../components/ResultsPanel'
 import type { ChatMessage, ChatProvider, PendingApproval } from '../components/ChatPanel'
 import type { SidebarSession } from '../components/ChatSessionsSidebar'
+import type { ChatSession } from '../hooks/useChatSessions'
 import type { ApprovalDecision } from '../agents/chatRunner'
 import type { LintIssue } from './lintTypes'
 import type { ScanState } from '../hooks/useLintIssues'
@@ -38,6 +39,12 @@ export interface DockState {
 
   // Chat sessions
   sessions: SidebarSession[]
+  /** Full session records for every session, so the popout can power its
+   *  Output-tab chat inspector without sharing the main hook's closure. */
+  chatSessionsFull: ChatSession[]
+  /** System preamble the chat runner is currently injecting; rebuilt on the
+   *  main side so the popout's chat inspector matches what the model sees. */
+  chatSystemPreamble: string
   activeSessionId: string
   availableModels: Record<ChatProvider, string[]>
 

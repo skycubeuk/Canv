@@ -350,3 +350,21 @@ describe('useChatSessions — per-session abort isolation', () => {
     expect(aFinal).toBeDefined()
   })
 })
+
+describe('useChatSessions — getSession', () => {
+  beforeEach(() => { localStorage.clear() })
+
+  it('getSession returns the full session for a known id', () => {
+    const { result } = renderHook(() => useChatSessions(makeArgs()))
+    const activeId = result.current.activeId
+    const session = result.current.getSession(activeId)
+    expect(session).not.toBeNull()
+    expect(session!.id).toBe(activeId)
+    expect(Array.isArray(session!.messages)).toBe(true)
+  })
+
+  it('getSession returns null for unknown ids', () => {
+    const { result } = renderHook(() => useChatSessions(makeArgs()))
+    expect(result.current.getSession('cs-does-not-exist')).toBeNull()
+  })
+})

@@ -295,3 +295,58 @@ describe('useWorkspace — markdown content fidelity', () => {
     expect(fsMock.writeFile).not.toHaveBeenCalled()
   })
 })
+
+describe('useWorkspace — watcher own-write suppression', () => {
+  // Capture the chokidar callback the hook registers, so tests can replay
+  // 'change' events with arbitrary timing.
+  let watcherCb: ((ev: { type: string; relPath: string; mtimeMs?: number }) => void) | null = null
+
+  beforeEach(() => {
+    watcherCb = null
+    ;(fsMock.subscribe as unknown as {
+      mockImplementation: (fn: (cb: (ev: { type: string; relPath: string; mtimeMs?: number }) => void) => () => void) => void
+    }).mockImplementation((cb) => {
+      watcherCb = cb
+      return () => {}
+    })
+  })
+
+  it('suppresses our own write echo even when chokidar reports it long after the write resolved', async () => {
+    const OWN_MTIME = 1_778_587_350_985.5952
+    fsMock.readFile.mockImplementation(async () => ({ content: 'hello', mtimeMs: 1 }))
+    fsMock.writeFile.mockResolvedValue({ mtimeMs: OWN_MTIME })
+
+    const hook = await withWorkspace()
+    await act(async () => { await hook.result.current.openTab('body.md') })
+    // Trigger a save and let the 1s debounce + writeFile resolve.
+    act(() => { hook.result.current.saveTab('body.md', 'edited') })
+    await act(async () => { await new Promise((r) => setTimeout(r, 1100)) })
+    expect(fsMock.writeFile).toHaveBeenCalled()
+
+    // Now simulate the chokidar 'change' echo arriving 1500ms later —
+    // well past the previous 250ms suppression window, but still our own
+    // write (same mtimeMs as what writeFile returned).
+    await act(async () => { await new Promise((r) => setTimeout(r, 1500)) })
+    expect(watcherCb).not.toBeNull()
+    act(() => { watcherCb!({ type: 'change', relPath: 'body.md', mtimeMs: OWN_MTIME }) })
+
+    expect(hook.result.current.conflict).toBeNull()
+  })
+
+  it('still raises a conflict when an external write produces a different mtime', async () => {
+    const OWN_MTIME = 2_000
+    const EXTERNAL_MTIME = 2_500
+    fsMock.readFile.mockImplementation(async () => ({ content: 'hello', mtimeMs: 1 }))
+    fsMock.writeFile.mockResolvedValue({ mtimeMs: OWN_MTIME })
+
+    const hook = await withWorkspace()
+    await act(async () => { await hook.result.current.openTab('body.md') })
+    act(() => { hook.result.current.saveTab('body.md', 'edited') })
+    await act(async () => { await new Promise((r) => setTimeout(r, 1100)) })
+
+    expect(watcherCb).not.toBeNull()
+    act(() => { watcherCb!({ type: 'change', relPath: 'body.md', mtimeMs: EXTERNAL_MTIME }) })
+
+    expect(hook.result.current.conflict).toEqual({ relPath: 'body.md', diskMtimeMs: EXTERNAL_MTIME })
+  })
+})

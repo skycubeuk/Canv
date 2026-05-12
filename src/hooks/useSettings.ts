@@ -130,9 +130,11 @@ export function useSettings() {
     if (!(ALLOWED_DELAYS as readonly number[]).includes(m.streamChunkDelayMs)) {
       m.streamChunkDelayMs = 0
     }
-    // Clamp chatFontSize to the slider range; default if nonsense.
+    // Clamp font sizes to the slider range; default if nonsense.
+    if (!Number.isFinite(m.fontSize)) m.fontSize = DEFAULT_SETTINGS.fontSize
+    else m.fontSize = Math.min(24, Math.max(12, Math.round(m.fontSize)))
     if (!Number.isFinite(m.chatFontSize)) m.chatFontSize = DEFAULT_SETTINGS.chatFontSize
-    else m.chatFontSize = Math.min(22, Math.max(12, Math.round(m.chatFontSize)))
+    else m.chatFontSize = Math.min(24, Math.max(12, Math.round(m.chatFontSize)))
     // pricingOverrides: drop entries whose values are not finite numbers.
     // Also upgrade legacy bare-model-id keys to `${provider}/${model}` so two
     // adapters listing the same model id can carry independent overrides.

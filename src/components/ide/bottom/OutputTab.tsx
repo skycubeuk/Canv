@@ -1,134 +1,146 @@
 import { useMemo, useState } from 'react'
 import type { RunRecord } from '../../ResultsPanel'
 import { timeAgo } from '../../../lib/timeAgo'
-import { providerName } from '../../../adapters'
+import type { ChatSession } from '../../../hooks/useChatSessions'
+import type { SidebarSession } from '../../ChatSessionsSidebar'
+import { RunInspector, CopyButton } from './RunInspector'
+import { ChatInspector } from './ChatInspector'
+
+type Source = 'runs' | 'chats'
 
 interface Props {
   runs: RunRecord[]
+  /** Optional chat-side props. When all are provided, the Runs|Chats toggle
+   *  is shown. When omitted (e.g. the dock popout window), the tab behaves
+   *  exactly like before — runs only. */
+  sessions?: SidebarSession[]
+  activeSessionId?: string
+  getSession?: (id: string) => ChatSession | null
+  chatSystemPreamble?: string
 }
 
-export function OutputTab({ runs }: Props) {
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const active = useMemo(() => {
-    if (selectedId) return runs.find((r) => r.id === selectedId) ?? runs[0] ?? null
-    return runs[0] ?? null
-  }, [runs, selectedId])
+export function OutputTab({ runs, sessions, activeSessionId, getSession, chatSystemPreamble }: Props) {
+  const chatAvailable = !!sessions && !!getSession && chatSystemPreamble !== undefined
 
-  if (runs.length === 0) {
+  const initialSource: Source = runs.length > 0 ? 'runs' : chatAvailable ? 'chats' : 'runs'
+  const [source, setSource] = useState<Source>(initialSource)
+
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
+
+  const activeRun = useMemo(() => {
+    if (selectedRunId) return runs.find((r) => r.id === selectedRunId) ?? runs[0] ?? null
+    return runs[0] ?? null
+  }, [runs, selectedRunId])
+
+  const activeSession = useMemo<ChatSession | null>(() => {
+    if (!chatAvailable || !sessions || !getSession) return null
+    const id = selectedSessionId ?? activeSessionId ?? sessions[0]?.id ?? null
+    return id ? getSession(id) : null
+  }, [chatAvailable, sessions, getSession, selectedSessionId, activeSessionId])
+
+  if (source === 'runs' && runs.length === 0 && !chatAvailable) {
     return (
       <div className="h-full flex items-center justify-center text-sm text-muted px-6 text-center bg-panel">
         Run an agent from the floating toolbar or document toolbar to inspect its raw I/O here.
       </div>
     )
   }
-  if (!active) return null
 
   return (
     <div className="h-full flex flex-col bg-app text-xs overflow-hidden">
       {/* Toolbar */}
       <div className="shrink-0 flex items-center gap-2 px-3 py-1.5 border-b border-default bg-panel">
-        <select
-          className="input text-xs"
-          value={active.id}
-          onChange={(e) => setSelectedId(e.target.value)}
-          aria-label="Select run"
-        >
-          {runs.map((r) => (
-            // <option> cannot contain JSX children — icon omitted here
-            <option key={r.id} value={r.id}>
-              {r.agentLabel} — {timeAgo(r.timestamp)}
-            </option>
-          ))}
-        </select>
+        {chatAvailable && (
+          <select
+            aria-label="Output source"
+            className="input text-xs"
+            value={source}
+            onChange={(e) => setSource(e.target.value as Source)}
+          >
+            <option value="runs">Runs</option>
+            <option value="chats">Chats</option>
+          </select>
+        )}
+
+        {source === 'runs' ? (
+          runs.length > 0 ? (
+            <select
+              className="input text-xs"
+              value={activeRun?.id ?? ''}
+              onChange={(e) => setSelectedRunId(e.target.value)}
+              aria-label="Select run"
+            >
+              {runs.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.agentLabel} — {timeAgo(r.timestamp)}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <span className="text-muted">No runs yet.</span>
+          )
+        ) : sessions && sessions.length > 0 ? (
+          <select
+            className="input text-xs"
+            value={activeSession?.id ?? ''}
+            onChange={(e) => setSelectedSessionId(e.target.value)}
+            aria-label="Select chat session"
+          >
+            {sessions.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.title}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <span className="text-muted">No chat sessions yet.</span>
+        )}
+
         <div className="flex-1" />
-        <CopyButton label="Copy prompt" text={() => promptOf(active)} />
-        <CopyButton label="Copy response" text={() => active.response} />
-        <CopyButton label="Copy all (JSON)" text={() => JSON.stringify(active, null, 2)} />
+
+        {source === 'runs' && activeRun
+          ? runCopyButtons(activeRun).map((b) => <CopyButton key={b.label} label={b.label} text={b.text} />)
+          : null}
+
+        {source === 'chats' && activeSession ? (
+          <>
+            <CopyButton
+              label="Copy session (JSON)"
+              text={() => JSON.stringify(activeSession, null, 2)}
+            />
+            <CopyButton
+              label="Copy transcript"
+              text={() => transcriptOf(activeSession, chatSystemPreamble ?? '')}
+            />
+          </>
+        ) : null}
       </div>
 
       {/* Body */}
-      <div className="flex-1 overflow-auto px-4 py-3 space-y-3 font-mono">
-        <Meta run={active} />
-        {active.system && <Section title="System">{active.system}</Section>}
-        {active.basePrompt && <Section title="Base prompt (used for refines)">{active.basePrompt}</Section>}
-        {active.rawMessages && active.rawMessages.length > 0 && (
-          <Section title={`Raw messages (${active.rawMessages.length})`}>
-            {active.rawMessages.map((m, i) => (
-              <div key={i} className="mb-2">
-                <div className="text-[10px] uppercase tracking-wide text-muted">
-                  {m.role}
-                </div>
-                <pre className="whitespace-pre-wrap break-words">{'content' in m ? m.content : ''}</pre>
-              </div>
-            ))}
-          </Section>
-        )}
-        <Section title="Response">{active.response || <em className="text-subtle">(empty)</em>}</Section>
-        {active.error && (
-          <Section title="Error">
-            <span className="text-red-400">{active.error}</span>
-          </Section>
-        )}
-      </div>
+      {source === 'runs' && activeRun ? (
+        <RunInspector run={activeRun} />
+      ) : source === 'chats' && activeSession ? (
+        <div className="flex-1 overflow-auto px-4 py-3">
+          <ChatInspector session={activeSession} systemText={chatSystemPreamble ?? ''} />
+        </div>
+      ) : (
+        <div className="flex-1 flex items-center justify-center text-muted text-sm px-6 text-center">
+          {source === 'runs'
+            ? 'Run an agent from the floating toolbar or document toolbar to inspect its raw I/O here.'
+            : 'No chat sessions yet. Start one in the Chat panel.'}
+        </div>
+      )}
     </div>
   )
 }
 
-function Meta({ run }: { run: RunRecord }) {
-  return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-1 text-[11px] text-muted">
-      <Cell label="Status" value={run.status} />
-      <Cell label="Provider" value={providerName(run.provider)} />
-      <Cell label="Model" value={run.model} />
-      <Cell label="Elapsed" value={run.elapsedMs != null ? `${run.elapsedMs} ms` : '—'} />
-      <Cell label="Input tokens" value={run.tokenUsage ? String(run.tokenUsage.input) : '—'} />
-      <Cell label="Output tokens" value={run.tokenUsage ? String(run.tokenUsage.output) : '—'} />
-      <Cell label="Truncated" value={run.truncated ? 'yes' : 'no'} />
-      <Cell label="Followups" value={String(run.followups?.length ?? 0)} />
-    </div>
-  )
-}
-
-function Cell({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex flex-col">
-      <span className="text-[10px] uppercase tracking-wide text-muted">{label}</span>
-      <span className="font-medium text-default">{value}</span>
-    </div>
-  )
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section>
-      <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted mb-1">{title}</h3>
-      <div className="pl-2 border-l border-default text-default whitespace-pre-wrap break-words">
-        {children}
-      </div>
-    </section>
-  )
-}
-
-function CopyButton({ label, text }: { label: string; text: () => string }) {
-  const [copied, setCopied] = useState(false)
-  return (
-    <button
-      type="button"
-      onClick={async () => {
-        try {
-          await navigator.clipboard.writeText(text())
-          setCopied(true)
-          setTimeout(() => setCopied(false), 1200)
-        } catch {
-          // clipboard unavailable
-        }
-      }}
-      className="px-2 py-0.5 rounded border border-default text-muted hover:bg-hover"
-      title={label}
-    >
-      {copied ? 'Copied' : label}
-    </button>
-  )
+function runCopyButtons(run: RunRecord): { label: string; text: () => string }[] {
+  return [
+    { label: 'Copy prompt', text: () => promptOf(run) },
+    { label: 'Copy response', text: () => run.response },
+    { label: 'Copy all (JSON)', text: () => JSON.stringify(run, null, 2) },
+  ]
 }
 
 function promptOf(run: RunRecord): string {
@@ -137,4 +149,22 @@ function promptOf(run: RunRecord): string {
     return sysLine + run.rawMessages.map((m) => `[${m.role}]\n${'content' in m ? m.content : ''}`).join('\n\n')
   }
   return run.basePrompt ?? ''
+}
+
+function transcriptOf(session: ChatSession, systemText: string): string {
+  const parts: string[] = []
+  if (systemText) parts.push(`[system]\n${systemText}`)
+  for (const m of session.messages) {
+    parts.push(`[${m.role}]\n${m.content}`)
+    if (m.role === 'assistant') {
+      for (const c of m.toolCalls ?? []) {
+        parts.push(`[tool_call ${c.name}]\n${JSON.stringify(c.input, null, 2)}`)
+      }
+      for (const r of m.toolResults ?? []) {
+        const tag = r.isUserDenial ? 'tool_result_denied' : r.isError ? 'tool_result_error' : 'tool_result'
+        parts.push(`[${tag} ${r.id}]\n${r.content}`)
+      }
+    }
+  }
+  return parts.join('\n\n')
 }

@@ -40,6 +40,8 @@ export interface UseDockBridgeMainArgs {
   contextFileName: string | null
   // Chat — sessions
   sessions: SidebarSession[]
+  chatSessionsFull: import('../hooks/useChatSessions').ChatSession[]
+  chatSystemPreamble: string
   activeSessionId: string
   availableModels: Record<ChatProvider, string[]>
   // Chat — actions
@@ -87,6 +89,8 @@ export function useDockBridgeMain(args: UseDockBridgeMainArgs): void {
     followLatest,
     contextFileName,
     sessions,
+    chatSessionsFull,
+    chatSystemPreamble,
     activeSessionId,
     availableModels,
     sendChat,
@@ -150,6 +154,8 @@ export function useDockBridgeMain(args: UseDockBridgeMainArgs): void {
       chatFontSize: settings.chatFontSize,
       pricingOverrides,
       sessions,
+      chatSessionsFull,
+      chatSystemPreamble,
       activeSessionId,
       availableModels,
       problems,
@@ -175,6 +181,8 @@ export function useDockBridgeMain(args: UseDockBridgeMainArgs): void {
     followLatest,
     contextFileName,
     sessions,
+    chatSessionsFull,
+    chatSystemPreamble,
     activeSessionId,
     availableModels,
     problems,

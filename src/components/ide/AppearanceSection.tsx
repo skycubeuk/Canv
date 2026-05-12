@@ -76,7 +76,7 @@ export function AppearanceSection({ settings, onUpdate }: Props) {
         <input
           id="appearance-font-size"
           type="range"
-          min={14}
+          min={12}
           max={24}
           step={1}
           value={settings.fontSize}
@@ -93,7 +93,7 @@ export function AppearanceSection({ settings, onUpdate }: Props) {
           id="appearance-chat-font-size"
           type="range"
           min={12}
-          max={22}
+          max={24}
           step={1}
           value={settings.chatFontSize}
           onChange={(e) => onUpdate({ chatFontSize: Number(e.target.value) })}
