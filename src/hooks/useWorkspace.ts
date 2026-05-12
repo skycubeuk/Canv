@@ -18,7 +18,13 @@ const SCHEMA_KEY = 'canv:schemaVersion'
 const LAST_WS_KEY = 'canv:lastWorkspace'
 const SAVE_DEBOUNCE_MS = 1000
 const TREE_REFRESH_DEBOUNCE_MS = 200
-const RECENT_WRITE_WINDOW_MS = 250
+// How long to remember our own writes before evicting them from the
+// recentWrites map. Suppression itself doesn't depend on age — it matches by
+// mtimeMs — so this only has to be long enough to outlast the worst-case
+// delay between our writeFile resolving and the chokidar 'change' echo
+// arriving (awaitWriteFinish + IPC). Observed up to ~400ms on macOS; we keep
+// a generous margin to also cover slow remote/synced filesystems.
+const RECENT_WRITE_EVICT_MS = 30_000
 
 function isMd(rel: string): boolean {
   const lower = rel.toLowerCase()
@@ -992,8 +998,18 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
         }
       }
       if (type === 'change' && typeof mtimeMs === 'number') {
+        // Match own-writes by mtime, not by wall-clock age. The mtimeMs we
+        // recorded at writeFile time uniquely identifies the bytes we put on
+        // disk; if chokidar reports back that mtime, the file is exactly what
+        // we wrote — regardless of how long the awaitWriteFinish + IPC echo
+        // took to arrive. Evict stale entries opportunistically so the map
+        // doesn't grow unbounded.
+        const cutoff = Date.now() - RECENT_WRITE_EVICT_MS
+        for (const [k, v] of recentWrites.current) {
+          if (v.ts < cutoff) recentWrites.current.delete(k)
+        }
         const recent = recentWrites.current.get(relPath)
-        if (recent && Date.now() - recent.ts < RECENT_WRITE_WINDOW_MS && Math.abs(recent.mtimeMs - mtimeMs) < 2) {
+        if (recent && Math.abs(recent.mtimeMs - mtimeMs) < 2) {
           return // our own write
         }
         // Update mtime on pinned entries when the file changes externally.
