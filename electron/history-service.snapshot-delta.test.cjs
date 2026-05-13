@@ -22,7 +22,7 @@ describe('history-service getSnapshotDelta', () => {
     expect(delta).toEqual([{ relPath: 'a.md', status: 'modified' }])
   })
 
-  it('returns deleted when a file is added on disk that did not exist in the snapshot', async () => {
+  it('returns added when a file is added on disk after the snapshot', async () => {
     const root = await tmp()
     await fsp.writeFile(path.join(root, 'a.md'), 'v1\n', 'utf8')
     const svc = createHistoryService({ root })
@@ -31,10 +31,10 @@ describe('history-service getSnapshotDelta', () => {
 
     await fsp.writeFile(path.join(root, 'b.md'), 'new\n', 'utf8')
     const delta = await svc.getSnapshotDelta(snap.id)
-    expect(delta).toEqual([{ relPath: 'b.md', status: 'deleted' }])
+    expect(delta).toEqual([{ relPath: 'b.md', status: 'added' }])
   })
 
-  it('returns added when a file present in the snapshot is missing on disk', async () => {
+  it('returns deleted when a file in the snapshot is missing on disk', async () => {
     const root = await tmp()
     await fsp.writeFile(path.join(root, 'a.md'), 'v1\n', 'utf8')
     const svc = createHistoryService({ root })
@@ -43,7 +43,7 @@ describe('history-service getSnapshotDelta', () => {
 
     await fsp.unlink(path.join(root, 'a.md'))
     const delta = await svc.getSnapshotDelta(snap.id)
-    expect(delta).toEqual([{ relPath: 'a.md', status: 'added' }])
+    expect(delta).toEqual([{ relPath: 'a.md', status: 'deleted' }])
   })
 
   it('ignores .git, .canv, and gitignored paths', async () => {

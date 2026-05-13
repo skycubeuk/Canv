@@ -362,8 +362,8 @@ function createHistoryService({ root }) {
 
     for (const [relPath, oid] of snapBlobs) {
       if (!workingPaths.has(relPath)) {
-        // exists in snapshot tree, missing on disk → restoring would re-create it
-        changes.push({ relPath, status: 'added' })
+        // exists in snapshot, missing on disk → file was deleted since the snapshot
+        changes.push({ relPath, status: 'deleted' })
         continue
       }
       const { blob } = await git.readBlob({ fs: nodefs, dir: root, oid })
@@ -374,8 +374,8 @@ function createHistoryService({ root }) {
     }
     for (const relPath of workingPaths) {
       if (!snapBlobs.has(relPath)) {
-        // exists on disk, missing from snapshot tree → restoring would remove it
-        changes.push({ relPath, status: 'deleted' })
+        // exists on disk, missing from snapshot → file was added since the snapshot
+        changes.push({ relPath, status: 'added' })
       }
     }
     changes.sort((a, b) => a.relPath.localeCompare(b.relPath))
