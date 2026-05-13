@@ -138,7 +138,11 @@ function iconMessage(name: string): string {
 
 function zodIssueToConfigError(file: string, issue: ZodIssue): ConfigError {
   const field = issue.path
-    .map((seg, i) => (typeof seg === 'number' ? `[${seg}]` : i === 0 ? seg : `.${seg}`))
+    .map((seg, i) => {
+      if (typeof seg === 'number') return `[${seg}]`
+      const s = typeof seg === 'symbol' ? seg.description ?? '' : seg
+      return i === 0 ? s : `.${s}`
+    })
     .join('')
   return { file, field, message: issue.message }
 }
