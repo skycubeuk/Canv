@@ -18,7 +18,10 @@ import type { PaletteMode, PaletteFile } from './components/ide/CommandPalette'
 import type { Action as AgentDef } from './config/types'
 import { useModes } from './hooks/useModes'
 import { useProfilePicker } from './hooks/useProfilePicker'
-import { isElectron, flattenTree } from './lib/fs'
+import { isElectron, flattenTree, getFs } from './lib/fs'
+import { WorkspaceSetupModal } from './components/WorkspaceSetupModal'
+import { useWorkspaceSetup } from './hooks/useWorkspaceSetup'
+import { getCanvHistory } from './lib/history'
 import { exportBackup } from './lib/backup'
 import { useDialogs } from './lib/dialogs'
 import { useNotifications } from './hooks/useNotifications'
@@ -66,6 +69,17 @@ export default function App() {
 
   const workspace = useWorkspace({ onToast: showToast })
   const { openSettingsTab } = workspace
+
+  const setup = useWorkspaceSetup({
+    workspaceReady: workspace.ready,
+    remote: workspace.kind?.kind === 'remote',
+    fs: getFs(),
+    // Provide a no-op stub when canvHistory is not exposed (e.g. dock popout / web build).
+    // The hook only calls history.init when enableRA + non-remote, so the stub is unreachable
+    // in that path; this keeps the type happy.
+    history: getCanvHistory() ?? { init: async () => ({ branch: 'canv-history', headCommit: '' }) },
+    defaultModeId: defaultModeId ?? 'fiction',
+  })
 
   const fileOps = useWorkspaceFileOps({
     workspace,
@@ -551,6 +565,25 @@ export default function App() {
         wordCount={wordCount}
         selectionWordCount={selectionWordCount}
       />
+
+      {setup.phase === 'needs-setup' && (
+        <WorkspaceSetupModal
+          modes={modes.map((m) => ({ id: m.id, label: m.label }))}
+          defaultProfile={defaultModeId ?? modes[0]?.id ?? 'fiction'}
+          remote={workspace.kind?.kind === 'remote' ? true : false}
+          onConfirm={async (r) => {
+            try {
+              await setup.confirm(r)
+            } catch (e) {
+              showToast(`Setup failed: ${(e as Error).message}`)
+            }
+          }}
+          onCancel={async () => {
+            setup.cancel()
+            try { await getFs().closeWorkspace() } catch { /* ignore */ }
+          }}
+        />
+      )}
 
       <FloatingToolbar
         view={activeEditor}
