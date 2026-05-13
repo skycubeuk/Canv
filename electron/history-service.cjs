@@ -144,7 +144,33 @@ function createHistoryService({ root }) {
     return mutex(initInner)
   }
 
-  return { initRevisionArchaeology }
+  async function createSnapshot({ reason, summary, files = [], metadata = {} }) {
+    return mutex(async () => {
+      let parent
+      try {
+        parent = await git.resolveRef({ fs: nodefs, dir: root, ref: `refs/heads/${CANV_BRANCH}` })
+      } catch {
+        // Defensive: caller forgot to init. Run init inline (also mutex-guarded inside).
+        // Note: we're already inside the mutex, so call the inner function directly to avoid deadlock.
+        const init = await initInner()
+        parent = init.headCommit
+      }
+      const sha = await commitFullTree({ parent, message: `Canv: ${reason} — ${summary}` })
+      await git.writeRef({ fs: nodefs, dir: root, ref: `refs/heads/${CANV_BRANCH}`, value: sha, force: true })
+
+      const idx = await readIndex()
+      const entry = {
+        id: snapshotId(), commit: sha, createdAt: nowIso(),
+        reason, summary, files: [...files], hidden: false, metadata: { ...metadata },
+      }
+      idx.snapshots.push(entry)
+      idx.latestSnapshot = entry.id
+      await writeIndex(idx)
+      return entry
+    })
+  }
+
+  return { initRevisionArchaeology, createSnapshot }
 }
 
 module.exports = { createHistoryService }

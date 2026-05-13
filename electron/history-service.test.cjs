@@ -54,3 +54,62 @@ describe('history-service init', () => {
     expect(after).toEqual(before)
   })
 })
+
+describe('history-service createSnapshot', () => {
+  it('advances canv-history, leaves HEAD/index/user-branch byte-identical', async () => {
+    const root = await tmp()
+    await fsp.writeFile(path.join(root, 'a.md'), '# A\n', 'utf8')
+    const svc = createHistoryService({ root })
+    await svc.initRevisionArchaeology()
+
+    // Pretend the user has a normal branch with content
+    await git.add({ fs: nodefs, dir: root, filepath: 'a.md' })
+    await git.commit({
+      fs: nodefs, dir: root, message: 'user commit',
+      author: { name: 'User', email: 'u@u', timestamp: 1700000000, timezoneOffset: 0 },
+    })
+
+    const beforeHead = await fsp.readFile(path.join(root, '.git', 'HEAD'), 'utf8')
+    const beforeBranch = await git.resolveRef({ fs: nodefs, dir: root, ref: 'HEAD' })
+    const beforeIndex = await fsp.readFile(path.join(root, '.git', 'index'))
+
+    await fsp.writeFile(path.join(root, 'a.md'), '# A modified\n', 'utf8')
+    const snap = await svc.createSnapshot({ reason: 'manual', summary: 'edit', files: ['a.md'], metadata: {} })
+
+    expect(snap.id).toMatch(/^snap_/)
+    expect(snap.commit).toMatch(/^[0-9a-f]{40}$/)
+    expect(snap.reason).toBe('manual')
+
+    const tip = await git.resolveRef({ fs: nodefs, dir: root, ref: 'refs/heads/canv-history' })
+    expect(tip).toBe(snap.commit)
+
+    expect(await fsp.readFile(path.join(root, '.git', 'HEAD'), 'utf8')).toBe(beforeHead)
+    expect(await git.resolveRef({ fs: nodefs, dir: root, ref: 'HEAD' })).toBe(beforeBranch)
+
+    const afterIndex = await fsp.readFile(path.join(root, '.git', 'index'))
+    expect(Buffer.compare(beforeIndex, afterIndex)).toBe(0)
+
+    const idx = JSON.parse(await fsp.readFile(path.join(root, '.canv', 'history-index.json'), 'utf8'))
+    expect(idx.snapshots.length).toBe(2)
+    expect(idx.latestSnapshot).toBe(snap.id)
+    expect(idx.snapshots[1].files).toEqual(['a.md'])
+  })
+
+  it('serialises concurrent calls without overlap', async () => {
+    const root = await tmp()
+    await fsp.writeFile(path.join(root, 'a.md'), 'x', 'utf8')
+    const svc = createHistoryService({ root })
+    await svc.initRevisionArchaeology()
+    const [s1, s2, s3] = await Promise.all([
+      svc.createSnapshot({ reason: 'manual', summary: '1', files: [] }),
+      svc.createSnapshot({ reason: 'manual', summary: '2', files: [] }),
+      svc.createSnapshot({ reason: 'manual', summary: '3', files: [] }),
+    ])
+    const idx = JSON.parse(await fsp.readFile(path.join(root, '.canv', 'history-index.json'), 'utf8'))
+    expect(idx.snapshots.length).toBe(4) // 1 init + 3 manual
+    const ids = new Set([s1.id, s2.id, s3.id])
+    expect(ids.size).toBe(3)
+    const tip = await git.resolveRef({ fs: nodefs, dir: root, ref: 'refs/heads/canv-history' })
+    expect(tip).toBe(idx.snapshots[3].commit)
+  })
+})
