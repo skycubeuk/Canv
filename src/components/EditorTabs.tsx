@@ -91,7 +91,7 @@ export function EditorTabs({
       onDragLeave={handleStripDragLeave}
       onDrop={handleStripDrop}
       className={`shrink-0 flex items-center h-9 pl-1.5 bg-panel border-b border-default ${
-        dragOver ? 'outline outline-2 outline-[rgb(var(--border-strong))]' : ''
+        dragOver ? 'outline-solid outline-2 outline-[rgb(var(--border-strong))]' : ''
       }`}
     >
       <div className="tabs-scroller flex items-center overflow-x-auto overflow-y-hidden whitespace-nowrap min-w-0 h-full">
@@ -144,7 +144,7 @@ export function EditorTabs({
                   e.stopPropagation()
                   void requestClose(key, dirty)
                 }}
-                className="opacity-0 group-hover:opacity-100 w-4 h-4 grid place-items-center rounded text-subtle hover:bg-hover hover:text-default ml-0.5"
+                className="opacity-0 group-hover:opacity-100 w-4 h-4 grid place-items-center rounded-sm text-subtle hover:bg-hover hover:text-default ml-0.5"
               >
                 <X aria-hidden className="w-2.5 h-2.5" />
               </button>

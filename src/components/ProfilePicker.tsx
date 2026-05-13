@@ -19,7 +19,7 @@ export function ProfilePicker({ open, mode, onPick, onCancel }: Props) {
       : 'What kind of writing is this? The toolbar and editing prompts will adapt to your choice.'
 
   return (
-    <div data-testid="profile-picker" className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40">
+    <div data-testid="profile-picker" className="fixed inset-0 z-60 flex items-center justify-center bg-black/40">
       <div className="w-[680px] max-w-[95vw] bg-elev rounded-xl shadow-2xl border border-default">
         <div className="px-6 pt-6 pb-3">
           <h2 className="text-xl font-semibold">{heading}</h2>

@@ -48,7 +48,7 @@ export function SitesTab({ onRegenerate }: Props) {
   return (
     <ul className="flex flex-col gap-2 p-2">
       {entries.map((e) => (
-        <li key={e.id} className="rounded border border-default bg-panel px-3 py-2 text-sm">
+        <li key={e.id} className="rounded-sm border border-default bg-panel px-3 py-2 text-sm">
           <div className="flex items-center justify-between gap-2">
             <div className="font-medium text-default">{e.name}</div>
             <button
@@ -67,19 +67,19 @@ export function SitesTab({ onRegenerate }: Props) {
               type="button"
               aria-label="Open"
               onClick={() => { void window.canvSites?.open(e.id) }}
-              className="rounded border border-default px-2 py-0.5 text-xs text-default hover:bg-hover"
+              className="rounded-sm border border-default px-2 py-0.5 text-xs text-default hover:bg-hover"
             >Open</button>
             <button
               type="button"
               aria-label="Regenerate"
               onClick={() => onRegenerate(e.prompt)}
-              className="rounded border border-default px-2 py-0.5 text-xs text-default hover:bg-hover"
+              className="rounded-sm border border-default px-2 py-0.5 text-xs text-default hover:bg-hover"
             >Regenerate</button>
             <button
               type="button"
               aria-label="Delete"
               onClick={() => { void window.canvSites?.delete(e.id) }}
-              className="rounded border border-default px-2 py-0.5 text-xs text-default hover:bg-hover"
+              className="rounded-sm border border-default px-2 py-0.5 text-xs text-default hover:bg-hover"
             >Delete</button>
           </div>
         </li>

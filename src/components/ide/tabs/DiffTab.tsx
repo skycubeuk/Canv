@@ -59,7 +59,7 @@ export function DiffTab({ relPath, baseRef, isActive }: Props) {
         <button
           type="button"
           onClick={() => setViewMode((m) => m === 'side-by-side' ? 'inline' : 'side-by-side')}
-          className="px-2 py-0.5 rounded border border-default text-muted hover:bg-hover"
+          className="px-2 py-0.5 rounded-sm border border-default text-muted hover:bg-hover"
           title="Toggle diff view mode"
         >
           {viewMode === 'side-by-side' ? 'Inline' : 'Side-by-side'}
@@ -68,7 +68,7 @@ export function DiffTab({ relPath, baseRef, isActive }: Props) {
           type="button"
           onClick={fetchDiff}
           disabled={state.loading}
-          className="px-2 py-0.5 rounded border border-default text-muted hover:bg-hover disabled:opacity-50"
+          className="px-2 py-0.5 rounded-sm border border-default text-muted hover:bg-hover disabled:opacity-50"
           title="Refresh diff"
         >
           {state.loading ? 'Loading…' : 'Refresh'}

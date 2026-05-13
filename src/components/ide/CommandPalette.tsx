@@ -136,7 +136,7 @@ function PalettePanel(props: Props) {
           onChange={(e) => { setQuery(e.target.value); setHighlight(0) }}
           onKeyDown={handleKeyDown}
           placeholder={mode === 'commands' ? 'Type a command…' : 'Open a file by name…'}
-          className="w-full px-4 py-3 text-sm bg-transparent border-b border-default focus:outline-none"
+          className="w-full px-4 py-3 text-sm bg-transparent border-b border-default focus:outline-hidden"
         />
         <ul className="max-h-[50vh] overflow-y-auto py-1" role="listbox">
           {rows.length === 0 && (
@@ -162,7 +162,7 @@ function PalettePanel(props: Props) {
                   <span className="text-xs text-muted truncate max-w-[40%]">{row.detail}</span>
                 )}
                 {row.shortcut && (
-                  <kbd className="text-[10px] px-1.5 py-0.5 rounded border border-default text-muted">
+                  <kbd className="text-[10px] px-1.5 py-0.5 rounded-sm border border-default text-muted">
                     {row.shortcut}
                   </kbd>
                 )}

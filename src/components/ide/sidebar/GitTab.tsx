@@ -94,7 +94,7 @@ export function GitTab({ onOpenDiff }: Props) {
           onClick={fetchStatus}
           disabled={loading}
           title="Refresh Git status"
-          className="px-2 py-0.5 rounded text-muted hover:bg-hover disabled:opacity-50"
+          className="px-2 py-0.5 rounded-sm text-muted hover:bg-hover disabled:opacity-50"
         >
           {loading ? '…' : '⟳'}
         </button>
@@ -163,7 +163,7 @@ function Section({
             className="w-full flex items-center gap-2 px-3 py-1 text-left hover:bg-hover group"
           >
             <span
-              className={`shrink-0 w-4 h-4 inline-flex items-center justify-center rounded text-[10px] font-bold ${badge.className}`}
+              className={`shrink-0 w-4 h-4 inline-flex items-center justify-center rounded-sm text-[10px] font-bold ${badge.className}`}
               aria-label={`Status: ${entry.status}`}
             >
               {badge.label}

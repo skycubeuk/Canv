@@ -171,13 +171,13 @@ export function FloatingToolbar(props: Props) {
               if (e.key === 'Escape') setMode({ kind: 'idle' })
             }}
             placeholder={mode.agent.instructionPlaceholder ?? 'Instruction'}
-            className="flex-1 px-2 py-1 text-sm bg-transparent focus:outline-none"
+            className="flex-1 px-2 py-1 text-sm bg-transparent focus:outline-hidden"
           />
           <button
             type="button"
             onClick={handleInstructionSubmit}
             disabled={!instructionText.trim()}
-            className="btn-primary !py-1 !px-2 text-xs disabled:opacity-50"
+            className="btn-primary py-1! px-2! text-xs disabled:opacity-50"
           >
             Run
           </button>
@@ -217,7 +217,7 @@ export function FloatingToolbar(props: Props) {
                     key={agent.id}
                     type="button"
                     onClick={() => handleClick(agent)}
-                    className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded hover:bg-hover text-default text-left"
+                    className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded-sm hover:bg-hover text-default text-left"
                   >
                     <agent.icon aria-hidden className="w-4 h-4" />
                     <span>{agent.label}</span>
