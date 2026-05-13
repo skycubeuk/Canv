@@ -6,7 +6,8 @@ import { StatusBar } from './StatusBar'
 import { DockPlacementMenu } from './DockPlacementMenu'
 import { FilesTab } from './sidebar/FilesTab'
 import { SearchTab } from './sidebar/SearchTab'
-import { GitTab } from './sidebar/GitTab'
+import { HistoryTab } from './sidebar/HistoryTab'
+import { getCanvHistory } from '../../lib/history'
 import { SitesTab } from './sidebar/SitesTab'
 import { OutlinePanel } from './sidebar/OutlinePanel'
 import { Canvas } from '../Canvas'
@@ -57,8 +58,11 @@ export interface WorkspaceShellProps {
   onRename: (oldRel: string, newRel: string) => Promise<void>
   onDelete: (rel: string) => Promise<void>
   onChangeWorkspace: () => Promise<void>
-  // Git
+  // Diff
   onOpenDiff: (rel: string, baseRef?: string) => void
+  // Revision Archaeology
+  raEnabled: boolean
+  onOpenRestore: (r: { snapshotId: string; relPath: string }) => void
   // Settings
   settings: Settings
   onUpdateSettings: (patch: Partial<Settings>) => void
@@ -93,6 +97,7 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
     onClickBreadcrumbFolder, revealFolderRel,
     onCreateFile, onCreateFolder, onRename, onDelete, onChangeWorkspace,
     onOpenDiff,
+    raEnabled, onOpenRestore,
     settings, onUpdateSettings,
     onExportBackup,
     bottomPanelTabs,
@@ -126,7 +131,21 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
             activeTab={ideLayout.layout.sidebar.activeTab}
             onSelectTab={ideLayout.setSidebarTab}
             search={<SearchTab onJumpToMatch={onJumpToMatch} />}
-            git={<GitTab onOpenDiff={onOpenDiff} />}
+            historyEnabled={raEnabled}
+            history={raEnabled ? (
+              <HistoryTab
+                history={getCanvHistory()!}
+                onOpenDiff={(r) => {
+                  if (r.kind === 'current') onOpenDiff(r.relPath)
+                  else onOpenDiff(r.relPath, r.snapshotId)
+                }}
+                onCreateCheckpoint={async (summary) => {
+                  const h = getCanvHistory(); if (!h) return
+                  await h.createSnapshot({ reason: 'manual', summary, files: [], metadata: {} })
+                }}
+                onRestore={onOpenRestore}
+              />
+            ) : undefined}
             sites={<SitesTab onRegenerate={setChatDraft} />}
             settings={settings}
             onUpdateSettings={onUpdateSettings}

@@ -221,7 +221,8 @@ export default function App() {
     if (!visible) ideLayout.toggleBottom()
   }, [ideLayout])
 
-  const gitBadge = null  // TODO(0.7.1): wire to actual git diff count
+  const raEnabled = setup.config?.revisionArchaeology.enabled === true
+  const [restoreTarget, setRestoreTarget] = useState<{ snapshotId: string; relPath: string } | null>(null)
 
   // TODO(0.7.1): wire cursor line/col from Canvas's CodeMirror via onCursorChange prop.
   const [cursorPos] = useState<{ line: number; col: number } | null>(null)
@@ -510,7 +511,7 @@ export default function App() {
         bottomPlacement={ideLayout.layout.bottom.placement}
         onSetBottomPlacementBottom={setBottomPlacementBottom}
         onSetBottomPlacementRight={setBottomPlacementRight}
-        gitBadge={gitBadge}
+        historyEnabled={raEnabled}
       />
       <WorkspaceShell
         ideLayout={ideLayout}
@@ -536,6 +537,8 @@ export default function App() {
         onDelete={fileOps.remove}
         onChangeWorkspace={fileOps.changeWorkspace}
         onOpenDiff={handleOpenDiff}
+        raEnabled={raEnabled}
+        onOpenRestore={setRestoreTarget}
         settings={settings}
         onUpdateSettings={update}
         onExportBackup={() => {
@@ -565,6 +568,8 @@ export default function App() {
         wordCount={wordCount}
         selectionWordCount={selectionWordCount}
       />
+
+      {restoreTarget && null /* RestorePreviewDialog wired in T19 */}
 
       {setup.phase === 'needs-setup' && (
         <WorkspaceSetupModal
