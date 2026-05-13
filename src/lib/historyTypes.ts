@@ -45,3 +45,16 @@ export interface CurrentChange {
   relPath: string
   status: 'modified' | 'added' | 'deleted'
 }
+
+export interface SnapshotDeltaEntry {
+  relPath: string
+  status: 'modified' | 'added' | 'deleted'
+}
+
+export interface FileHistoryEntry {
+  snapshotId: string
+  commit: string
+  createdAt: string
+  reason: SnapshotReason
+  summary: string
+}

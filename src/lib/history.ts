@@ -1,6 +1,7 @@
 // src/lib/history.ts
 import type {
   SnapshotEntry, CreateSnapshotInput, CurrentChange,
+  SnapshotDeltaEntry, FileHistoryEntry,
 } from './historyTypes'
 
 export interface CanvHistory {
@@ -17,6 +18,8 @@ export interface CanvHistory {
   hideSnapshot(id: string): Promise<SnapshotEntry>
   patchSnapshotFiles(id: string, files: string[]): Promise<void>
   getTipCommit(): Promise<string | null>
+  getSnapshotDelta(snapshotId: string): Promise<SnapshotDeltaEntry[]>
+  getFileHistory(relPath: string): Promise<FileHistoryEntry[]>
 }
 
 declare global {
@@ -27,4 +30,7 @@ export function getCanvHistory(): CanvHistory | null {
   return typeof window !== 'undefined' ? (window.canvHistory ?? null) : null
 }
 
-export type { SnapshotEntry, CreateSnapshotInput, CurrentChange, SnapshotReason } from './historyTypes'
+export type {
+  SnapshotEntry, CreateSnapshotInput, CurrentChange, SnapshotReason,
+  SnapshotDeltaEntry, FileHistoryEntry,
+} from './historyTypes'
