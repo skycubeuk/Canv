@@ -353,6 +353,80 @@ function createHistoryService({ root }) {
     } catch { return null }
   }
 
+  async function readBlobOidAt(commit, relPath) {
+    // Returns the blob OID for `relPath` at `commit`, or null if absent.
+    try {
+      const { commit: c } = await git.readCommit({ fs: nodefs, dir: root, oid: commit })
+      const parts = relPath.split('/')
+      let treeOid = c.tree
+      for (let i = 0; i < parts.length - 1; i++) {
+        const { tree } = await git.readTree({ fs: nodefs, dir: root, oid: treeOid })
+        const ent = tree.find((e) => e.path === parts[i] && e.type === 'tree')
+        if (!ent) return null
+        treeOid = ent.oid
+      }
+      const { tree } = await git.readTree({ fs: nodefs, dir: root, oid: treeOid })
+      const leaf = tree.find((e) => e.path === parts[parts.length - 1] && e.type === 'blob')
+      return leaf ? leaf.oid : null
+    } catch (e) {
+      if (e && e.code === 'NotFoundError') return null
+      throw e
+    }
+  }
+
+  async function getFileHistory(relPath) {
+    const idx = await readIndex()
+    if (!idx.snapshots.length) return []
+    const byCommit = new Map(idx.snapshots.map((s) => [s.commit, s]))
+
+    let tip
+    try {
+      tip = await git.resolveRef({ fs: nodefs, dir: root, ref: `refs/heads/${CANV_BRANCH}` })
+    } catch { return [] }
+
+    // Collect the full commit chain newest→oldest, then reverse to oldest→newest
+    const chain = []
+    let cur = tip
+    while (cur) {
+      chain.push(cur)
+      const { commit: c } = await git.readCommit({ fs: nodefs, dir: root, oid: cur })
+      cur = c.parent && c.parent[0] ? c.parent[0] : null
+    }
+    chain.reverse() // now oldest→newest
+
+    // Resolve blob OID for every commit in the chain
+    const oids = await Promise.all(chain.map((sha) => readBlobOidAt(sha, relPath)))
+
+    // Walk oldest→newest: emit visible (non-hidden) snapshots where the file blob is
+    // distinct from the previously-seen blob (including hidden/init blobs for dedup).
+    // workspace_init (reason === 'workspace_init') is never emitted.
+    // First visible snapshot that has the file is always emitted.
+    const out = []
+    let prevOid = null
+    for (let i = 0; i < chain.length; i++) {
+      const curOid = oids[i]
+      if (curOid === null) continue // file absent at this commit — skip in v1
+      const snap = byCommit.get(chain[i])
+      if (snap && !snap.hidden && snap.reason !== 'workspace_init') {
+        // Emit if this is the first occurrence or the blob changed since last seen
+        if (curOid !== prevOid) {
+          out.push({
+            snapshotId: snap.id,
+            commit: snap.commit,
+            createdAt: snap.createdAt,
+            reason: snap.reason,
+            summary: snap.summary,
+          })
+        }
+      }
+      // Track for dedup (non-absent blobs, excluding workspace_init baseline)
+      const snapHere = byCommit.get(chain[i])
+      if (!snapHere || snapHere.reason !== 'workspace_init') prevOid = curOid
+    }
+    out.reverse() // return newest→oldest
+    return out
+  }
+
   async function getSnapshotDelta(snapshotIdArg) {
     const snap = await getSnapshot(snapshotIdArg)
     if (!snap) throw new Error(`Unknown snapshot ${snapshotIdArg}`)
@@ -384,7 +458,7 @@ function createHistoryService({ root }) {
 
   return { initRevisionArchaeology, createSnapshot, listSnapshots, getSnapshot, getSnapshotByCommit,
            hideSnapshot, diffSnapshot, diffCurrent, getCurrentChanges, restoreFilePreview, restoreFile,
-           patchSnapshotFiles, getTipCommit, getSnapshotDelta }
+           patchSnapshotFiles, getTipCommit, getSnapshotDelta, getFileHistory }
 }
 
 module.exports = { createHistoryService }
