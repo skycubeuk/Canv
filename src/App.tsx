@@ -22,6 +22,7 @@ import { isElectron, flattenTree, getFs } from './lib/fs'
 import { WorkspaceSetupModal } from './components/WorkspaceSetupModal'
 import { useWorkspaceSetup } from './hooks/useWorkspaceSetup'
 import { getCanvHistory } from './lib/history'
+import { RestorePreviewDialog } from './components/ide/sidebar/RestorePreviewDialog'
 import { exportBackup } from './lib/backup'
 import { useDialogs } from './lib/dialogs'
 import { useNotifications } from './hooks/useNotifications'
@@ -578,7 +579,24 @@ export default function App() {
         selectionWordCount={selectionWordCount}
       />
 
-      {restoreTarget && null /* RestorePreviewDialog wired in T19 */}
+      {restoreTarget && getCanvHistory() && (
+        <RestorePreviewDialog
+          history={getCanvHistory()!}
+          snapshotId={restoreTarget.snapshotId}
+          relPath={restoreTarget.relPath}
+          onCancel={() => setRestoreTarget(null)}
+          onRestored={async (rollbackId) => {
+            const rel = restoreTarget.relPath
+            setRestoreTarget(null)
+            showToast(`Restored ${rel}. Safety snapshot: ${rollbackId}`)
+            try { await workspace.reloadTabFromDisk(rel) } catch { /* tab may not be open */ }
+          }}
+          saveDirtyBuffer={async (_relPath) => {
+            // flushAll persists all dirty buffers; it's a no-op when nothing is dirty.
+            await workspace.flushAll()
+          }}
+        />
+      )}
 
       {setup.phase === 'needs-setup' && (
         <WorkspaceSetupModal
