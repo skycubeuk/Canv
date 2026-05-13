@@ -28,15 +28,14 @@ export function FileHistoryTab({ target, nonce, history, onOpenDiff, onRestore }
   const [entries, setEntries] = useState<FileHistoryEntry[] | 'loading' | null>(null)
 
   const load = useCallback(async (rel: string) => {
-    setEntries('loading')
     const out = await history.getFileHistory(rel)
     setEntries(out)
   }, [history])
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect -- load() is async; state set after await.
   useEffect(() => {
-    if (!target) { setEntries(null); return }
-    void load(target)
+    if (!target) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- setState happens only after await inside load()
+    load(target)
   }, [target, nonce, load])
 
   if (!target) {
