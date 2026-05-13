@@ -95,6 +95,53 @@ describe('FileHistoryTab', () => {
     expect(onRestore).toHaveBeenCalledWith({ snapshotId: 's2', relPath: 'ch.md' })
   })
 
+  it('shows loading state while getFileHistory is pending', async () => {
+    let resolve: (v: FileHistoryEntry[]) => void = () => {}
+    const pending = new Promise<FileHistoryEntry[]>((r) => { resolve = r })
+    const getFileHistory = vi.fn().mockReturnValue(pending)
+    render(<FileHistoryTab
+      target="x.md"
+      nonce={1}
+      history={{ getFileHistory } as never}
+      onOpenDiff={vi.fn()}
+      onRestore={vi.fn()}
+    />)
+    expect(await screen.findByText(/Loading versions/i)).toBeInTheDocument()
+    resolve([])
+    await waitFor(() => expect(screen.queryByText(/Loading versions/i)).toBeNull())
+  })
+
+  it('discards in-flight results from a previous target when retargeted', async () => {
+    let resolveA: (v: FileHistoryEntry[]) => void = () => {}
+    const pendingA = new Promise<FileHistoryEntry[]>((r) => { resolveA = r })
+    const getFileHistory = vi.fn()
+      .mockReturnValueOnce(pendingA)
+      .mockResolvedValueOnce([entry({ snapshotId: 'sb', summary: 'B-only' })])
+
+    const { rerender } = render(<FileHistoryTab
+      target="a.md"
+      nonce={1}
+      history={{ getFileHistory } as never}
+      onOpenDiff={vi.fn()}
+      onRestore={vi.fn()}
+    />)
+    rerender(<FileHistoryTab
+      target="b.md"
+      nonce={2}
+      history={{ getFileHistory } as never}
+      onOpenDiff={vi.fn()}
+      onRestore={vi.fn()}
+    />)
+    await screen.findByText('B-only')
+    // Now resolve A — should be ignored
+    resolveA([entry({ snapshotId: 'sa', summary: 'A-only' })])
+    // Give microtask flush
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(screen.queryByText('A-only')).toBeNull()
+    expect(screen.getByText('B-only')).toBeInTheDocument()
+  })
+
   it('refetches when nonce changes (retarget)', async () => {
     const getFileHistory = vi.fn().mockResolvedValue([])
     const { rerender } = render(<FileHistoryTab

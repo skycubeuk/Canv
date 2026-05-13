@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { FileText } from 'lucide-react'
 import type { CanvHistory, FileHistoryEntry } from '../../../lib/history'
 import { REASON_LABEL, shortTime, formatSnapshotLabel } from '../../../lib/historyLabels'
@@ -27,16 +27,16 @@ interface Props {
 export function FileHistoryTab({ target, nonce, history, onOpenDiff, onRestore }: Props) {
   const [entries, setEntries] = useState<FileHistoryEntry[] | 'loading' | null>(null)
 
-  const load = useCallback(async (rel: string) => {
-    const out = await history.getFileHistory(rel)
-    setEntries(out)
-  }, [history])
-
   useEffect(() => {
     if (!target) return
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- setState happens only after await inside load()
-    load(target)
-  }, [target, nonce, load])
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional loading kickoff
+    setEntries('loading')
+    let cancelled = false
+    history.getFileHistory(target).then((out) => {
+      if (!cancelled) setEntries(out)
+    })
+    return () => { cancelled = true }
+  }, [target, nonce, history])
 
   if (!target) {
     return (

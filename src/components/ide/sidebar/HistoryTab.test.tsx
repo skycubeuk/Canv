@@ -146,6 +146,29 @@ describe('HistoryTab', () => {
     expect(badges.length).toBeGreaterThanOrEqual(3)
   })
 
+  it('does not render diff/restore actions for added-status delta rows', async () => {
+    const history = {
+      getCurrentChanges: vi.fn().mockResolvedValue([]),
+      listSnapshots: vi.fn().mockResolvedValue([snap({ id: 's1', summary: 'expand-me' })]),
+      hideSnapshot: vi.fn(),
+      getTipCommit: vi.fn().mockResolvedValue('a'.repeat(40)),
+      getSnapshotDelta: vi.fn().mockResolvedValue([
+        { relPath: 'a.md', status: 'modified' },
+        { relPath: 'added-since.md', status: 'added' },
+      ]),
+    }
+    render(<HistoryTab history={history as never} onOpenDiff={onOpenDiff} onCreateCheckpoint={onCreateCheckpoint} onRestore={onRestore} />)
+    await waitFor(() => expect(screen.getByText('expand-me')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('expand-me'))
+    await waitFor(() => expect(screen.getByText('a.md')).toBeInTheDocument())
+
+    // 'modified' row gets diff + restore; 'added' row does NOT
+    const diffButtons = screen.getAllByTitle(/View diff/i)
+    expect(diffButtons.length).toBe(1)
+    const restoreButtons = screen.getAllByTitle(/Restore from this snapshot/i)
+    expect(restoreButtons.length).toBe(1)
+  })
+
   it('caches per-snapshot delta — re-expanding the same snapshot does not re-call', async () => {
     const history = {
       getCurrentChanges: vi.fn().mockResolvedValue([]),

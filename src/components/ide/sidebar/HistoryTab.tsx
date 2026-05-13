@@ -215,28 +215,32 @@ export function HistoryTab({ history, onOpenDiff, onCreateCheckpoint, onRestore 
                                   >
                                     {STATUS_BADGE[d.status]}
                                   </span>
-                                  <button
-                                    type="button"
-                                    onClick={() => onOpenDiff({
-                                      kind: 'snapshot',
-                                      relPath: d.relPath,
-                                      snapshotId: s.id,
-                                      commitSha: s.commit,
-                                      baseLabel: formatSnapshotLabel(s),
-                                    })}
-                                    className="text-[10.5px] text-subtle hover:text-default opacity-0 group-hover:opacity-100"
-                                    title="View diff"
-                                  >
-                                    diff
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => onRestore({ snapshotId: s.id, relPath: d.relPath })}
-                                    className="text-[10.5px] text-subtle hover:text-default opacity-0 group-hover:opacity-100"
-                                    title="Restore from this snapshot"
-                                  >
-                                    restore
-                                  </button>
+                                  {d.status !== 'added' && (
+                                    <>
+                                      <button
+                                        type="button"
+                                        onClick={() => onOpenDiff({
+                                          kind: 'snapshot',
+                                          relPath: d.relPath,
+                                          snapshotId: s.id,
+                                          commitSha: s.commit,
+                                          baseLabel: formatSnapshotLabel(s),
+                                        })}
+                                        className="text-[10.5px] text-subtle hover:text-default opacity-0 group-hover:opacity-100"
+                                        title="View diff"
+                                      >
+                                        diff
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => onRestore({ snapshotId: s.id, relPath: d.relPath })}
+                                        className="text-[10.5px] text-subtle hover:text-default opacity-0 group-hover:opacity-100"
+                                        title="Restore from this snapshot"
+                                      >
+                                        restore
+                                      </button>
+                                    </>
+                                  )}
                                 </li>
                               ))}
                             </ul>
