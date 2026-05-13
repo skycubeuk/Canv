@@ -201,3 +201,68 @@ describe('history-service diff/changes', () => {
     expect(d[0].status).toBe('modified')
   })
 })
+
+describe('history-service restore', () => {
+  it('restoreFilePreview is read-only (does not touch disk)', async () => {
+    const root = await tmp()
+    await fsp.writeFile(path.join(root, 'a.md'), 'one\n', 'utf8')
+    const svc = createHistoryService({ root })
+    await svc.initRevisionArchaeology()
+    const s1 = await svc.createSnapshot({ reason: 'manual', summary: 'v1', files: ['a.md'] })
+    await fsp.writeFile(path.join(root, 'a.md'), 'two\n', 'utf8')
+
+    const before = await fsp.readFile(path.join(root, 'a.md'), 'utf8')
+    const p = await svc.restoreFilePreview(s1.id, 'a.md')
+    const after = await fsp.readFile(path.join(root, 'a.md'), 'utf8')
+
+    expect(before).toBe(after)
+    expect(p.snapshotText).toBe('one\n')
+    expect(p.currentText).toBe('two\n')
+  })
+
+  it('restoreFile fires before_rollback safety snapshot first, then writes the blob', async () => {
+    const root = await tmp()
+    await fsp.writeFile(path.join(root, 'a.md'), 'one\n', 'utf8')
+    const svc = createHistoryService({ root })
+    await svc.initRevisionArchaeology()
+    const s1 = await svc.createSnapshot({ reason: 'manual', summary: 'v1', files: ['a.md'] })
+    await fsp.writeFile(path.join(root, 'a.md'), 'TWO\n', 'utf8')
+
+    const beforeHead = await fsp.readFile(path.join(root, '.git', 'HEAD'), 'utf8')
+    const r = await svc.restoreFile(s1.id, 'a.md')
+
+    expect(r.rollbackSnapshotId).toMatch(/^snap_/)
+    expect(await fsp.readFile(path.join(root, 'a.md'), 'utf8')).toBe('one\n')
+
+    const rollback = await svc.getSnapshot(r.rollbackSnapshotId)
+    expect(rollback.reason).toBe('before_rollback')
+    // The before_rollback snapshot's tree should contain the pre-restore content ('TWO\n')
+    const blob = await svc.diffSnapshot(rollback.id, 'a.md')
+    expect(blob.baseText).toBe('TWO\n')
+
+    expect(await fsp.readFile(path.join(root, '.git', 'HEAD'), 'utf8')).toBe(beforeHead)
+  })
+
+  it('restoreFile creates intermediate directories if the path was deleted', async () => {
+    const root = await tmp()
+    await fsp.mkdir(path.join(root, 'chapters'), { recursive: true })
+    await fsp.writeFile(path.join(root, 'chapters', 'one.md'), 'C1\n', 'utf8')
+    const svc = createHistoryService({ root })
+    await svc.initRevisionArchaeology()
+    const s1 = await svc.createSnapshot({ reason: 'manual', summary: 'v1', files: ['chapters/one.md'] })
+    // User deletes the file (and its folder) entirely
+    await fsp.rm(path.join(root, 'chapters'), { recursive: true })
+    await svc.createSnapshot({ reason: 'manual', summary: 'gone', files: ['chapters/one.md'] })
+
+    await svc.restoreFile(s1.id, 'chapters/one.md')
+    expect(await fsp.readFile(path.join(root, 'chapters', 'one.md'), 'utf8')).toBe('C1\n')
+  })
+
+  it('restoreFile throws on unknown snapshot id', async () => {
+    const root = await tmp()
+    await fsp.writeFile(path.join(root, 'a.md'), 'x', 'utf8')
+    const svc = createHistoryService({ root })
+    await svc.initRevisionArchaeology()
+    await expect(svc.restoreFile('snap_nope', 'a.md')).rejects.toThrow(/Unknown snapshot/)
+  })
+})

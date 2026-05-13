@@ -272,8 +272,34 @@ function createHistoryService({ root }) {
     return await getCurrentChanges()
   }
 
+  async function restoreFilePreview(snapshotId, relPath) {
+    const snap = await getSnapshot(snapshotId)
+    if (!snap) throw new Error(`Unknown snapshot ${snapshotId}`)
+    const snapshotText = await readBlobAt(snap.commit, relPath)
+    const currentText = await readWorking(relPath)
+    return { snapshotText, currentText }
+  }
+
+  async function restoreFile(snapshotId, relPath) {
+    const snap = await getSnapshot(snapshotId)
+    if (!snap) throw new Error(`Unknown snapshot ${snapshotId}`)
+    // 1. Safety snapshot of current state
+    const rollback = await createSnapshot({
+      reason: 'before_rollback',
+      summary: `Before restore of ${relPath} from ${snap.id}`,
+      files: [relPath],
+      metadata: { snapshotId: snap.id },
+    })
+    // 2. Write the blob from `snap` to disk (creating parent dirs if needed)
+    const text = await readBlobAt(snap.commit, relPath)
+    const abs = path.join(root, relPath)
+    await fsp.mkdir(path.dirname(abs), { recursive: true })
+    await fsp.writeFile(abs, text, 'utf8')
+    return { rollbackSnapshotId: rollback.id }
+  }
+
   return { initRevisionArchaeology, createSnapshot, listSnapshots, getSnapshot, hideSnapshot,
-           diffSnapshot, diffCurrent, getCurrentChanges }
+           diffSnapshot, diffCurrent, getCurrentChanges, restoreFilePreview, restoreFile }
 }
 
 module.exports = { createHistoryService }
