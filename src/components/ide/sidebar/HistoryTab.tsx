@@ -40,6 +40,7 @@ export function HistoryTab({ history, onOpenDiff, onCreateCheckpoint, onRestore 
     setSnapshots(s)
   }, [history, includeHidden])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- refresh() is async; setState fires after await.
   useEffect(() => { void refresh() }, [refresh])
 
   const submitCheckpoint = async () => {

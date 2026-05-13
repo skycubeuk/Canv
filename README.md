@@ -22,6 +22,17 @@ System requirements: macOS 10.15+, Windows 10+, glibc 2.28+ on Linux.
 The full user guide lives in [`docs/`](docs/README.md). Start with
 [Getting started](docs/getting-started.md).
 
+## Revision Archaeology
+
+Canv can keep a private git-backed history of your workspace independently
+of your normal git workflow. When you open a new folder, the setup modal
+offers **Revision Archaeology** — snapshots of the workspace are written to
+a dedicated `canv-history` branch and surfaced in the **History** sidebar
+tab. Your working branch, `HEAD`, and git index are never touched.
+Snapshots happen on manual checkpoint, before/after each AI edit turn, when
+idle for 10 minutes with pending changes, and as a safety capture before a
+restore. Remote (SSH) workspaces are not supported in this release.
+
 ## Privacy
 
 Canv has no backend. API keys are stored locally; the app talks directly to

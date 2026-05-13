@@ -12,16 +12,14 @@ export interface UseIdleAutosnapshotApi {
 }
 
 export function useIdleAutosnapshot(args: UseIdleAutosnapshotArgs): UseIdleAutosnapshotApi {
+  const { enabled, idleMs, history } = args
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const argsRef = useRef(args)
-  argsRef.current = args
+  const armRef = useRef<() => void>(() => {})
 
   const arm = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current)
-    if (!argsRef.current.enabled || !argsRef.current.history) return
+    if (!enabled || !history) return
     timerRef.current = setTimeout(async () => {
-      const { history } = argsRef.current
-      if (!history) return
       try {
         const changes = await history.getCurrentChanges()
         if (changes.length === 0) return
@@ -34,16 +32,16 @@ export function useIdleAutosnapshot(args: UseIdleAutosnapshotArgs): UseIdleAutos
       } catch (e) {
         console.warn('[idle-autosnapshot] failed', e)
       } finally {
-        arm()
+        armRef.current()
       }
-    }, argsRef.current.idleMs)
-  }, [])
+    }, idleMs)
+  }, [enabled, history, idleMs])
 
   useEffect(() => {
+    armRef.current = arm
     arm()
     return () => { if (timerRef.current) clearTimeout(timerRef.current) }
-  }, [arm, args.enabled, args.idleMs, args.history])
+  }, [arm])
 
-  const touch = useCallback(() => arm(), [arm])
-  return { touch }
+  return { touch: arm }
 }

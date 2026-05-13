@@ -32,9 +32,8 @@ export function useWorkspaceSetup(args: UseWorkspaceSetupArgs): UseWorkspaceSetu
   const [config, setConfig] = useState<WorkspaceConfig | null>(null)
 
   useEffect(() => {
+    if (!args.workspaceReady) return
     let cancelled = false
-    if (!args.workspaceReady) { setPhase('loading'); return }
-    setPhase('loading')
     args.fs.readWorkspaceConfig().then((cfg) => {
       if (cancelled) return
       if (cfg) { setConfig(cfg); setPhase('ready') }
