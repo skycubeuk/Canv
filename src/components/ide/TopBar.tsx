@@ -1,4 +1,4 @@
-import { Folder, Search, GitBranch, LayoutDashboard, PanelRight, PanelBottom } from 'lucide-react'
+import { Folder, Search, History, LayoutDashboard, PanelRight, PanelBottom } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { SidebarTab, InAppDockPlacement } from '../../hooks/useIdeLayout'
 import { DocumentAgentMenu } from '../DocumentAgentMenu'
@@ -40,7 +40,7 @@ export function TopBar(props: Props) {
   const sectionTabs: SectionTab[] = [
     { id: 'files', label: 'Files', icon: Folder },
     { id: 'search', label: 'Search', icon: Search },
-    ...(historyEnabled ? [{ id: 'history' as const, label: 'History', icon: GitBranch }] : []),
+    ...(historyEnabled ? [{ id: 'history' as const, label: 'History', icon: History }] : []),
     { id: 'sites', label: 'Sites', icon: LayoutDashboard },
   ]
 
