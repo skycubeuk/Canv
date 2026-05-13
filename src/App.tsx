@@ -387,6 +387,12 @@ export default function App() {
     jumpToProblem,
     settings,
     pricingOverrides: settings.pricingOverrides,
+    revisionArchaeologyEnabled: raEnabled,
+    fileHistoryTarget,
+    fileHistoryNonce,
+    onOpenFileHistory: openFileHistory,
+    onFileHistoryOpenDiff: (r) => handleOpenDiff(r.relPath, r.commitSha, r.baseLabel),
+    onFileHistoryRestore: (snapshotId, relPath) => setRestoreTarget({ snapshotId, relPath }),
   })
 
   const openRels = useMemo(() => {

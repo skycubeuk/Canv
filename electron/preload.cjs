@@ -169,26 +169,29 @@ if (!isDockPopout()) {
     },
   })
 
-  contextBridge.exposeInMainWorld('canvHistory', {
-    init: () => ipcRenderer.invoke('canvHistory:init'),
-    createSnapshot: (input) => ipcRenderer.invoke('canvHistory:createSnapshot', input),
-    listSnapshots: (opts) => ipcRenderer.invoke('canvHistory:listSnapshots', opts ?? {}),
-    getSnapshot: (id) => ipcRenderer.invoke('canvHistory:getSnapshot', id),
-    getSnapshotByCommit: (sha) => ipcRenderer.invoke('canvHistory:getSnapshotByCommit', sha),
-    diffSnapshot: (id, rel) => ipcRenderer.invoke('canvHistory:diffSnapshot', id, rel),
-    diffCurrent: (rel) => ipcRenderer.invoke('canvHistory:diffCurrent', rel ?? null),
-    getCurrentChanges: () => ipcRenderer.invoke('canvHistory:getCurrentChanges'),
-    restoreFilePreview: (id, rel) => ipcRenderer.invoke('canvHistory:restoreFilePreview', id, rel),
-    restoreFile: (id, rel) => ipcRenderer.invoke('canvHistory:restoreFile', id, rel),
-    hideSnapshot: (id) => ipcRenderer.invoke('canvHistory:hideSnapshot', id),
-    patchSnapshotFiles: (id, files) => ipcRenderer.invoke('canvHistory:patchSnapshotFiles', id, files),
-    getTipCommit: () => ipcRenderer.invoke('canvHistory:getTipCommit'),
-    getSnapshotDelta: (id) => ipcRenderer.invoke('canvHistory:getSnapshotDelta', id),
-    getFileHistory: (rel) => ipcRenderer.invoke('canvHistory:getFileHistory', rel),
-  })
 }
 
 // Available in both main and pop-out windows.
+// canvHistory is exposed here (outside the gate) so the pop-out window can make
+// read-only file-history IPC calls when FileHistoryTab is visible in a popout.
+contextBridge.exposeInMainWorld('canvHistory', {
+  init: () => ipcRenderer.invoke('canvHistory:init'),
+  createSnapshot: (input) => ipcRenderer.invoke('canvHistory:createSnapshot', input),
+  listSnapshots: (opts) => ipcRenderer.invoke('canvHistory:listSnapshots', opts ?? {}),
+  getSnapshot: (id) => ipcRenderer.invoke('canvHistory:getSnapshot', id),
+  getSnapshotByCommit: (sha) => ipcRenderer.invoke('canvHistory:getSnapshotByCommit', sha),
+  diffSnapshot: (id, rel) => ipcRenderer.invoke('canvHistory:diffSnapshot', id, rel),
+  diffCurrent: (rel) => ipcRenderer.invoke('canvHistory:diffCurrent', rel ?? null),
+  getCurrentChanges: () => ipcRenderer.invoke('canvHistory:getCurrentChanges'),
+  restoreFilePreview: (id, rel) => ipcRenderer.invoke('canvHistory:restoreFilePreview', id, rel),
+  restoreFile: (id, rel) => ipcRenderer.invoke('canvHistory:restoreFile', id, rel),
+  hideSnapshot: (id) => ipcRenderer.invoke('canvHistory:hideSnapshot', id),
+  patchSnapshotFiles: (id, files) => ipcRenderer.invoke('canvHistory:patchSnapshotFiles', id, files),
+  getTipCommit: () => ipcRenderer.invoke('canvHistory:getTipCommit'),
+  getSnapshotDelta: (id) => ipcRenderer.invoke('canvHistory:getSnapshotDelta', id),
+  getFileHistory: (rel) => ipcRenderer.invoke('canvHistory:getFileHistory', rel),
+})
+
 contextBridge.exposeInMainWorld('canvDock', {
   // main → main IPC: ask main process to open/close the popout window
   openPopout: () => ipcRenderer.invoke('canvDock:openPopout'),
