@@ -353,9 +353,38 @@ function createHistoryService({ root }) {
     } catch { return null }
   }
 
+  async function getSnapshotDelta(snapshotIdArg) {
+    const snap = await getSnapshot(snapshotIdArg)
+    if (!snap) throw new Error(`Unknown snapshot ${snapshotIdArg}`)
+    const snapBlobs = await walkBlobsInTree(snap.commit)
+    const workingPaths = await walkWorkingTree()
+    const changes = []
+
+    for (const [relPath, oid] of snapBlobs) {
+      if (!workingPaths.has(relPath)) {
+        // exists in snapshot tree, missing on disk → restoring would re-create it
+        changes.push({ relPath, status: 'added' })
+        continue
+      }
+      const { blob } = await git.readBlob({ fs: nodefs, dir: root, oid })
+      const workBuf = await fsp.readFile(path.join(root, relPath))
+      if (Buffer.compare(Buffer.from(blob), workBuf) !== 0) {
+        changes.push({ relPath, status: 'modified' })
+      }
+    }
+    for (const relPath of workingPaths) {
+      if (!snapBlobs.has(relPath)) {
+        // exists on disk, missing from snapshot tree → restoring would remove it
+        changes.push({ relPath, status: 'deleted' })
+      }
+    }
+    changes.sort((a, b) => a.relPath.localeCompare(b.relPath))
+    return changes
+  }
+
   return { initRevisionArchaeology, createSnapshot, listSnapshots, getSnapshot, getSnapshotByCommit,
            hideSnapshot, diffSnapshot, diffCurrent, getCurrentChanges, restoreFilePreview, restoreFile,
-           patchSnapshotFiles, getTipCommit }
+           patchSnapshotFiles, getTipCommit, getSnapshotDelta }
 }
 
 module.exports = { createHistoryService }
