@@ -257,6 +257,7 @@ export default function App() {
     showRetryUndoToast: notifications.showRetryUndoToast,
     dismissRetryUndo: notifications.dismissRetryUndo,
     dialogs,
+    historyClient: raEnabled ? getCanvHistory() : null,
   })
   const {
     chatMessages, chatBusy, pendingApprovals,

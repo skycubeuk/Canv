@@ -13,6 +13,7 @@ import { buildChatSystemPreamble } from '../lib/buildChatSystemPreamble'
 import { getAdapter } from '../adapters'
 import { getFs } from '../lib/fs'
 import type { ToolCall } from '../adapters/types'
+import type { CanvHistory } from '../lib/history'
 
 type SettingsApi = ReturnType<typeof useSettings>
 type WorkspaceApi = ReturnType<typeof useWorkspace>
@@ -46,6 +47,7 @@ export interface UseChatSessionsArgs {
   showRetryUndoToast: (count: number) => void
   dismissRetryUndo: () => void
   dialogs: DialogsApi
+  historyClient?: CanvHistory | null
 }
 
 export interface SessionSummary {
@@ -355,6 +357,8 @@ export function useChatSessions(args: UseChatSessionsArgs): UseChatSessionsApi {
           apiKey: args.settings.apiKeys[lockedProvider],
           signal: rt.abort.signal,
           chunkDelayMs: args.settings.streamChunkDelayMs,
+          historyClient: args.historyClient ?? null,
+          onHistoryError: (e) => args.showToast(`History error: ${e.message}`),
         })
       } catch (e) {
         if ((e as { name?: string }).name === 'AbortError') {

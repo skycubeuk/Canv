@@ -180,6 +180,7 @@ if (!isDockPopout()) {
     restoreFilePreview: (id, rel) => ipcRenderer.invoke('canvHistory:restoreFilePreview', id, rel),
     restoreFile: (id, rel) => ipcRenderer.invoke('canvHistory:restoreFile', id, rel),
     hideSnapshot: (id) => ipcRenderer.invoke('canvHistory:hideSnapshot', id),
+    patchSnapshotFiles: (id, files) => ipcRenderer.invoke('canvHistory:patchSnapshotFiles', id, files),
   })
 }
 

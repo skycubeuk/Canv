@@ -298,8 +298,19 @@ function createHistoryService({ root }) {
     return { rollbackSnapshotId: rollback.id }
   }
 
+  async function patchSnapshotFiles(id, files) {
+    return mutex(async () => {
+      const idx = await readIndex()
+      const i = idx.snapshots.findIndex((s) => s.id === id)
+      if (i < 0) throw new Error(`Unknown snapshot ${id}`)
+      idx.snapshots[i] = { ...idx.snapshots[i], files: [...files] }
+      await writeIndex(idx)
+    })
+  }
+
   return { initRevisionArchaeology, createSnapshot, listSnapshots, getSnapshot, hideSnapshot,
-           diffSnapshot, diffCurrent, getCurrentChanges, restoreFilePreview, restoreFile }
+           diffSnapshot, diffCurrent, getCurrentChanges, restoreFilePreview, restoreFile,
+           patchSnapshotFiles }
 }
 
 module.exports = { createHistoryService }

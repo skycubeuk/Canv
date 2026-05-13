@@ -721,6 +721,8 @@ function registerFsHandlers() {
   ipcMain.handle('canvHistory:restoreFilePreview', async (_e, id, rel) => getHistoryService().restoreFilePreview(id, rel))
   ipcMain.handle('canvHistory:restoreFile', async (_e, id, rel) => getHistoryService().restoreFile(id, rel))
   ipcMain.handle('canvHistory:hideSnapshot', async (_e, id) => getHistoryService().hideSnapshot(id))
+  ipcMain.handle('canvHistory:patchSnapshotFiles', async (_e, id, files) =>
+    getHistoryService().patchSnapshotFiles(id, files))
 
   serve.onStatusChange((s) => {
     let payload = s

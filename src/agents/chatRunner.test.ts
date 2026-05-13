@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { runChatTurn, pathIsAutoApproved, type ApprovalDecision } from './chatRunner'
 import type { LLMAdapter, CompleteParams, CompleteResult, Message } from '../adapters/types'
 import type { ChatMessage } from '../components/ChatPanel'
@@ -862,5 +862,121 @@ describe('chatRunner — toAdapterMessages filtering', () => {
     const sent = sentBodies[0]
     expect(sent.find((m) => m.role === 'assistant')).toBeUndefined()
     expect(sent.filter((m) => m.role === 'user').map((m) => (m as { content: string }).content)).toEqual(['hi', 'continue'])
+  })
+})
+
+describe('chatRunner — history brackets', () => {
+  function snap(id: string, reason: string) {
+    return { id, commit: 'a'.repeat(40), createdAt: 't', reason, summary: '', files: [], hidden: false, metadata: {} }
+  }
+  function makeHistory() {
+    let n = 0
+    return {
+      init: vi.fn(),
+      createSnapshot: vi.fn(async (i: { reason: string }) => snap(`snap_${i.reason}_${++n}`, i.reason)),
+      listSnapshots: vi.fn(),
+      getSnapshot: vi.fn(),
+      diffSnapshot: vi.fn(),
+      diffCurrent: vi.fn(),
+      getCurrentChanges: vi.fn(),
+      restoreFilePreview: vi.fn(),
+      restoreFile: vi.fn(),
+      hideSnapshot: vi.fn(),
+      patchSnapshotFiles: vi.fn(async () => {}),
+    }
+  }
+
+  it('creates exactly one before_ai_edit and one after_ai_edit per turn with multiple mutating tools', async () => {
+    const fs = makeMockFs({})
+    const history = makeHistory()
+    const adapter: LLMAdapter = {
+      id: 'mock', name: 'Mock', models: ['m'],
+      async complete(p: CompleteParams) {
+        if (p.messages.length === 1) {
+          // First request — model issues two mutating tool calls in one round
+          return {
+            text: '', truncated: false, stopReason: 'tool_use',
+            toolCalls: [
+              { id: 'c1', name: 'create_file', input: { path: 'a.md', content: 'A' } },
+              { id: 'c2', name: 'create_file', input: { path: 'b.md', content: 'B' } },
+            ],
+          }
+        }
+        return { text: 'done', truncated: false, stopReason: 'end_turn' }
+      },
+    }
+    await runChatTurn({
+      ...baseCtx,
+      toolCtx: makeCtx({ fs }),
+      adapter,
+      provider: 'anthropic',
+      history: [{ id: 'u1', role: 'user', content: 'do it', provider: 'anthropic' }],
+      onUpdate: () => {},
+      historyClient: history as never,
+    })
+    const reasons = history.createSnapshot.mock.calls.map((c) => (c[0] as { reason: string }).reason)
+    expect(reasons).toEqual(['before_ai_edit', 'after_ai_edit'])
+    expect(history.patchSnapshotFiles).toHaveBeenCalledTimes(1)
+    const patchedFiles = (history.patchSnapshotFiles.mock.calls[0] as unknown as [string, string[]])[1]
+    expect(patchedFiles.sort()).toEqual(['a.md', 'b.md'])
+  })
+
+  it('skips snapshots entirely when historyClient is null', async () => {
+    const history = makeHistory()
+    const fs = makeMockFs({})
+    const adapter: LLMAdapter = {
+      id: 'mock', name: 'Mock', models: ['m'],
+      async complete(p: CompleteParams) {
+        if (p.messages.length === 1) {
+          return {
+            text: '', truncated: false, stopReason: 'tool_use',
+            toolCalls: [{ id: 'c1', name: 'create_file', input: { path: 'a.md', content: 'A' } }],
+          }
+        }
+        return { text: 'done', truncated: false, stopReason: 'end_turn' }
+      },
+    }
+    await runChatTurn({
+      ...baseCtx,
+      toolCtx: makeCtx({ fs }),
+      adapter,
+      provider: 'anthropic',
+      history: [{ id: 'u1', role: 'user', content: 'do it', provider: 'anthropic' }],
+      onUpdate: () => {},
+      historyClient: null,
+    })
+    expect(history.createSnapshot).not.toHaveBeenCalled()
+  })
+
+  it('logs but does not block tool execution when createSnapshot throws', async () => {
+    const fs = makeMockFs({})
+    const history = makeHistory()
+    history.createSnapshot.mockRejectedValueOnce(new Error('boom'))
+    const errors: Error[] = []
+    const adapter: LLMAdapter = {
+      id: 'mock', name: 'Mock', models: ['m'],
+      async complete(p: CompleteParams) {
+        if (p.messages.length === 1) {
+          return {
+            text: '', truncated: false, stopReason: 'tool_use',
+            toolCalls: [{ id: 'c1', name: 'create_file', input: { path: 'a.md', content: 'A' } }],
+          }
+        }
+        return { text: 'done', truncated: false, stopReason: 'end_turn' }
+      },
+    }
+    await runChatTurn({
+      ...baseCtx,
+      toolCtx: makeCtx({ fs }),
+      adapter,
+      provider: 'anthropic',
+      history: [{ id: 'u1', role: 'user', content: 'do it', provider: 'anthropic' }],
+      onUpdate: () => {},
+      historyClient: history as never,
+      onHistoryError: (e) => errors.push(e),
+    })
+    expect(errors[0]?.message).toBe('boom')
+    // The tool should still have run — file should exist in the mock FS
+    expect(await fs.readFile('a.md')).toMatchObject({ content: 'A' })
   })
 })

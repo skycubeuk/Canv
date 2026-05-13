@@ -266,3 +266,24 @@ describe('history-service restore', () => {
     await expect(svc.restoreFile('snap_nope', 'a.md')).rejects.toThrow(/Unknown snapshot/)
   })
 })
+
+describe('history-service patchSnapshotFiles', () => {
+  it('updates the files array on an existing snapshot entry', async () => {
+    const root = await tmp()
+    await fsp.writeFile(path.join(root, 'a.md'), 'x', 'utf8')
+    const svc = createHistoryService({ root })
+    await svc.initRevisionArchaeology()
+    const s = await svc.createSnapshot({ reason: 'before_ai_edit', summary: 'b', files: [] })
+    await svc.patchSnapshotFiles(s.id, ['a.md', 'b.md'])
+    const got = await svc.getSnapshot(s.id)
+    expect(got.files).toEqual(['a.md', 'b.md'])
+  })
+
+  it('throws on unknown id', async () => {
+    const root = await tmp()
+    await fsp.writeFile(path.join(root, 'a.md'), 'x', 'utf8')
+    const svc = createHistoryService({ root })
+    await svc.initRevisionArchaeology()
+    await expect(svc.patchSnapshotFiles('snap_nope', ['a.md'])).rejects.toThrow(/Unknown snapshot/)
+  })
+})
