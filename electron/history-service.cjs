@@ -170,7 +170,29 @@ function createHistoryService({ root }) {
     })
   }
 
-  return { initRevisionArchaeology, createSnapshot }
+  async function listSnapshots({ includeHidden = false } = {}) {
+    const idx = await readIndex()
+    const arr = [...idx.snapshots].reverse()
+    return includeHidden ? arr : arr.filter((s) => !s.hidden)
+  }
+
+  async function getSnapshot(id) {
+    const idx = await readIndex()
+    return idx.snapshots.find((s) => s.id === id) || null
+  }
+
+  async function hideSnapshot(id) {
+    return mutex(async () => {
+      const idx = await readIndex()
+      const i = idx.snapshots.findIndex((s) => s.id === id)
+      if (i < 0) throw new Error(`Unknown snapshot ${id}`)
+      idx.snapshots[i] = { ...idx.snapshots[i], hidden: true }
+      await writeIndex(idx)
+      return idx.snapshots[i]
+    })
+  }
+
+  return { initRevisionArchaeology, createSnapshot, listSnapshots, getSnapshot, hideSnapshot }
 }
 
 module.exports = { createHistoryService }

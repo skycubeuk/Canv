@@ -113,3 +113,28 @@ describe('history-service createSnapshot', () => {
     expect(tip).toBe(idx.snapshots[3].commit)
   })
 })
+
+describe('history-service list/get/hide', () => {
+  it('listSnapshots returns newest-first; hidden filtered by default; getSnapshot returns hidden', async () => {
+    const root = await tmp()
+    await fsp.writeFile(path.join(root, 'a.md'), 'x', 'utf8')
+    const svc = createHistoryService({ root })
+    await svc.initRevisionArchaeology()
+    const s1 = await svc.createSnapshot({ reason: 'manual', summary: 'one', files: [] })
+    const s2 = await svc.createSnapshot({ reason: 'manual', summary: 'two', files: [] })
+    await svc.hideSnapshot(s1.id)
+
+    const visible = await svc.listSnapshots()
+    expect(visible.length).toBe(2) // init + s2
+    expect(visible[0].id).toBe(s2.id) // newest first
+
+    const all = await svc.listSnapshots({ includeHidden: true })
+    expect(all.length).toBe(3)
+
+    const got = await svc.getSnapshot(s1.id)
+    expect(got).not.toBeNull()
+    expect(got.hidden).toBe(true)
+
+    expect(await svc.getSnapshot('snap_does_not_exist')).toBeNull()
+  })
+})
