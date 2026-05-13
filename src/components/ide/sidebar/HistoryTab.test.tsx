@@ -106,21 +106,18 @@ describe('HistoryTab', () => {
     await waitFor(() => expect(history.listSnapshots).toHaveBeenCalledWith({ includeHidden: true }))
   })
 
-  it('hides snapshots whose reason is deselected', async () => {
+  it('does not render the reason filter chips', async () => {
     const history = {
       getCurrentChanges: vi.fn().mockResolvedValue([]),
-      listSnapshots: vi.fn().mockResolvedValue([
-        snap({ id: 's1', reason: 'manual', summary: 'a manual one' }),
-        snap({ id: 's2', reason: 'idle_autosave', summary: 'an idle one' }),
-      ]),
+      listSnapshots: vi.fn().mockResolvedValue([snap({ id: 's1' })]),
       hideSnapshot: vi.fn(),
       getTipCommit: vi.fn().mockResolvedValue('a'.repeat(40)),
+      getSnapshotDelta: vi.fn().mockResolvedValue([]),
     }
     render(<HistoryTab history={history as never} onOpenDiff={onOpenDiff} onCreateCheckpoint={onCreateCheckpoint} onRestore={onRestore} />)
-    await waitFor(() => expect(screen.getByText('a manual one')).toBeInTheDocument())
-    expect(screen.getByText('an idle one')).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: /Hide Idle/i }))
-    expect(screen.queryByText('an idle one')).not.toBeInTheDocument()
-    expect(screen.getByText('a manual one')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByText(/edit/)).toBeInTheDocument())
+    expect(screen.queryByLabelText(/Hide Manual/i)).toBeNull()
+    expect(screen.queryByLabelText(/Hide Workspace init/i)).toBeNull()
+    expect(screen.queryByLabelText(/Hide Before AI/i)).toBeNull()
   })
 })

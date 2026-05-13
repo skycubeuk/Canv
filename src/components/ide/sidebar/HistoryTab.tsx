@@ -22,10 +22,6 @@ const STATUS_BADGE: Record<CurrentChange['status'], string> = {
   deleted: 'D',
 }
 
-const ALL_REASONS: SnapshotEntry['reason'][] = [
-  'manual', 'workspace_init', 'before_ai_edit', 'after_ai_edit', 'before_rollback', 'idle_autosave',
-]
-
 function basename(rel: string): string {
   const i = rel.lastIndexOf('/')
   return i >= 0 ? rel.slice(i + 1) : rel
@@ -39,10 +35,6 @@ export function HistoryTab({ history, onOpenDiff, onCreateCheckpoint, onRestore 
   const [expanded, setExpanded] = useState<string | null>(null)
   const [composerOpen, setComposerOpen] = useState(false)
   const [composerText, setComposerText] = useState('Manual checkpoint')
-  const [selectedReasons, setSelectedReasons] = useState<Set<SnapshotEntry['reason']>>(
-    () => new Set(ALL_REASONS),
-  )
-
   const refresh = useCallback(async () => {
     const [c, s, tip] = await Promise.all([
       history.getCurrentChanges(),
@@ -66,8 +58,6 @@ export function HistoryTab({ history, onOpenDiff, onCreateCheckpoint, onRestore 
     setComposerText('Manual checkpoint')
     await refresh()
   }
-
-  const visibleSnapshots = snapshots.filter((s) => selectedReasons.has(s.reason))
 
   return (
     <aside className="h-full flex flex-col bg-panel overflow-hidden">
@@ -154,41 +144,11 @@ export function HistoryTab({ history, onOpenDiff, onCreateCheckpoint, onRestore 
             Timeline
           </div>
 
-          {/* Reason filter chips */}
-          <div className="px-3 pb-1.5 flex flex-wrap gap-1">
-            {ALL_REASONS.map((r) => {
-              const on = selectedReasons.has(r)
-              return (
-                <button
-                  key={r}
-                  type="button"
-                  onClick={() => setSelectedReasons((prev) => {
-                    const next = new Set(prev)
-                    if (next.has(r)) next.delete(r)
-                    else next.add(r)
-                    return next
-                  })}
-                  aria-label={on ? `Hide ${REASON_LABEL[r]}` : `Show ${REASON_LABEL[r]}`}
-                  className={`text-[9.5px] uppercase tracking-wider px-1.5 py-0.5 rounded-sm border ${
-                    on
-                      ? 'border-default bg-elev text-default'
-                      : 'border-default text-subtle bg-transparent opacity-50 hover:opacity-100'
-                  }`}
-                  title={on ? `Hide ${REASON_LABEL[r]}` : `Show ${REASON_LABEL[r]}`}
-                >
-                  {REASON_LABEL[r]}
-                </button>
-              )
-            })}
-          </div>
-
-          {visibleSnapshots.length === 0 ? (
-            <div className="px-3 pb-2 text-xs text-subtle">
-              {snapshots.length > 0 ? 'No snapshots match the current filter.' : 'No snapshots yet.'}
-            </div>
+          {snapshots.length === 0 ? (
+            <div className="px-3 pb-2 text-xs text-subtle">No snapshots yet.</div>
           ) : (
             <ul>
-              {visibleSnapshots.map((s) => {
+              {snapshots.map((s) => {
                 const isOpen = expanded === s.id
                 return (
                   <li key={s.id} className={s.hidden ? 'opacity-50' : ''}>
