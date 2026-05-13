@@ -229,6 +229,9 @@ describe('history-service restore', () => {
     await fsp.writeFile(path.join(root, 'a.md'), 'TWO\n', 'utf8')
 
     const beforeHead = await fsp.readFile(path.join(root, '.git', 'HEAD'), 'utf8')
+    const gitIndexExists = await fsp.access(path.join(root, '.git', 'index')).then(() => true).catch(() => false)
+    const beforeIndex = gitIndexExists ? await fsp.readFile(path.join(root, '.git', 'index')) : null
+
     const r = await svc.restoreFile(s1.id, 'a.md')
 
     expect(r.rollbackSnapshotId).toMatch(/^snap_/)
@@ -241,6 +244,15 @@ describe('history-service restore', () => {
     expect(blob.baseText).toBe('TWO\n')
 
     expect(await fsp.readFile(path.join(root, '.git', 'HEAD'), 'utf8')).toBe(beforeHead)
+
+    // .git/index must be byte-identical (or still absent) after restore
+    const afterIndexExists = await fsp.access(path.join(root, '.git', 'index')).then(() => true).catch(() => false)
+    if (beforeIndex !== null) {
+      const afterIndex = await fsp.readFile(path.join(root, '.git', 'index'))
+      expect(Buffer.compare(beforeIndex, afterIndex)).toBe(0)
+    } else {
+      expect(afterIndexExists).toBe(false)
+    }
   })
 
   it('restoreFile creates intermediate directories if the path was deleted', async () => {
@@ -285,5 +297,55 @@ describe('history-service patchSnapshotFiles', () => {
     const svc = createHistoryService({ root })
     await svc.initRevisionArchaeology()
     await expect(svc.patchSnapshotFiles('snap_nope', ['a.md'])).rejects.toThrow(/Unknown snapshot/)
+  })
+})
+
+describe('history-service parent-repo detection', () => {
+  it('refuses to init when the workspace is inside an existing parent repo', async () => {
+    const parent = await tmp()
+    await git.init({ fs: nodefs, dir: parent, defaultBranch: 'main' })
+    const child = path.join(parent, 'child-workspace')
+    await fsp.mkdir(child, { recursive: true })
+    await fsp.writeFile(path.join(child, 'a.md'), 'A', 'utf8')
+    const svc = createHistoryService({ root: child })
+    await expect(svc.initRevisionArchaeology()).rejects.toThrow(/parent git repository/)
+  })
+})
+
+describe('history-service gitignore', () => {
+  it('skips .gitignore-matched entries in snapshots and current-changes', async () => {
+    const root = await tmp()
+    await fsp.writeFile(path.join(root, 'a.md'), 'A', 'utf8')
+    await fsp.writeFile(path.join(root, '.gitignore'), 'node_modules/\nbuild/\n', 'utf8')
+    await fsp.mkdir(path.join(root, 'node_modules'), { recursive: true })
+    await fsp.writeFile(path.join(root, 'node_modules', 'big.bin'), 'X'.repeat(1024), 'utf8')
+    const svc = createHistoryService({ root })
+    await svc.initRevisionArchaeology()
+    // Snapshot tree should NOT contain node_modules
+    const tip = await git.resolveRef({ fs: nodefs, dir: root, ref: 'refs/heads/canv-history' })
+    const { commit } = await git.readCommit({ fs: nodefs, dir: root, oid: tip })
+    const { tree } = await git.readTree({ fs: nodefs, dir: root, oid: commit.tree })
+    expect(tree.find((e) => e.path === 'node_modules')).toBeUndefined()
+
+    // getCurrentChanges should not report ignored additions
+    await fsp.writeFile(path.join(root, 'node_modules', 'extra.bin'), 'Y', 'utf8')
+    const changes = await svc.getCurrentChanges()
+    expect(changes.find((c) => c.relPath.startsWith('node_modules/'))).toBeUndefined()
+  })
+})
+
+describe('history-service schema', () => {
+  it('throws on unsupported history-index schemaVersion', async () => {
+    const root = await tmp()
+    await fsp.writeFile(path.join(root, 'a.md'), 'A', 'utf8')
+    const svc = createHistoryService({ root })
+    await svc.initRevisionArchaeology()
+    // Overwrite index with a v2 schema
+    await fsp.writeFile(
+      path.join(root, '.canv', 'history-index.json'),
+      JSON.stringify({ schemaVersion: 2, latestSnapshot: null, snapshots: [] }),
+      'utf8',
+    )
+    await expect(svc.listSnapshots()).rejects.toThrow(/Unsupported history-index schemaVersion/)
   })
 })

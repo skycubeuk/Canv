@@ -5,6 +5,19 @@ const path = require('node:path')
 const crypto = require('node:crypto')
 const git = require('isomorphic-git')
 
+async function findParentGitDir(start) {
+  let dir = path.resolve(start)
+  while (true) {
+    try {
+      const s = await fsp.stat(path.join(dir, '.git'))
+      if (s.isDirectory()) return dir
+    } catch (e) { if (e.code !== 'ENOENT') throw e }
+    const parent = path.dirname(dir)
+    if (parent === dir) return null
+    dir = parent
+  }
+}
+
 const CANV_BRANCH = 'canv-history'
 const CANV_AUTHOR = { name: 'Canv', email: 'noreply@canv.local' }
 
@@ -47,12 +60,13 @@ function createHistoryService({ root }) {
     return (fn) => { const next = chain.then(fn, fn); chain = next.catch(() => {}); return next }
   })()
 
-  async function gitDirExists() {
-    try { const s = await fsp.stat(path.join(root, '.git')); return s.isDirectory() } catch { return false }
-  }
-
   async function readIndex() {
-    return (await readJson(indexPath)) || { schemaVersion: 1, latestSnapshot: null, snapshots: [] }
+    const data = await readJson(indexPath)
+    if (data === null) return { schemaVersion: 1, latestSnapshot: null, snapshots: [] }
+    if (data.schemaVersion !== 1) {
+      throw new Error(`Unsupported history-index schemaVersion: ${data.schemaVersion}. This Canv version only supports schemaVersion 1.`)
+    }
+    return data
   }
 
   async function writeIndex(idx) {
@@ -67,6 +81,10 @@ function createHistoryService({ root }) {
     for (const ent of entries) {
       if (ent.name === '.git' || ent.name === '.canv') continue
       const childRel = rel ? `${rel}/${ent.name}` : ent.name
+      try {
+        const ignored = await git.isIgnored({ fs: nodefs, dir: absRoot, filepath: childRel })
+        if (ignored) continue
+      } catch { /* on first init the repo isn't fully formed; treat as not-ignored */ }
       const abs = path.join(absRoot, childRel)
       if (ent.isDirectory()) {
         const sub = await buildTreeFromDir(absRoot, childRel)
@@ -101,7 +119,15 @@ function createHistoryService({ root }) {
   }
 
   async function initInner() {
-    if (!(await gitDirExists())) {
+    const existingGit = await findParentGitDir(root)
+    if (existingGit && existingGit !== path.resolve(root)) {
+      throw new Error(
+        `Workspace is inside a parent git repository at "${existingGit}". ` +
+        `Revision Archaeology does not yet support nested-workspace repos. ` +
+        `Open the parent folder as a workspace, or move this folder out of the parent repo.`
+      )
+    }
+    if (!existingGit) {
       await git.init({ fs: nodefs, dir: root, defaultBranch: 'main' })
     }
     await ensureGitignoreEntry(root, '.canv/')
@@ -144,30 +170,32 @@ function createHistoryService({ root }) {
     return mutex(initInner)
   }
 
-  async function createSnapshot({ reason, summary, files = [], metadata = {} }) {
-    return mutex(async () => {
-      let parent
-      try {
-        parent = await git.resolveRef({ fs: nodefs, dir: root, ref: `refs/heads/${CANV_BRANCH}` })
-      } catch {
-        // Defensive: caller forgot to init. Run init inline (also mutex-guarded inside).
-        // Note: we're already inside the mutex, so call the inner function directly to avoid deadlock.
-        const init = await initInner()
-        parent = init.headCommit
-      }
-      const sha = await commitFullTree({ parent, message: `Canv: ${reason} — ${summary}` })
-      await git.writeRef({ fs: nodefs, dir: root, ref: `refs/heads/${CANV_BRANCH}`, value: sha, force: true })
+  async function createSnapshotLocked({ reason, summary, files = [], metadata = {} }) {
+    let parent
+    try {
+      parent = await git.resolveRef({ fs: nodefs, dir: root, ref: `refs/heads/${CANV_BRANCH}` })
+    } catch {
+      // Defensive: caller forgot to init. Run init inline (also mutex-guarded inside).
+      // Note: we're already inside the mutex, so call the inner function directly to avoid deadlock.
+      const init = await initInner()
+      parent = init.headCommit
+    }
+    const sha = await commitFullTree({ parent, message: `Canv: ${reason} — ${summary}` })
+    await git.writeRef({ fs: nodefs, dir: root, ref: `refs/heads/${CANV_BRANCH}`, value: sha, force: true })
 
-      const idx = await readIndex()
-      const entry = {
-        id: snapshotId(), commit: sha, createdAt: nowIso(),
-        reason, summary, files: [...files], hidden: false, metadata: { ...metadata },
-      }
-      idx.snapshots.push(entry)
-      idx.latestSnapshot = entry.id
-      await writeIndex(idx)
-      return entry
-    })
+    const idx = await readIndex()
+    const entry = {
+      id: snapshotId(), commit: sha, createdAt: nowIso(),
+      reason, summary, files: [...files], hidden: false, metadata: { ...metadata },
+    }
+    idx.snapshots.push(entry)
+    idx.latestSnapshot = entry.id
+    await writeIndex(idx)
+    return entry
+  }
+
+  async function createSnapshot(input) {
+    return mutex(() => createSnapshotLocked(input))
   }
 
   async function listSnapshots({ includeHidden = false } = {}) {
@@ -230,6 +258,10 @@ function createHistoryService({ root }) {
       for (const ent of entries) {
         if (ent.name === '.git' || ent.name === '.canv') continue
         const childRel = rel ? `${rel}/${ent.name}` : ent.name
+        try {
+          const ignored = await git.isIgnored({ fs: nodefs, dir: root, filepath: childRel })
+          if (ignored) continue
+        } catch { /* treat as not-ignored */ }
         if (ent.isDirectory()) await recur(childRel)
         else if (ent.isFile()) out.add(childRel)
       }
@@ -281,21 +313,22 @@ function createHistoryService({ root }) {
   }
 
   async function restoreFile(snapshotId, relPath) {
-    const snap = await getSnapshot(snapshotId)
-    if (!snap) throw new Error(`Unknown snapshot ${snapshotId}`)
-    // 1. Safety snapshot of current state
-    const rollback = await createSnapshot({
-      reason: 'before_rollback',
-      summary: `Before restore of ${relPath} from ${snap.id}`,
-      files: [relPath],
-      metadata: { snapshotId: snap.id },
+    return mutex(async () => {
+      const idx0 = await readIndex()
+      const snap = idx0.snapshots.find((s) => s.id === snapshotId)
+      if (!snap) throw new Error(`Unknown snapshot ${snapshotId}`)
+      const rollback = await createSnapshotLocked({
+        reason: 'before_rollback',
+        summary: `Before restore of ${relPath} from ${snap.id}`,
+        files: [relPath],
+        metadata: { snapshotId: snap.id },
+      })
+      const text = await readBlobAt(snap.commit, relPath)
+      const abs = path.join(root, relPath)
+      await fsp.mkdir(path.dirname(abs), { recursive: true })
+      await fsp.writeFile(abs, text, 'utf8')
+      return { rollbackSnapshotId: rollback.id }
     })
-    // 2. Write the blob from `snap` to disk (creating parent dirs if needed)
-    const text = await readBlobAt(snap.commit, relPath)
-    const abs = path.join(root, relPath)
-    await fsp.mkdir(path.dirname(abs), { recursive: true })
-    await fsp.writeFile(abs, text, 'utf8')
-    return { rollbackSnapshotId: rollback.id }
   }
 
   async function patchSnapshotFiles(id, files) {
