@@ -21,27 +21,37 @@ export function WorkspaceSetupModal(p: WorkspaceSetupModalProps) {
 
   return (
     <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="canv-setup-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      onMouseDown={(e) => { if (e.target === e.currentTarget) p.onCancel() }}
     >
-      <div className="bg-white dark:bg-zinc-900 rounded-lg p-6 w-[420px] shadow-xl">
-        <h2 id="canv-setup-title" className="text-lg font-semibold mb-4">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="canv-setup-title"
+        className="w-full max-w-md rounded-lg border border-default bg-elev shadow-lg p-5"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <h2 id="canv-setup-title" className="text-sm font-medium text-default mb-4">
           Set up workspace
         </h2>
 
         <fieldset className="mb-4">
-          <legend className="text-sm font-medium mb-2">Default profile</legend>
-          <div className="space-y-1">
+          <legend className="text-[10.5px] font-semibold tracking-wider uppercase text-subtle mb-2">
+            Default profile
+          </legend>
+          <div className="space-y-0.5">
             {p.modes.map((m) => (
-              <label key={m.id} className="flex items-center gap-2 text-sm">
+              <label
+                key={m.id}
+                className="flex items-center gap-2 text-sm text-default px-2 py-1 rounded-sm hover:bg-hover cursor-pointer"
+              >
                 <input
                   type="radio"
                   name="canv-default-profile"
                   value={m.id}
                   checked={profile === m.id}
                   onChange={() => setProfile(m.id)}
+                  className="accent-[rgb(var(--accent))]"
                 />
                 {m.label}
               </label>
@@ -49,28 +59,36 @@ export function WorkspaceSetupModal(p: WorkspaceSetupModalProps) {
           </div>
         </fieldset>
 
-        <div className="mb-2">
-          <label className="flex items-center gap-2 text-sm">
+        <div className="mb-1">
+          <label className="flex items-center gap-2 text-sm text-default px-2 py-1 rounded-sm hover:bg-hover cursor-pointer">
             <input
               type="checkbox"
               checked={enableRA}
               disabled={p.remote}
               onChange={(e) => setEnableRA(e.target.checked)}
+              className="accent-[rgb(var(--accent))] disabled:opacity-50"
             />
             Enable Revision Archaeology
           </label>
           {p.remote && (
-            <p className="text-xs text-zinc-500 mt-1">Remote workspaces are not yet supported.</p>
+            <p className="text-xs text-subtle mt-1 px-2">
+              Remote workspaces are not yet supported.
+            </p>
           )}
         </div>
 
-        <div className="flex justify-end gap-2 mt-6">
-          <button className="px-3 py-1.5 text-sm rounded border" onClick={p.onCancel}>
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={p.onCancel}
+            className="px-3 py-1 text-xs rounded-sm border border-default text-default hover:bg-hover"
+          >
             Cancel
           </button>
           <button
-            className="px-3 py-1.5 text-sm rounded bg-blue-600 text-white"
+            type="button"
             onClick={() => p.onConfirm({ defaultProfile: profile, enableRA })}
+            className="btn-primary py-1! px-3! text-xs"
           >
             Set up workspace
           </button>

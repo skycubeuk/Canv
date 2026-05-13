@@ -32,28 +32,79 @@ export function RestorePreviewDialog({
   }
 
   return (
-    <div role="dialog" aria-modal="true" className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white dark:bg-zinc-900 rounded-lg p-4 w-[640px] max-h-[80vh] flex flex-col shadow-xl">
-        <h2 className="text-base font-semibold mb-2">Restore {relPath}</h2>
-        {!preview && <p className="text-sm">Loading preview…</p>}
-        {preview && (
-          <div className="grid grid-cols-2 gap-2 flex-1 overflow-auto text-xs font-mono">
-            <pre className="bg-zinc-50 dark:bg-zinc-800 p-2 whitespace-pre-wrap">{preview.snapshotText}</pre>
-            <pre className="bg-zinc-50 dark:bg-zinc-800 p-2 whitespace-pre-wrap">{preview.currentText}</pre>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) onCancel() }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Restore ${relPath}`}
+        className="w-full max-w-3xl max-h-[80vh] flex flex-col rounded-lg border border-default bg-elev shadow-lg"
+        onMouseDown={(e) => e.stopPropagation()}
+      >
+        <header className="shrink-0 px-4 py-3 border-b border-default flex items-center justify-between">
+          <div className="min-w-0">
+            <div className="text-[10.5px] font-semibold tracking-wider uppercase text-subtle">
+              Restore file
+            </div>
+            <div className="text-sm font-medium text-default truncate" title={relPath}>
+              {relPath}
+            </div>
           </div>
-        )}
-        <div className="flex justify-end gap-2 mt-4">
-          <button className="px-3 py-1.5 text-sm rounded border" onClick={onCancel} disabled={busy}>
-            Cancel
-          </button>
-          <button
-            className="px-3 py-1.5 text-sm rounded bg-blue-600 text-white"
-            disabled={busy || !preview}
-            onClick={confirm}
-          >
-            {busy ? 'Restoring…' : 'Restore'}
-          </button>
+        </header>
+
+        <div className="flex-1 min-h-0 overflow-hidden p-4">
+          {!preview && (
+            <div className="h-full grid place-items-center text-sm text-muted">
+              Loading preview…
+            </div>
+          )}
+          {preview && (
+            <div className="h-full grid grid-cols-2 gap-3">
+              <div className="flex flex-col min-h-0">
+                <div className="text-[10.5px] font-semibold tracking-wider uppercase text-subtle mb-1.5">
+                  Snapshot
+                </div>
+                <pre className="flex-1 min-h-0 overflow-auto rounded-sm border border-default bg-app p-2 text-xs font-mono text-default whitespace-pre-wrap break-words">
+                  {preview.snapshotText}
+                </pre>
+              </div>
+              <div className="flex flex-col min-h-0">
+                <div className="text-[10.5px] font-semibold tracking-wider uppercase text-subtle mb-1.5">
+                  Current
+                </div>
+                <pre className="flex-1 min-h-0 overflow-auto rounded-sm border border-default bg-app p-2 text-xs font-mono text-default whitespace-pre-wrap break-words">
+                  {preview.currentText}
+                </pre>
+              </div>
+            </div>
+          )}
         </div>
+
+        <footer className="shrink-0 px-4 py-3 border-t border-default flex items-center justify-between gap-3">
+          <p className="text-xs text-subtle">
+            A safety snapshot is taken before restore — you can roll forward from the timeline.
+          </p>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={busy}
+              className="px-3 py-1 text-xs rounded-sm border border-default text-default hover:bg-hover disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={confirm}
+              disabled={busy || !preview}
+              className="btn-primary py-1! px-3! text-xs disabled:opacity-50"
+            >
+              {busy ? 'Restoring…' : 'Restore'}
+            </button>
+          </div>
+        </footer>
       </div>
     </div>
   )
