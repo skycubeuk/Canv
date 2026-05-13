@@ -397,17 +397,16 @@ function createHistoryService({ root }) {
     // Resolve blob OID for every commit in the chain
     const oids = await Promise.all(chain.map((sha) => readBlobOidAt(sha, relPath)))
 
-    // Walk oldest→newest: emit visible (non-hidden) snapshots where the file blob is
-    // distinct from the previously-seen blob (including hidden/init blobs for dedup).
-    // workspace_init (reason === 'workspace_init') is never emitted.
-    // First visible snapshot that has the file is always emitted.
+    // Walk oldest→newest: emit each visible (non-hidden) snapshot whose blob differs
+    // from the previously-seen blob. Dedup tracks all non-absent blobs (including
+    // hidden ones) so neighbours don't double-emit identical content.
     const out = []
     let prevOid = null
     for (let i = 0; i < chain.length; i++) {
       const curOid = oids[i]
       if (curOid === null) continue // file absent at this commit — skip in v1
       const snap = byCommit.get(chain[i])
-      if (snap && !snap.hidden && snap.reason !== 'workspace_init') {
+      if (snap && !snap.hidden) {
         // Emit if this is the first occurrence or the blob changed since last seen
         if (curOid !== prevOid) {
           out.push({
@@ -419,9 +418,8 @@ function createHistoryService({ root }) {
           })
         }
       }
-      // Track for dedup (non-absent blobs, excluding workspace_init baseline)
-      const snapHere = byCommit.get(chain[i])
-      if (!snapHere || snapHere.reason !== 'workspace_init') prevOid = curOid
+      // Track every non-absent blob for dedup regardless of snapshot type
+      prevOid = curOid
     }
     out.reverse() // return newest→oldest
     return out

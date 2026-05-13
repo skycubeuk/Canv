@@ -66,8 +66,11 @@ describe('history-service getFileHistory', () => {
     const s3 = await svc.createSnapshot({ reason: 'manual', summary: 's3-recreated' })
 
     const history = await svc.getFileHistory('x.md')
-    // s2 (absent) is skipped; s3 (v3) and s1 (v1) both emitted, dedup against workspace_init v1
-    expect(history.map(h => h.snapshotId)).toEqual([s3.id, s1.id])
+    // s2 (absent) is skipped; s3 (v3) and workspace_init (v1) both emitted.
+    // s1 (v1) dedups against workspace_init's v1.
+    expect(history.length).toBe(2)
+    expect(history[0].snapshotId).toBe(s3.id)
+    expect(history[1].reason).toBe('workspace_init')
   })
 
   it('filters hidden snapshots', async () => {
@@ -82,7 +85,22 @@ describe('history-service getFileHistory', () => {
 
     await svc.hideSnapshot(s2.id)
     const history = await svc.getFileHistory('x.md')
-    expect(history.map(h => h.snapshotId)).toEqual([s1.id])
+    // s2 (hidden, v2) is excluded. workspace_init (v1) is emitted first;
+    // s1 (v1) dedups against workspace_init so only one v1 entry appears.
+    expect(history.length).toBe(1)
+    expect(history[0].reason).toBe('workspace_init')
+  })
+
+  it('returns workspace_init when it is the only snapshot containing the file', async () => {
+    const root = await tmp()
+    await fsp.writeFile(path.join(root, 'x.md'), 'baseline\n', 'utf8')
+    const svc = createHistoryService({ root })
+    await svc.initRevisionArchaeology()
+    // No manual snapshot. The only canv-history commit is workspace_init.
+
+    const history = await svc.getFileHistory('x.md')
+    expect(history.length).toBe(1)
+    expect(history[0].reason).toBe('workspace_init')
   })
 
   it('returns SnapshotEntry-derived fields (snapshotId, commit, createdAt, reason, summary)', async () => {
