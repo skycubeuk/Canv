@@ -83,7 +83,7 @@ export function FileTree(props: Props) {
     window.addEventListener('keydown', onKeyDown)
     return () => {
       window.removeEventListener('click', close)
-      window.removeEventListener('blur', close)
+      window.removeEventListener('blur-sm', close)
       window.removeEventListener('keydown', onKeyDown)
     }
   }, [menu])
@@ -149,7 +149,7 @@ export function FileTree(props: Props) {
       return (
         <div key={entry.relPath || '__root__'}>
           <div
-            className="flex items-center gap-1.5 px-1 py-[3px] text-[12.5px] cursor-pointer rounded text-muted hover:bg-hover transition-colors"
+            className="flex items-center gap-1.5 px-1 py-[3px] text-[12.5px] cursor-pointer rounded-sm text-muted hover:bg-hover transition-colors"
             style={{ paddingLeft: indent }}
             onClick={() => toggle(entry.relPath)}
             onContextMenu={(e) => handleContextMenu(e, entry)}

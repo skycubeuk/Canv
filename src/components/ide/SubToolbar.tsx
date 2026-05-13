@@ -74,7 +74,7 @@ export function SubToolbar(props: Props) {
                 aria-pressed={selected}
                 onClick={() => onChangeViewMode(m)}
                 className={`px-2.5 py-0.5 text-[11.5px] rounded font-medium ${
-                  selected ? 'bg-app text-default shadow' : 'text-muted hover:text-default'
+                  selected ? 'bg-app text-default shadow-sm' : 'text-muted hover:text-default'
                 }`}
               >
                 {m === 'edit' ? 'Edit' : 'Preview'}

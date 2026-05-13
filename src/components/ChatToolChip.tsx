@@ -46,7 +46,7 @@ export function ChatToolChip({ name, inputPath, status, summary, result }: ChatT
         <span>{headline}</span>
       </button>
       {open && (result ?? '').length > 0 && (
-        <pre data-testid="chip-result-body" className="mt-1 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-panel/40 p-2 text-[0.85em]">
+        <pre data-testid="chip-result-body" className="mt-1 max-h-64 overflow-auto whitespace-pre-wrap rounded-sm bg-panel/40 p-2 text-[0.85em]">
           {result}
         </pre>
       )}

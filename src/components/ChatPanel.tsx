@@ -235,14 +235,14 @@ export function ChatPanel({ messages, busy, provider, model, onSend, onClear, on
         <FileText aria-hidden className="w-2.5 h-2.5" />
         <span className="text-default truncate">{contextFileName ?? 'No active document'}</span>
         {contextFileName && (
-          <span className="px-1.5 py-px rounded text-[0.75em] font-medium bg-accent-soft text-accent">
+          <span className="px-1.5 py-px rounded-sm text-[0.75em] font-medium bg-accent-soft text-accent">
             shared
           </span>
         )}
         <select
           aria-label="Provider"
           title={locked ? `Locked to ${provider}/${model} for this chat — open a new chat to use a different model` : 'Provider for this chat'}
-          className="text-[0.78em] bg-elev border border-default rounded px-1 py-0.5 text-muted disabled:opacity-60"
+          className="text-[0.78em] bg-elev border border-default rounded-sm px-1 py-0.5 text-muted disabled:opacity-60"
           disabled={locked}
           value={provider}
           onChange={(e) => {
@@ -258,7 +258,7 @@ export function ChatPanel({ messages, busy, provider, model, onSend, onClear, on
         <select
           aria-label="Model"
           title={locked ? `Locked to ${model}` : 'Model for this chat'}
-          className="text-[0.78em] bg-elev border border-default rounded px-1 py-0.5 text-muted disabled:opacity-60"
+          className="text-[0.78em] bg-elev border border-default rounded-sm px-1 py-0.5 text-muted disabled:opacity-60"
           disabled={locked}
           value={model}
           onChange={(e) => onChangeProviderModel(provider as ChatProvider, e.target.value)}
@@ -367,7 +367,7 @@ export function ChatPanel({ messages, busy, provider, model, onSend, onClear, on
             placeholder="Message the document…"
             minRows={2}
             maxRows={6}
-            className="w-full bg-transparent border-none focus:outline-none text-[1em] text-default placeholder:text-subtle resize-none px-1 pb-2"
+            className="w-full bg-transparent border-none focus:outline-hidden text-[1em] text-default placeholder:text-subtle resize-none px-1 pb-2"
           />
           <div className="flex items-center gap-1.5">
             <div className="flex-1" />
@@ -375,7 +375,7 @@ export function ChatPanel({ messages, busy, provider, model, onSend, onClear, on
               <button
                 type="button"
                 onClick={onStop}
-                className="text-[0.75em] px-2 py-1 rounded text-muted hover:text-default"
+                className="text-[0.75em] px-2 py-1 rounded-sm text-muted hover:text-default"
               >
                 Stop
               </button>
@@ -387,7 +387,7 @@ export function ChatPanel({ messages, busy, provider, model, onSend, onClear, on
                   onClick={handleSubmit}
                   disabled={!input.trim()}
                   aria-label="Send message"
-                  className="w-6 h-6 grid place-items-center rounded bg-accent text-accent-fg disabled:opacity-50 hover:opacity-90"
+                  className="w-6 h-6 grid place-items-center rounded-sm bg-accent text-accent-fg disabled:opacity-50 hover:opacity-90"
                 >
                   <ArrowRight aria-hidden className="w-3 h-3" />
                 </button>
@@ -556,7 +556,7 @@ export function Bubble({
                 <span className="font-mono text-subtle">{message.errorInfo.statusCode}</span>
               )}
             </div>
-            <p className="mt-0.5 leading-snug whitespace-pre-wrap break-words">
+            <p className="mt-0.5 leading-snug whitespace-pre-wrap wrap-break-word">
               {message.errorInfo.message}
             </p>
           </div>
@@ -618,14 +618,14 @@ function UserEditMode({ initial, onSubmit, onCancel }: {
         <button
           type="button"
           onClick={() => onSubmit(text.trim())}
-          className="px-2 py-1 text-[0.85em] rounded bg-accent text-accent-fg hover:opacity-90"
+          className="px-2 py-1 text-[0.85em] rounded-sm bg-accent text-accent-fg hover:opacity-90"
         >
           Submit
         </button>
         <button
           type="button"
           onClick={onCancel}
-          className="px-2 py-1 text-[0.85em] rounded border border-default text-muted hover:text-default"
+          className="px-2 py-1 text-[0.85em] rounded-sm border border-default text-muted hover:text-default"
         >
           Cancel
         </button>

@@ -74,7 +74,7 @@ export function LeftSidebar(props: Props) {
             <button
               type="button"
               aria-label="New file"
-              className="w-[22px] h-[22px] grid place-items-center rounded text-subtle hover:bg-hover hover:text-default"
+              className="w-[22px] h-[22px] grid place-items-center rounded-sm text-subtle hover:bg-hover hover:text-default"
               onClick={onNewFile}
             >
               <Plus aria-hidden className="w-3 h-3" />
@@ -82,7 +82,7 @@ export function LeftSidebar(props: Props) {
             <button
               type="button"
               aria-label="New folder"
-              className="w-[22px] h-[22px] grid place-items-center rounded text-subtle hover:bg-hover hover:text-default"
+              className="w-[22px] h-[22px] grid place-items-center rounded-sm text-subtle hover:bg-hover hover:text-default"
               onClick={onNewFolder}
             >
               <FolderPlus aria-hidden className="w-3 h-3" />
@@ -91,7 +91,7 @@ export function LeftSidebar(props: Props) {
               type="button"
               aria-label="Change workspace"
               title="Change workspace"
-              className="w-[22px] h-[22px] grid place-items-center rounded text-subtle hover:bg-hover hover:text-default"
+              className="w-[22px] h-[22px] grid place-items-center rounded-sm text-subtle hover:bg-hover hover:text-default"
               onClick={onChangeWorkspace}
             >
               <FolderOpen aria-hidden className="w-3 h-3" />

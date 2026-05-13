@@ -40,7 +40,7 @@ export function ContextMenu({ x, y, items, onClose }: Props) {
       window.removeEventListener('keydown', onKey)
       window.removeEventListener('mousedown', onDown, true)
       window.removeEventListener('scroll', onScroll, true)
-      window.removeEventListener('blur', onBlur)
+      window.removeEventListener('blur-sm', onBlur)
     }
   }, [onClose])
 

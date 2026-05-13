@@ -38,7 +38,7 @@ export function ProblemsTab({ issues, scanState, scanError, onScan, onClear, onJ
           type="button"
           onClick={onScan}
           disabled={scanState === 'scanning'}
-          className="px-2 py-0.5 rounded border border-default text-muted hover:bg-hover disabled:opacity-50"
+          className="px-2 py-0.5 rounded-sm border border-default text-muted hover:bg-hover disabled:opacity-50"
           title="Lint every markdown file in the workspace"
         >
           {scanState === 'scanning' ? 'Scanning…' : 'Scan workspace'}
@@ -46,7 +46,7 @@ export function ProblemsTab({ issues, scanState, scanError, onScan, onClear, onJ
         <button
           type="button"
           onClick={onClear}
-          className="px-2 py-0.5 rounded text-muted hover:bg-hover"
+          className="px-2 py-0.5 rounded-sm text-muted hover:bg-hover"
           title="Clear workspace-scan results (open-tab issues stay)"
         >
           Clear

@@ -17,7 +17,7 @@ export function RunInspector({ run }: Props) {
           {run.rawMessages.map((m, i) => (
             <div key={i} className="mb-2">
               <div className="text-[10px] uppercase tracking-wide text-muted">{m.role}</div>
-              <pre className="whitespace-pre-wrap break-words">{'content' in m ? m.content : ''}</pre>
+              <pre className="whitespace-pre-wrap wrap-break-word">{'content' in m ? m.content : ''}</pre>
             </div>
           ))}
         </Section>
@@ -60,7 +60,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   return (
     <section>
       <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted mb-1">{title}</h3>
-      <div className="pl-2 border-l border-default text-default whitespace-pre-wrap break-words">
+      <div className="pl-2 border-l border-default text-default whitespace-pre-wrap wrap-break-word">
         {children}
       </div>
     </section>
@@ -81,7 +81,7 @@ export function CopyButton({ label, text }: { label: string; text: () => string 
           // clipboard unavailable
         }
       }}
-      className="px-2 py-0.5 rounded border border-default text-muted hover:bg-hover"
+      className="px-2 py-0.5 rounded-sm border border-default text-muted hover:bg-hover"
       title={label}
     >
       {copied ? 'Copied' : label}

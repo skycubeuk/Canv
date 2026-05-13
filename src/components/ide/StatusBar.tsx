@@ -90,7 +90,7 @@ export function StatusBar(props: Props) {
       {workspaceName && (
         kind?.kind === 'remote' ? (
           <span className="flex items-center gap-1 truncate max-w-[260px]" title={kind.display}>
-            <span className="px-1.5 py-px text-[9px] uppercase tracking-wider rounded bg-amber-700 text-amber-100">remote</span>
+            <span className="px-1.5 py-px text-[9px] uppercase tracking-wider rounded-sm bg-amber-700 text-amber-100">remote</span>
             <span className="truncate">{kind.display}</span>
           </span>
         ) : (
@@ -147,7 +147,7 @@ export function StatusBar(props: Props) {
             onClick={onOpenSettings}
             aria-label="Open Settings"
             title="Open Settings"
-            className="w-5 h-5 grid place-items-center rounded text-muted hover:bg-hover hover:text-default"
+            className="w-5 h-5 grid place-items-center rounded-sm text-muted hover:bg-hover hover:text-default"
           >
             <Settings aria-hidden className="w-3 h-3" />
           </button>

@@ -26,7 +26,7 @@ export function ErrorScreen({ errors, configDir, onReveal }: Props) {
     <div className="min-h-screen bg-app text-default p-8 overflow-auto">
       <div className="max-w-3xl mx-auto">
         <header className="flex items-start gap-3 mb-6">
-          <AlertTriangle className="w-7 h-7 text-amber-600 flex-shrink-0 mt-1" />
+          <AlertTriangle className="w-7 h-7 text-amber-600 shrink-0 mt-1" />
           <div>
             <h1 className="text-xl font-semibold">Canv could not start</h1>
             <p className="text-sm text-muted mt-1">
@@ -40,7 +40,7 @@ export function ErrorScreen({ errors, configDir, onReveal }: Props) {
             <h2 className="font-mono text-sm text-default mb-2">
               {file || 'General'}
             </h2>
-            <ul className="bg-elev rounded border border-default divide-y divide-[rgb(var(--border-default))]">
+            <ul className="bg-elev rounded-sm border border-default divide-y divide-[rgb(var(--border-default))]">
               {errs.map((e, i) => (
                 <li key={i} className="px-4 py-2 text-sm">
                   {e.field && (

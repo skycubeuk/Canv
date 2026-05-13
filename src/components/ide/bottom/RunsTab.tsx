@@ -65,7 +65,7 @@ export function RunsTab(props: Props) {
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); onClose(r.id) }}
-                className="opacity-0 group-hover:opacity-60 hover:!opacity-100 ml-1"
+                className="opacity-0 group-hover:opacity-60 hover:opacity-100! ml-1"
                 aria-label={`Close ${r.agentLabel}`}
               >
                 <X aria-hidden className="w-3 h-3" />
