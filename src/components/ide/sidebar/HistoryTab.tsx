@@ -6,6 +6,7 @@ import { REASON_LABEL, shortTime, formatSnapshotLabel } from '../../../lib/histo
 export type OpenDiffRequest =
   | { kind: 'current'; relPath: string; baseSha: string; baseLabel: string }
   | { kind: 'snapshot'; relPath: string; snapshotId: string; commitSha: string; baseLabel: string }
+  | { kind: 'fileHistory'; relPath: string; snapshotId: string; commitSha: string; baseLabel: string }
 
 export interface RestoreRequest { snapshotId: string; relPath: string }
 

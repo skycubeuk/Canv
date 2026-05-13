@@ -232,6 +232,14 @@ export default function App() {
   })
 
   const [restoreTarget, setRestoreTarget] = useState<{ snapshotId: string; relPath: string } | null>(null)
+  const [fileHistoryTarget, setFileHistoryTarget] = useState<string | null>(null)
+  const [fileHistoryNonce, setFileHistoryNonce] = useState(0)
+
+  const openFileHistory = useCallback((rel: string) => {
+    setFileHistoryTarget(rel)
+    setFileHistoryNonce((n) => n + 1)
+    ideLayout.showBottomTab('fileHistory')
+  }, [ideLayout])
 
   // TODO(0.7.1): wire cursor line/col from Canvas's CodeMirror via onCursorChange prop.
   const [cursorPos] = useState<{ line: number; col: number } | null>(null)
@@ -501,6 +509,12 @@ export default function App() {
     clearProblems: lintIssuesApi.clearWorkspaceIssues,
     jumpToProblem,
     pricingOverrides: settings.pricingOverrides,
+    fileHistoryEnabled: raEnabled,
+    fileHistoryTarget,
+    fileHistoryNonce,
+    fileHistoryHistory: raEnabled ? getCanvHistory() : null,
+    onFileHistoryOpenDiff: (r) => handleOpenDiff(r.relPath, r.commitSha, r.baseLabel),
+    onFileHistoryRestore: (r) => setRestoreTarget(r),
   }), [
     runs, activeTabId, setActiveTabId, handleCloseTab, applyRunWithSnapshot, handleRerun, refineRun,
     chatMessages, chatBusy, chatProvider, chatModel,
@@ -510,6 +524,7 @@ export default function App() {
     sessions, activeId, createSession, selectSession, closeSession, setActiveSessionProviderModel, availableModels,
     getSession, chatSystemPreamble,
     lintIssuesApi, jumpToProblem,
+    raEnabled, fileHistoryTarget, fileHistoryNonce, handleOpenDiff, setRestoreTarget,
   ])
 
   const bottomPanelTabs = useMemo(() => buildBottomPanelTabs(bottomPanelAdapter), [bottomPanelAdapter])
@@ -610,6 +625,7 @@ export default function App() {
         onOpenDiff={handleOpenDiff}
         raEnabled={raEnabled}
         onOpenRestore={setRestoreTarget}
+        onViewHistory={openFileHistory}
         settings={settings}
         onUpdateSettings={update}
         onExportBackup={() => {

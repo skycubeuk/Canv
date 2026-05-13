@@ -63,6 +63,8 @@ export interface WorkspaceShellProps {
   // Revision Archaeology
   raEnabled: boolean
   onOpenRestore: (r: { snapshotId: string; relPath: string }) => void
+  /** Triggers when the Files-tab context menu fires "View history" on a file. */
+  onViewHistory?: (rel: string) => void
   // Settings
   settings: Settings
   onUpdateSettings: (patch: Partial<Settings>) => void
@@ -97,7 +99,7 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
     onClickBreadcrumbFolder, revealFolderRel,
     onCreateFile, onCreateFolder, onRename, onDelete, onChangeWorkspace,
     onOpenDiff,
-    raEnabled, onOpenRestore,
+    raEnabled, onOpenRestore, onViewHistory,
     settings, onUpdateSettings,
     onExportBackup,
     bottomPanelTabs,
@@ -136,7 +138,7 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
               <HistoryTab
                 history={getCanvHistory()!}
                 onOpenDiff={(r) => {
-                  // r.baseSha (current) or r.commitSha (snapshot) — both are valid git OIDs on canv-history.
+                  // r.baseSha (current) or r.commitSha (snapshot / fileHistory) — both are valid git OIDs on canv-history.
                   const sha = r.kind === 'current' ? r.baseSha : r.commitSha
                   onOpenDiff(r.relPath, sha, r.baseLabel)
                 }}
@@ -174,6 +176,8 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
                 onDelete={onDelete}
                 onChangeWorkspace={onChangeWorkspace}
                 revealRel={revealFolderRel}
+                revisionArchaeologyEnabled={raEnabled}
+                onViewHistory={onViewHistory}
               />
             )}
             outline={outlineNode}
