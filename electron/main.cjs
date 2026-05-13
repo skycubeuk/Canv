@@ -725,6 +725,8 @@ function registerFsHandlers() {
   ipcMain.handle('canvHistory:patchSnapshotFiles', async (_e, id, files) =>
     getHistoryService().patchSnapshotFiles(id, files))
   ipcMain.handle('canvHistory:getTipCommit', async () => getHistoryService().getTipCommit())
+  ipcMain.handle('canvHistory:getSnapshotDelta', async (_e, id) => getHistoryService().getSnapshotDelta(id))
+  ipcMain.handle('canvHistory:getFileHistory', async (_e, rel) => getHistoryService().getFileHistory(rel))
 
   serve.onStatusChange((s) => {
     let payload = s

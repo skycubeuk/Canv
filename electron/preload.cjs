@@ -183,6 +183,8 @@ if (!isDockPopout()) {
     hideSnapshot: (id) => ipcRenderer.invoke('canvHistory:hideSnapshot', id),
     patchSnapshotFiles: (id, files) => ipcRenderer.invoke('canvHistory:patchSnapshotFiles', id, files),
     getTipCommit: () => ipcRenderer.invoke('canvHistory:getTipCommit'),
+    getSnapshotDelta: (id) => ipcRenderer.invoke('canvHistory:getSnapshotDelta', id),
+    getFileHistory: (rel) => ipcRenderer.invoke('canvHistory:getFileHistory', rel),
   })
 }
 
