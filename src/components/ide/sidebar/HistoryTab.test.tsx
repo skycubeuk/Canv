@@ -66,11 +66,12 @@ describe('HistoryTab', () => {
       listSnapshots: vi.fn().mockResolvedValue([snap({ id: 's1', commit: commitSha, files: ['a.md'] })]),
       hideSnapshot: vi.fn(),
       getTipCommit: vi.fn().mockResolvedValue('a'.repeat(40)),
+      getSnapshotDelta: vi.fn().mockResolvedValue([{ relPath: 'a.md', status: 'modified' }]),
     }
     render(<HistoryTab history={history as never} onOpenDiff={onOpenDiff} onCreateCheckpoint={onCreateCheckpoint} onRestore={onRestore} />)
     await waitFor(() => screen.getByText(/edit/))
     fireEvent.click(screen.getByText(/edit/))
-    expect(screen.getByText('diff')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByText('diff')).toBeInTheDocument())
     expect(screen.getByText('restore')).toBeInTheDocument()
     fireEvent.click(screen.getByText('diff'))
     expect(onOpenDiff).toHaveBeenCalledWith(expect.objectContaining({ kind: 'snapshot', snapshotId: 's1', relPath: 'a.md', commitSha, baseLabel: expect.any(String) }))
@@ -119,5 +120,65 @@ describe('HistoryTab', () => {
     expect(screen.queryByLabelText(/Hide Manual/i)).toBeNull()
     expect(screen.queryByLabelText(/Hide Workspace init/i)).toBeNull()
     expect(screen.queryByLabelText(/Hide Before AI/i)).toBeNull()
+  })
+
+  it('on snapshot expand, calls getSnapshotDelta and renders rows with status badges', async () => {
+    const history = {
+      getCurrentChanges: vi.fn().mockResolvedValue([]),
+      listSnapshots: vi.fn().mockResolvedValue([snap({ id: 's1', summary: 'expand-me' })]),
+      hideSnapshot: vi.fn(),
+      getTipCommit: vi.fn().mockResolvedValue('a'.repeat(40)),
+      getSnapshotDelta: vi.fn().mockResolvedValue([
+        { relPath: 'a.md', status: 'modified' },
+        { relPath: 'b.md', status: 'added' },
+        { relPath: 'c.md', status: 'deleted' },
+      ]),
+    }
+    render(<HistoryTab history={history as never} onOpenDiff={onOpenDiff} onCreateCheckpoint={onCreateCheckpoint} onRestore={onRestore} />)
+    await waitFor(() => expect(screen.getByText('expand-me')).toBeInTheDocument())
+    fireEvent.click(screen.getByText('expand-me'))
+    await waitFor(() => expect(history.getSnapshotDelta).toHaveBeenCalledWith('s1'))
+    expect(screen.getByText('a.md')).toBeInTheDocument()
+    expect(screen.getByText('b.md')).toBeInTheDocument()
+    expect(screen.getByText('c.md')).toBeInTheDocument()
+    // Status badges
+    const badges = screen.getAllByLabelText(/modified|added|deleted/i)
+    expect(badges.length).toBeGreaterThanOrEqual(3)
+  })
+
+  it('caches per-snapshot delta — re-expanding the same snapshot does not re-call', async () => {
+    const history = {
+      getCurrentChanges: vi.fn().mockResolvedValue([]),
+      listSnapshots: vi.fn().mockResolvedValue([snap({ id: 's1' })]),
+      hideSnapshot: vi.fn(),
+      getTipCommit: vi.fn().mockResolvedValue('a'.repeat(40)),
+      getSnapshotDelta: vi.fn().mockResolvedValue([{ relPath: 'a.md', status: 'modified' }]),
+    }
+    render(<HistoryTab history={history as never} onOpenDiff={onOpenDiff} onCreateCheckpoint={onCreateCheckpoint} onRestore={onRestore} />)
+    await waitFor(() => expect(screen.getByText(/edit/)).toBeInTheDocument())
+    const row = screen.getByText(/edit/)
+    fireEvent.click(row)
+    await waitFor(() => expect(history.getSnapshotDelta).toHaveBeenCalledTimes(1))
+    fireEvent.click(row) // collapse
+    fireEvent.click(row) // expand again
+    // Still called only once
+    await waitFor(() => expect(screen.getByText('a.md')).toBeInTheDocument())
+    expect(history.getSnapshotDelta).toHaveBeenCalledTimes(1)
+  })
+
+  it('per-file Restore in the expanded row fires onRestore', async () => {
+    const history = {
+      getCurrentChanges: vi.fn().mockResolvedValue([]),
+      listSnapshots: vi.fn().mockResolvedValue([snap({ id: 's1' })]),
+      hideSnapshot: vi.fn(),
+      getTipCommit: vi.fn().mockResolvedValue('a'.repeat(40)),
+      getSnapshotDelta: vi.fn().mockResolvedValue([{ relPath: 'a.md', status: 'modified' }]),
+    }
+    render(<HistoryTab history={history as never} onOpenDiff={onOpenDiff} onCreateCheckpoint={onCreateCheckpoint} onRestore={onRestore} />)
+    await waitFor(() => expect(screen.getByText(/edit/)).toBeInTheDocument())
+    fireEvent.click(screen.getByText(/edit/))
+    await waitFor(() => expect(screen.getByText('a.md')).toBeInTheDocument())
+    fireEvent.click(screen.getByTitle(/Restore/i))
+    expect(onRestore).toHaveBeenCalledWith({ snapshotId: 's1', relPath: 'a.md' })
   })
 })

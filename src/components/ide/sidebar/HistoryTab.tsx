@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Plus, FileText, ChevronRight, ChevronDown } from 'lucide-react'
-import type { CanvHistory, SnapshotEntry, CurrentChange } from '../../../lib/history'
+import type { CanvHistory, SnapshotEntry, CurrentChange, SnapshotDeltaEntry } from '../../../lib/history'
 import { REASON_LABEL, shortTime, formatSnapshotLabel } from '../../../lib/historyLabels'
 
 export type OpenDiffRequest =
@@ -35,6 +35,9 @@ export function HistoryTab({ history, onOpenDiff, onCreateCheckpoint, onRestore 
   const [expanded, setExpanded] = useState<string | null>(null)
   const [composerOpen, setComposerOpen] = useState(false)
   const [composerText, setComposerText] = useState('Manual checkpoint')
+  const [deltaCache, setDeltaCache] = useState<Record<string, SnapshotDeltaEntry[] | 'loading'>>({})
+  const deltaCacheRef = useRef<Record<string, SnapshotDeltaEntry[] | 'loading'>>({})
+
   const refresh = useCallback(async () => {
     const [c, s, tip] = await Promise.all([
       history.getCurrentChanges(),
@@ -44,7 +47,18 @@ export function HistoryTab({ history, onOpenDiff, onCreateCheckpoint, onRestore 
     setChanges(c)
     setSnapshots(s)
     setTipCommit(tip)
+    deltaCacheRef.current = {}
+    setDeltaCache({})
   }, [history, includeHidden])
+
+  const ensureDelta = useCallback(async (id: string) => {
+    if (deltaCacheRef.current[id] !== undefined) return
+    deltaCacheRef.current = { ...deltaCacheRef.current, [id]: 'loading' }
+    setDeltaCache((prev) => ({ ...prev, [id]: 'loading' }))
+    const out = await history.getSnapshotDelta(id)
+    deltaCacheRef.current = { ...deltaCacheRef.current, [id]: out }
+    setDeltaCache((prev) => ({ ...prev, [id]: out }))
+  }, [history])
 
   // eslint-disable-next-line react-hooks/set-state-in-effect -- refresh() is async; setState fires after await.
   useEffect(() => { void refresh() }, [refresh])
@@ -154,7 +168,13 @@ export function HistoryTab({ history, onOpenDiff, onCreateCheckpoint, onRestore 
                   <li key={s.id} className={s.hidden ? 'opacity-50' : ''}>
                     <button
                       type="button"
-                      onClick={() => setExpanded((cur) => cur === s.id ? null : s.id)}
+                      onClick={() => {
+                        setExpanded((cur) => {
+                          const next = cur === s.id ? null : s.id
+                          return next
+                        })
+                        if (expanded !== s.id) void ensureDelta(s.id)
+                      }}
                       className="w-full flex items-center gap-1.5 pr-2 pl-2 py-[3px] text-[12.5px] rounded-sm text-muted hover:bg-hover hover:text-default transition-colors"
                     >
                       {isOpen
@@ -167,52 +187,60 @@ export function HistoryTab({ history, onOpenDiff, onCreateCheckpoint, onRestore 
                         {REASON_LABEL[s.reason]}
                       </span>
                       <span className="truncate flex-1 text-left">{s.summary}</span>
-                      {s.files.length > 0 && (
-                        <span className="text-[10px] text-subtle tabular-nums shrink-0">
-                          {s.files.length}
-                        </span>
-                      )}
                     </button>
 
                     {isOpen && (
                       <div className="pb-1.5">
-                        {s.files.length === 0 ? (
-                          <div className="pl-7 pr-3 py-1 text-xs text-subtle">No file hints recorded.</div>
-                        ) : (
-                          <ul>
-                            {s.files.map((f) => (
-                              <li
-                                key={f}
-                                className="group flex items-center gap-1.5 pl-7 pr-2 py-[3px] text-[12.5px] text-muted hover:bg-hover"
-                              >
-                                <FileText aria-hidden className="w-3 h-3 shrink-0 text-subtle" />
-                                <span className="truncate flex-1" title={f}>{basename(f)}</span>
-                                <button
-                                  type="button"
-                                  onClick={() => onOpenDiff({
-                                    kind: 'snapshot',
-                                    relPath: f,
-                                    snapshotId: s.id,
-                                    commitSha: s.commit,
-                                    baseLabel: formatSnapshotLabel(s),
-                                  })}
-                                  className="text-[10.5px] text-subtle hover:text-default opacity-0 group-hover:opacity-100"
-                                  title="View diff"
+                        {(() => {
+                          const cache = deltaCache[s.id]
+                          if (cache === undefined || cache === 'loading') {
+                            return <div className="pl-7 pr-3 py-1 text-xs text-subtle">Computing changes…</div>
+                          }
+                          if (cache.length === 0) {
+                            return <div className="pl-7 pr-3 py-1 text-xs text-subtle">No differences between this snapshot and current files.</div>
+                          }
+                          return (
+                            <ul>
+                              {cache.map((d) => (
+                                <li
+                                  key={d.relPath}
+                                  className="group flex items-center gap-1.5 pl-7 pr-2 py-[3px] text-[12.5px] text-muted hover:bg-hover"
                                 >
-                                  diff
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => onRestore({ snapshotId: s.id, relPath: f })}
-                                  className="text-[10.5px] text-subtle hover:text-default opacity-0 group-hover:opacity-100"
-                                  title="Restore from this snapshot"
-                                >
-                                  restore
-                                </button>
-                              </li>
-                            ))}
-                          </ul>
-                        )}
+                                  <FileText aria-hidden className="w-3 h-3 shrink-0 text-subtle" />
+                                  <span className="truncate flex-1" title={d.relPath}>{basename(d.relPath)}</span>
+                                  <span
+                                    className="text-[10px] font-mono text-subtle shrink-0"
+                                    aria-label={d.status}
+                                  >
+                                    {STATUS_BADGE[d.status]}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => onOpenDiff({
+                                      kind: 'snapshot',
+                                      relPath: d.relPath,
+                                      snapshotId: s.id,
+                                      commitSha: s.commit,
+                                      baseLabel: formatSnapshotLabel(s),
+                                    })}
+                                    className="text-[10.5px] text-subtle hover:text-default opacity-0 group-hover:opacity-100"
+                                    title="View diff"
+                                  >
+                                    diff
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => onRestore({ snapshotId: s.id, relPath: d.relPath })}
+                                    className="text-[10.5px] text-subtle hover:text-default opacity-0 group-hover:opacity-100"
+                                    title="Restore from this snapshot"
+                                  >
+                                    restore
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
+                          )
+                        })()}
                         {!s.hidden && (
                           <button
                             type="button"
