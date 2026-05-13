@@ -181,6 +181,7 @@ if (!isDockPopout()) {
     restoreFile: (id, rel) => ipcRenderer.invoke('canvHistory:restoreFile', id, rel),
     hideSnapshot: (id) => ipcRenderer.invoke('canvHistory:hideSnapshot', id),
     patchSnapshotFiles: (id, files) => ipcRenderer.invoke('canvHistory:patchSnapshotFiles', id, files),
+    getTipCommit: () => ipcRenderer.invoke('canvHistory:getTipCommit'),
   })
 }
 

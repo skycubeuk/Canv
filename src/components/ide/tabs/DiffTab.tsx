@@ -53,7 +53,7 @@ export function DiffTab({ relPath, baseRef, isActive }: Props) {
       {/* Toolbar */}
       <div className="shrink-0 flex items-center gap-2 px-3 py-1.5 border-b border-default bg-panel text-[11px]">
         <span className="text-muted select-none">
-          {relPath} vs {baseRef}
+          {relPath} vs {/^[0-9a-f]{40}$/i.test(baseRef) ? baseRef.slice(0, 7) : baseRef}
         </span>
         <div className="flex-1" />
         <button

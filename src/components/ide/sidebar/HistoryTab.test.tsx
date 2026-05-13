@@ -37,6 +37,7 @@ describe('HistoryTab', () => {
         snap({ id: 's0', reason: 'workspace_init', summary: 'init' }),
       ]),
       hideSnapshot: vi.fn(),
+      getTipCommit: vi.fn().mockResolvedValue('a'.repeat(40)),
     }
     render(<HistoryTab history={history as never} onOpenDiff={onOpenDiff} onCreateCheckpoint={onCreateCheckpoint} onRestore={onRestore} />)
     await waitFor(() => expect(screen.getByText('a.md')).toBeInTheDocument())
@@ -44,23 +45,27 @@ describe('HistoryTab', () => {
     expect(screen.getByText(/init/)).toBeInTheDocument()
   })
 
-  it('clicking a changed file fires onOpenDiff with kind=current', async () => {
+  it('clicking a changed file fires onOpenDiff with kind=current and baseSha', async () => {
+    const tipSha = 'a'.repeat(40)
     const history = {
       getCurrentChanges: vi.fn().mockResolvedValue([{ relPath: 'a.md', status: 'modified' }]),
       listSnapshots: vi.fn().mockResolvedValue([]),
       hideSnapshot: vi.fn(),
+      getTipCommit: vi.fn().mockResolvedValue(tipSha),
     }
     render(<HistoryTab history={history as never} onOpenDiff={onOpenDiff} onCreateCheckpoint={onCreateCheckpoint} onRestore={onRestore} />)
     await waitFor(() => screen.getByText('a.md'))
     fireEvent.click(screen.getByText('a.md'))
-    expect(onOpenDiff).toHaveBeenCalledWith({ kind: 'current', relPath: 'a.md' })
+    expect(onOpenDiff).toHaveBeenCalledWith({ kind: 'current', relPath: 'a.md', baseSha: tipSha })
   })
 
   it('expanding a snapshot reveals per-file diff/restore actions', async () => {
+    const commitSha = 'b'.repeat(40)
     const history = {
       getCurrentChanges: vi.fn().mockResolvedValue([]),
-      listSnapshots: vi.fn().mockResolvedValue([snap({ id: 's1', files: ['a.md'] })]),
+      listSnapshots: vi.fn().mockResolvedValue([snap({ id: 's1', commit: commitSha, files: ['a.md'] })]),
       hideSnapshot: vi.fn(),
+      getTipCommit: vi.fn().mockResolvedValue('a'.repeat(40)),
     }
     render(<HistoryTab history={history as never} onOpenDiff={onOpenDiff} onCreateCheckpoint={onCreateCheckpoint} onRestore={onRestore} />)
     await waitFor(() => screen.getByText(/edit/))
@@ -68,7 +73,7 @@ describe('HistoryTab', () => {
     expect(screen.getByText('diff')).toBeInTheDocument()
     expect(screen.getByText('restore')).toBeInTheDocument()
     fireEvent.click(screen.getByText('diff'))
-    expect(onOpenDiff).toHaveBeenCalledWith({ kind: 'snapshot', snapshotId: 's1', relPath: 'a.md' })
+    expect(onOpenDiff).toHaveBeenCalledWith({ kind: 'snapshot', snapshotId: 's1', relPath: 'a.md', commitSha })
     fireEvent.click(screen.getByText('restore'))
     expect(onRestore).toHaveBeenCalledWith({ snapshotId: 's1', relPath: 'a.md' })
   })
@@ -78,6 +83,7 @@ describe('HistoryTab', () => {
       getCurrentChanges: vi.fn().mockResolvedValue([]),
       listSnapshots: vi.fn().mockResolvedValue([]),
       hideSnapshot: vi.fn(),
+      getTipCommit: vi.fn().mockResolvedValue('a'.repeat(40)),
     }
     render(<HistoryTab history={history as never} onOpenDiff={onOpenDiff} onCreateCheckpoint={onCreateCheckpoint} onRestore={onRestore} />)
     fireEvent.click(screen.getByRole('button', { name: /Create checkpoint/i }))
@@ -92,10 +98,29 @@ describe('HistoryTab', () => {
       getCurrentChanges: vi.fn().mockResolvedValue([]),
       listSnapshots: vi.fn().mockResolvedValue([]),
       hideSnapshot: vi.fn(),
+      getTipCommit: vi.fn().mockResolvedValue('a'.repeat(40)),
     }
     render(<HistoryTab history={history as never} onOpenDiff={onOpenDiff} onCreateCheckpoint={onCreateCheckpoint} onRestore={onRestore} />)
     await waitFor(() => expect(history.listSnapshots).toHaveBeenCalledWith({ includeHidden: false }))
     fireEvent.click(screen.getByLabelText(/Show hidden/i))
     await waitFor(() => expect(history.listSnapshots).toHaveBeenCalledWith({ includeHidden: true }))
+  })
+
+  it('hides snapshots whose reason is deselected', async () => {
+    const history = {
+      getCurrentChanges: vi.fn().mockResolvedValue([]),
+      listSnapshots: vi.fn().mockResolvedValue([
+        snap({ id: 's1', reason: 'manual', summary: 'a manual one' }),
+        snap({ id: 's2', reason: 'idle_autosave', summary: 'an idle one' }),
+      ]),
+      hideSnapshot: vi.fn(),
+      getTipCommit: vi.fn().mockResolvedValue('a'.repeat(40)),
+    }
+    render(<HistoryTab history={history as never} onOpenDiff={onOpenDiff} onCreateCheckpoint={onCreateCheckpoint} onRestore={onRestore} />)
+    await waitFor(() => expect(screen.getByText('a manual one')).toBeInTheDocument())
+    expect(screen.getByText('an idle one')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Hide Idle/i }))
+    expect(screen.queryByText('an idle one')).not.toBeInTheDocument()
+    expect(screen.getByText('a manual one')).toBeInTheDocument()
   })
 })

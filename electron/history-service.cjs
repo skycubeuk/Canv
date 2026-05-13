@@ -341,9 +341,15 @@ function createHistoryService({ root }) {
     })
   }
 
+  async function getTipCommit() {
+    try {
+      return await git.resolveRef({ fs: nodefs, dir: root, ref: `refs/heads/${CANV_BRANCH}` })
+    } catch { return null }
+  }
+
   return { initRevisionArchaeology, createSnapshot, listSnapshots, getSnapshot, hideSnapshot,
            diffSnapshot, diffCurrent, getCurrentChanges, restoreFilePreview, restoreFile,
-           patchSnapshotFiles }
+           patchSnapshotFiles, getTipCommit }
 }
 
 module.exports = { createHistoryService }

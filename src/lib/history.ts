@@ -15,6 +15,7 @@ export interface CanvHistory {
   restoreFile(snapshotId: string, relPath: string): Promise<{ rollbackSnapshotId: string }>
   hideSnapshot(id: string): Promise<SnapshotEntry>
   patchSnapshotFiles(id: string, files: string[]): Promise<void>
+  getTipCommit(): Promise<string | null>
 }
 
 declare global {

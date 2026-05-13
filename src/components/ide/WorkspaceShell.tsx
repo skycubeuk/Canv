@@ -136,8 +136,9 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
               <HistoryTab
                 history={getCanvHistory()!}
                 onOpenDiff={(r) => {
-                  if (r.kind === 'current') onOpenDiff(r.relPath)
-                  else onOpenDiff(r.relPath, r.snapshotId)
+                  // r.baseSha (current) or r.commitSha (snapshot) — both are valid git OIDs on canv-history.
+                  const sha = r.kind === 'current' ? r.baseSha : r.commitSha
+                  onOpenDiff(r.relPath, sha)
                 }}
                 onCreateCheckpoint={async (summary) => {
                   const h = getCanvHistory(); if (!h) return

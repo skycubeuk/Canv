@@ -3,8 +3,8 @@ import { Plus, FileText, ChevronRight, ChevronDown } from 'lucide-react'
 import type { CanvHistory, SnapshotEntry, CurrentChange } from '../../../lib/history'
 
 export type OpenDiffRequest =
-  | { kind: 'current'; relPath: string }
-  | { kind: 'snapshot'; snapshotId: string; relPath: string }
+  | { kind: 'current'; relPath: string; baseSha: string }
+  | { kind: 'snapshot'; relPath: string; snapshotId: string; commitSha: string }
 
 export interface RestoreRequest { snapshotId: string; relPath: string }
 
@@ -30,6 +30,10 @@ const STATUS_BADGE: Record<CurrentChange['status'], string> = {
   deleted: 'D',
 }
 
+const ALL_REASONS: SnapshotEntry['reason'][] = [
+  'manual', 'workspace_init', 'before_ai_edit', 'after_ai_edit', 'before_rollback', 'idle_autosave',
+]
+
 function basename(rel: string): string {
   const i = rel.lastIndexOf('/')
   return i >= 0 ? rel.slice(i + 1) : rel
@@ -44,18 +48,24 @@ function shortTime(iso: string): string {
 export function HistoryTab({ history, onOpenDiff, onCreateCheckpoint, onRestore }: Props) {
   const [changes, setChanges] = useState<CurrentChange[]>([])
   const [snapshots, setSnapshots] = useState<SnapshotEntry[]>([])
+  const [tipCommit, setTipCommit] = useState<string | null>(null)
   const [includeHidden, setIncludeHidden] = useState(false)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [composerOpen, setComposerOpen] = useState(false)
   const [composerText, setComposerText] = useState('Manual checkpoint')
+  const [selectedReasons, setSelectedReasons] = useState<Set<SnapshotEntry['reason']>>(
+    () => new Set(ALL_REASONS),
+  )
 
   const refresh = useCallback(async () => {
-    const [c, s] = await Promise.all([
+    const [c, s, tip] = await Promise.all([
       history.getCurrentChanges(),
       history.listSnapshots({ includeHidden }),
+      history.getTipCommit(),
     ])
     setChanges(c)
     setSnapshots(s)
+    setTipCommit(tip)
   }, [history, includeHidden])
 
   // eslint-disable-next-line react-hooks/set-state-in-effect -- refresh() is async; setState fires after await.
@@ -67,6 +77,8 @@ export function HistoryTab({ history, onOpenDiff, onCreateCheckpoint, onRestore 
     setComposerText('Manual checkpoint')
     await refresh()
   }
+
+  const visibleSnapshots = snapshots.filter((s) => selectedReasons.has(s.reason))
 
   return (
     <aside className="h-full flex flex-col bg-panel overflow-hidden">
@@ -123,7 +135,10 @@ export function HistoryTab({ history, onOpenDiff, onCreateCheckpoint, onRestore 
                 <li key={c.relPath}>
                   <button
                     type="button"
-                    onClick={() => onOpenDiff({ kind: 'current', relPath: c.relPath })}
+                    onClick={() => {
+                      if (!tipCommit) return
+                      onOpenDiff({ kind: 'current', relPath: c.relPath, baseSha: tipCommit })
+                    }}
                     title={c.relPath}
                     className="group w-full flex items-center gap-1.5 pr-2 pl-3 py-[3px] text-[12.5px] rounded-sm text-muted hover:bg-hover hover:text-default transition-colors"
                   >
@@ -144,11 +159,42 @@ export function HistoryTab({ history, onOpenDiff, onCreateCheckpoint, onRestore 
           <div className="px-3 pb-1 text-[10.5px] font-semibold tracking-wider uppercase text-subtle">
             Timeline
           </div>
-          {snapshots.length === 0 ? (
-            <div className="px-3 pb-2 text-xs text-subtle">No snapshots yet.</div>
+
+          {/* Reason filter chips */}
+          <div className="px-3 pb-1.5 flex flex-wrap gap-1">
+            {ALL_REASONS.map((r) => {
+              const on = selectedReasons.has(r)
+              return (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setSelectedReasons((prev) => {
+                    const next = new Set(prev)
+                    if (next.has(r)) next.delete(r)
+                    else next.add(r)
+                    return next
+                  })}
+                  aria-label={on ? `Hide ${REASON_LABEL[r]}` : `Show ${REASON_LABEL[r]}`}
+                  className={`text-[9.5px] uppercase tracking-wider px-1.5 py-0.5 rounded-sm border ${
+                    on
+                      ? 'border-default bg-elev text-default'
+                      : 'border-default text-subtle bg-transparent opacity-50 hover:opacity-100'
+                  }`}
+                  title={on ? `Hide ${REASON_LABEL[r]}` : `Show ${REASON_LABEL[r]}`}
+                >
+                  {REASON_LABEL[r]}
+                </button>
+              )
+            })}
+          </div>
+
+          {visibleSnapshots.length === 0 ? (
+            <div className="px-3 pb-2 text-xs text-subtle">
+              {snapshots.length > 0 ? 'No snapshots match the current filter.' : 'No snapshots yet.'}
+            </div>
           ) : (
             <ul>
-              {snapshots.map((s) => {
+              {visibleSnapshots.map((s) => {
                 const isOpen = expanded === s.id
                 return (
                   <li key={s.id} className={s.hidden ? 'opacity-50' : ''}>
@@ -189,7 +235,7 @@ export function HistoryTab({ history, onOpenDiff, onCreateCheckpoint, onRestore 
                                 <span className="truncate flex-1" title={f}>{basename(f)}</span>
                                 <button
                                   type="button"
-                                  onClick={() => onOpenDiff({ kind: 'snapshot', snapshotId: s.id, relPath: f })}
+                                  onClick={() => onOpenDiff({ kind: 'snapshot', relPath: f, snapshotId: s.id, commitSha: s.commit })}
                                   className="text-[10.5px] text-subtle hover:text-default opacity-0 group-hover:opacity-100"
                                   title="View diff"
                                 >

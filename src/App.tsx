@@ -401,12 +401,73 @@ export default function App() {
       ? 'saving' as const
       : 'saved' as const
 
+  const applyRunWithSnapshot = useCallback(async (run: import('./components/ResultsPanel').RunRecord, replacement: string) => {
+    const rel = workspace.activeMarkdownRel
+    const client = raEnabled ? getCanvHistory() : null
+
+    if (!client || !rel) {
+      handleApply(run, replacement)
+      return
+    }
+
+    const meta = {
+      source: 'agent_apply',
+      runId: run.id,
+      agentId: run.agentId,
+      agentLabel: run.agentLabel,
+      provider: run.provider,
+      model: run.model,
+    }
+
+    // Persist any pending edits so the before-snapshot reflects current on-disk state.
+    try { await workspace.flushAll() } catch (e) { console.warn('[apply] flush before snapshot failed', e) }
+
+    let beforeId: string | null = null
+    try {
+      const e = await client.createSnapshot({
+        reason: 'before_ai_edit',
+        summary: `Before apply · ${run.agentLabel}`,
+        files: [rel],
+        metadata: meta,
+      })
+      beforeId = e.id
+    } catch (e) {
+      console.warn('[apply] before snapshot failed', e)
+      notifications.showToast(`History snapshot failed: ${(e as Error).message}`)
+    }
+
+    // Run the existing apply path — handles decideApply, dispatch, setRuns, toast.
+    handleApply(run, replacement)
+
+    // The dispatch is in-memory. Force-save and wait so the file lands on disk before the after-snapshot.
+    const view = getActiveEditor()
+    if (view && rel) {
+      workspace.saveTab(rel, view.state.doc.toString())
+      try { await workspace.flushAll() } catch (e) { console.warn('[apply] flush after dispatch failed', e) }
+    }
+
+    if (beforeId) {
+      try {
+        await client.createSnapshot({
+          reason: 'after_ai_edit',
+          summary: `After apply · ${run.agentLabel}`,
+          files: [rel],
+          metadata: meta,
+        })
+        await client.patchSnapshotFiles(beforeId, [rel])
+      } catch (e) {
+        console.warn('[apply] after snapshot failed', e)
+        notifications.showToast(`History snapshot failed: ${(e as Error).message}`)
+      }
+    }
+  }, [workspace, raEnabled, handleApply, getActiveEditor, notifications])
+
   const bottomPanelAdapter = useMemo<BottomPanelTabsAdapter>(() => ({
     runs,
     activeRunId: activeTabId,
     selectRun: setActiveTabId,
     closeRun: handleCloseTab,
-    applyRun: handleApply,
+    applyRun: applyRunWithSnapshot,
     rerunRun: handleRerun,
     refineRun,
     chatMessages,
@@ -441,7 +502,7 @@ export default function App() {
     jumpToProblem,
     pricingOverrides: settings.pricingOverrides,
   }), [
-    runs, activeTabId, setActiveTabId, handleCloseTab, handleApply, handleRerun, refineRun,
+    runs, activeTabId, setActiveTabId, handleCloseTab, applyRunWithSnapshot, handleRerun, refineRun,
     chatMessages, chatBusy, chatProvider, chatModel,
     sendChat, clearChat, stopChat, retryFromAnchor, editAndRetry,
     pendingApprovals, onApprovalDecide, followLatest, setFollowLatest,
