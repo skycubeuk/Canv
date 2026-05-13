@@ -174,6 +174,7 @@ if (!isDockPopout()) {
     createSnapshot: (input) => ipcRenderer.invoke('canvHistory:createSnapshot', input),
     listSnapshots: (opts) => ipcRenderer.invoke('canvHistory:listSnapshots', opts ?? {}),
     getSnapshot: (id) => ipcRenderer.invoke('canvHistory:getSnapshot', id),
+    getSnapshotByCommit: (sha) => ipcRenderer.invoke('canvHistory:getSnapshotByCommit', sha),
     diffSnapshot: (id, rel) => ipcRenderer.invoke('canvHistory:diffSnapshot', id, rel),
     diffCurrent: (rel) => ipcRenderer.invoke('canvHistory:diffCurrent', rel ?? null),
     getCurrentChanges: () => ipcRenderer.invoke('canvHistory:getCurrentChanges'),

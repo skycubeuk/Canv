@@ -8,6 +8,7 @@ export interface CanvHistory {
   createSnapshot(input: CreateSnapshotInput): Promise<SnapshotEntry>
   listSnapshots(opts?: { includeHidden?: boolean }): Promise<SnapshotEntry[]>
   getSnapshot(id: string): Promise<SnapshotEntry | null>
+  getSnapshotByCommit(commitSha: string): Promise<SnapshotEntry | null>
   diffSnapshot(snapshotId: string, relPath: string): Promise<{ baseText: string; currentText: string }>
   diffCurrent(relPath?: string): Promise<{ baseText: string; currentText: string } | CurrentChange[]>
   getCurrentChanges(): Promise<CurrentChange[]>

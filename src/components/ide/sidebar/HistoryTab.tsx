@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Plus, FileText, ChevronRight, ChevronDown } from 'lucide-react'
 import type { CanvHistory, SnapshotEntry, CurrentChange } from '../../../lib/history'
+import { REASON_LABEL, shortTime, formatSnapshotLabel } from '../../../lib/historyLabels'
 
 export type OpenDiffRequest =
   | { kind: 'current'; relPath: string; baseSha: string; baseLabel: string }
@@ -13,15 +14,6 @@ interface Props {
   onOpenDiff: (r: OpenDiffRequest) => void
   onCreateCheckpoint: (summary: string) => Promise<void> | void
   onRestore: (r: RestoreRequest) => void
-}
-
-const REASON_LABEL: Record<SnapshotEntry['reason'], string> = {
-  manual: 'Manual',
-  workspace_init: 'Init',
-  before_ai_edit: 'AI: before',
-  after_ai_edit: 'AI: after',
-  before_rollback: 'Rollback',
-  idle_autosave: 'Idle',
 }
 
 const STATUS_BADGE: Record<CurrentChange['status'], string> = {
@@ -37,12 +29,6 @@ const ALL_REASONS: SnapshotEntry['reason'][] = [
 function basename(rel: string): string {
   const i = rel.lastIndexOf('/')
   return i >= 0 ? rel.slice(i + 1) : rel
-}
-
-function shortTime(iso: string): string {
-  const d = new Date(iso)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
 export function HistoryTab({ history, onOpenDiff, onCreateCheckpoint, onRestore }: Props) {
@@ -72,9 +58,7 @@ export function HistoryTab({ history, onOpenDiff, onCreateCheckpoint, onRestore 
   useEffect(() => { void refresh() }, [refresh])
 
   const latestSnapshot = snapshots[0] ?? null
-  const currentBaseLabel = latestSnapshot
-    ? `Last snapshot · ${REASON_LABEL[latestSnapshot.reason]} · ${shortTime(latestSnapshot.createdAt)}`
-    : 'Last snapshot'
+  const currentBaseLabel = latestSnapshot ? formatSnapshotLabel(latestSnapshot) : 'Last snapshot'
 
   const submitCheckpoint = async () => {
     await onCreateCheckpoint(composerText || 'Manual checkpoint')
@@ -250,7 +234,7 @@ export function HistoryTab({ history, onOpenDiff, onCreateCheckpoint, onRestore 
                                     relPath: f,
                                     snapshotId: s.id,
                                     commitSha: s.commit,
-                                    baseLabel: `${REASON_LABEL[s.reason]} · ${s.summary || 'Snapshot'} · ${shortTime(s.createdAt)}`,
+                                    baseLabel: formatSnapshotLabel(s),
                                   })}
                                   className="text-[10.5px] text-subtle hover:text-default opacity-0 group-hover:opacity-100"
                                   title="View diff"

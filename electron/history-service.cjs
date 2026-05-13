@@ -209,6 +209,12 @@ function createHistoryService({ root }) {
     return idx.snapshots.find((s) => s.id === id) || null
   }
 
+  async function getSnapshotByCommit(sha) {
+    if (typeof sha !== 'string' || sha.length === 0) return null
+    const idx = await readIndex()
+    return idx.snapshots.find((s) => s.commit === sha) || null
+  }
+
   async function hideSnapshot(id) {
     return mutex(async () => {
       const idx = await readIndex()
@@ -347,8 +353,8 @@ function createHistoryService({ root }) {
     } catch { return null }
   }
 
-  return { initRevisionArchaeology, createSnapshot, listSnapshots, getSnapshot, hideSnapshot,
-           diffSnapshot, diffCurrent, getCurrentChanges, restoreFilePreview, restoreFile,
+  return { initRevisionArchaeology, createSnapshot, listSnapshots, getSnapshot, getSnapshotByCommit,
+           hideSnapshot, diffSnapshot, diffCurrent, getCurrentChanges, restoreFilePreview, restoreFile,
            patchSnapshotFiles, getTipCommit }
 }
 

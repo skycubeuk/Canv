@@ -715,6 +715,7 @@ function registerFsHandlers() {
   ipcMain.handle('canvHistory:createSnapshot', async (_e, input) => getHistoryService().createSnapshot(input))
   ipcMain.handle('canvHistory:listSnapshots', async (_e, opts) => getHistoryService().listSnapshots(opts))
   ipcMain.handle('canvHistory:getSnapshot', async (_e, id) => getHistoryService().getSnapshot(id))
+  ipcMain.handle('canvHistory:getSnapshotByCommit', async (_e, sha) => getHistoryService().getSnapshotByCommit(sha))
   ipcMain.handle('canvHistory:diffSnapshot', async (_e, id, rel) => getHistoryService().diffSnapshot(id, rel))
   ipcMain.handle('canvHistory:diffCurrent', async (_e, rel) => getHistoryService().diffCurrent(rel))
   ipcMain.handle('canvHistory:getCurrentChanges', async () => getHistoryService().getCurrentChanges())
