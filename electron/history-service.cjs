@@ -192,7 +192,88 @@ function createHistoryService({ root }) {
     })
   }
 
-  return { initRevisionArchaeology, createSnapshot, listSnapshots, getSnapshot, hideSnapshot }
+  async function readBlobAt(commit, relPath) {
+    try {
+      const { blob } = await git.readBlob({ fs: nodefs, dir: root, oid: commit, filepath: relPath })
+      return Buffer.from(blob).toString('utf8')
+    } catch (e) {
+      if (e && e.code === 'NotFoundError') return ''
+      throw e
+    }
+  }
+
+  async function readWorking(relPath) {
+    try { return await fsp.readFile(path.join(root, relPath), 'utf8') }
+    catch (e) { if (e.code === 'ENOENT') return ''; throw e }
+  }
+
+  async function walkBlobsInTree(commit) {
+    const out = new Map()
+    async function recur(oid, prefix) {
+      const { tree } = await git.readTree({ fs: nodefs, dir: root, oid })
+      for (const ent of tree) {
+        const p = prefix ? `${prefix}/${ent.path}` : ent.path
+        if (ent.type === 'tree') await recur(ent.oid, p)
+        else if (ent.type === 'blob') out.set(p, ent.oid)
+      }
+    }
+    const { commit: c } = await git.readCommit({ fs: nodefs, dir: root, oid: commit })
+    await recur(c.tree, '')
+    return out
+  }
+
+  async function walkWorkingTree() {
+    const out = new Set()
+    async function recur(rel) {
+      const dir = path.join(root, rel)
+      const entries = await fsp.readdir(dir, { withFileTypes: true })
+      for (const ent of entries) {
+        if (ent.name === '.git' || ent.name === '.canv') continue
+        const childRel = rel ? `${rel}/${ent.name}` : ent.name
+        if (ent.isDirectory()) await recur(childRel)
+        else if (ent.isFile()) out.add(childRel)
+      }
+    }
+    await recur('')
+    return out
+  }
+
+  async function diffSnapshot(snapshotId, relPath) {
+    const snap = await getSnapshot(snapshotId)
+    if (!snap) throw new Error(`Unknown snapshot ${snapshotId}`)
+    const tip = await git.resolveRef({ fs: nodefs, dir: root, ref: `refs/heads/${CANV_BRANCH}` })
+    return { baseText: await readBlobAt(snap.commit, relPath), currentText: await readBlobAt(tip, relPath) }
+  }
+
+  async function getCurrentChanges() {
+    const tip = await git.resolveRef({ fs: nodefs, dir: root, ref: `refs/heads/${CANV_BRANCH}` })
+    const tipBlobs = await walkBlobsInTree(tip)
+    const workingPaths = await walkWorkingTree()
+    const changes = []
+
+    for (const [relPath, oid] of tipBlobs) {
+      if (!workingPaths.has(relPath)) { changes.push({ relPath, status: 'deleted' }); continue }
+      const { blob } = await git.readBlob({ fs: nodefs, dir: root, oid })
+      const workBuf = await fsp.readFile(path.join(root, relPath))
+      if (Buffer.compare(Buffer.from(blob), workBuf) !== 0) changes.push({ relPath, status: 'modified' })
+    }
+    for (const relPath of workingPaths) {
+      if (!tipBlobs.has(relPath)) changes.push({ relPath, status: 'added' })
+    }
+    changes.sort((a, b) => a.relPath.localeCompare(b.relPath))
+    return changes
+  }
+
+  async function diffCurrent(relPath) {
+    if (relPath) {
+      const tip = await git.resolveRef({ fs: nodefs, dir: root, ref: `refs/heads/${CANV_BRANCH}` })
+      return { baseText: await readBlobAt(tip, relPath), currentText: await readWorking(relPath) }
+    }
+    return await getCurrentChanges()
+  }
+
+  return { initRevisionArchaeology, createSnapshot, listSnapshots, getSnapshot, hideSnapshot,
+           diffSnapshot, diffCurrent, getCurrentChanges }
 }
 
 module.exports = { createHistoryService }
