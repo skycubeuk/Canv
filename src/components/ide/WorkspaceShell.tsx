@@ -59,7 +59,7 @@ export interface WorkspaceShellProps {
   onDelete: (rel: string) => Promise<void>
   onChangeWorkspace: () => Promise<void>
   // Diff
-  onOpenDiff: (rel: string, baseRef?: string) => void
+  onOpenDiff: (rel: string, baseRef?: string, baseLabel?: string) => void
   // Revision Archaeology
   raEnabled: boolean
   onOpenRestore: (r: { snapshotId: string; relPath: string }) => void
@@ -138,7 +138,7 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
                 onOpenDiff={(r) => {
                   // r.baseSha (current) or r.commitSha (snapshot) — both are valid git OIDs on canv-history.
                   const sha = r.kind === 'current' ? r.baseSha : r.commitSha
-                  onOpenDiff(r.relPath, sha)
+                  onOpenDiff(r.relPath, sha, r.baseLabel)
                 }}
                 onCreateCheckpoint={async (summary) => {
                   const h = getCanvHistory(); if (!h) return
@@ -206,7 +206,7 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
                     )
                   }
                   if (t.kind === 'diff') {
-                    return <DiffTab relPath={t.relPath} baseRef={t.baseRef} isActive={isActive} />
+                    return <DiffTab relPath={t.relPath} baseRef={t.baseRef} baseLabel={t.baseLabel} isActive={isActive} />
                   }
                   return (
                     <Canvas

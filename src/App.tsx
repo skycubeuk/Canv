@@ -133,8 +133,8 @@ export default function App() {
     setTimeout(() => setRevealFolderRel(null), 0)
   }, [ideLayout])
 
-  const handleOpenDiff = useCallback((rel: string, baseRef: string = 'HEAD') => {
-    workspace.openDiffTab(rel, baseRef)
+  const handleOpenDiff = useCallback((rel: string, baseRef: string = 'HEAD', baseLabel?: string) => {
+    workspace.openDiffTab(rel, baseRef, baseLabel)
   }, [workspace])
 
   const handleOutlineJump = useCallback((node: OutlineNode) => {

@@ -107,7 +107,7 @@ export interface WorkspaceApi {
   /** Set the active tab in the given group (or in the active group if unspecified). */
   setActiveTab: (rel: string | null, groupId?: EditorGroupId) => void
   openSettingsTab: (groupId?: EditorGroupId) => void
-  openDiffTab: (relPath: string, baseRef?: string, groupId?: EditorGroupId) => void
+  openDiffTab: (relPath: string, baseRef?: string, baseLabel?: string, groupId?: EditorGroupId) => void
   closeTabByKey: (key: string, groupId?: EditorGroupId) => Promise<void>
   setActiveTabByKey: (key: string | null, groupId?: EditorGroupId) => void
   /** Promote the focused tab in `fromGroupId` to a new group on the right (creates `g2`). */
@@ -473,10 +473,10 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
     setActiveGroupIdState(target)
   }, [persistGroups])
 
-  const openDiffTab = useCallback((relPath: string, baseRef = 'HEAD', groupId?: EditorGroupId) => {
+  const openDiffTab = useCallback((relPath: string, baseRef = 'HEAD', baseLabel?: string, groupId?: EditorGroupId) => {
     const target = groupId ?? activeGroupIdRef.current
     const key = `diff:${relPath}@${baseRef}`
-    const tab: OpenTab = { kind: 'diff', relPath, baseRef }
+    const tab: OpenTab = { kind: 'diff', relPath, baseRef, baseLabel }
     setEditorGroups((prev) => {
       // Singleton check inside the updater so batched calls see the latest state.
       const existingGroup = findGroupContaining(prev, key)

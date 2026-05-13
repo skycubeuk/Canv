@@ -56,7 +56,7 @@ describe('HistoryTab', () => {
     render(<HistoryTab history={history as never} onOpenDiff={onOpenDiff} onCreateCheckpoint={onCreateCheckpoint} onRestore={onRestore} />)
     await waitFor(() => screen.getByText('a.md'))
     fireEvent.click(screen.getByText('a.md'))
-    expect(onOpenDiff).toHaveBeenCalledWith({ kind: 'current', relPath: 'a.md', baseSha: tipSha })
+    expect(onOpenDiff).toHaveBeenCalledWith(expect.objectContaining({ kind: 'current', relPath: 'a.md', baseSha: tipSha, baseLabel: expect.any(String) }))
   })
 
   it('expanding a snapshot reveals per-file diff/restore actions', async () => {
@@ -73,7 +73,7 @@ describe('HistoryTab', () => {
     expect(screen.getByText('diff')).toBeInTheDocument()
     expect(screen.getByText('restore')).toBeInTheDocument()
     fireEvent.click(screen.getByText('diff'))
-    expect(onOpenDiff).toHaveBeenCalledWith({ kind: 'snapshot', snapshotId: 's1', relPath: 'a.md', commitSha })
+    expect(onOpenDiff).toHaveBeenCalledWith(expect.objectContaining({ kind: 'snapshot', snapshotId: 's1', relPath: 'a.md', commitSha, baseLabel: expect.any(String) }))
     fireEvent.click(screen.getByText('restore'))
     expect(onRestore).toHaveBeenCalledWith({ snapshotId: 's1', relPath: 'a.md' })
   })

@@ -3,8 +3,8 @@ import { Plus, FileText, ChevronRight, ChevronDown } from 'lucide-react'
 import type { CanvHistory, SnapshotEntry, CurrentChange } from '../../../lib/history'
 
 export type OpenDiffRequest =
-  | { kind: 'current'; relPath: string; baseSha: string }
-  | { kind: 'snapshot'; relPath: string; snapshotId: string; commitSha: string }
+  | { kind: 'current'; relPath: string; baseSha: string; baseLabel: string }
+  | { kind: 'snapshot'; relPath: string; snapshotId: string; commitSha: string; baseLabel: string }
 
 export interface RestoreRequest { snapshotId: string; relPath: string }
 
@@ -70,6 +70,11 @@ export function HistoryTab({ history, onOpenDiff, onCreateCheckpoint, onRestore 
 
   // eslint-disable-next-line react-hooks/set-state-in-effect -- refresh() is async; setState fires after await.
   useEffect(() => { void refresh() }, [refresh])
+
+  const latestSnapshot = snapshots[0] ?? null
+  const currentBaseLabel = latestSnapshot
+    ? `Last snapshot · ${REASON_LABEL[latestSnapshot.reason]} · ${shortTime(latestSnapshot.createdAt)}`
+    : 'Last snapshot'
 
   const submitCheckpoint = async () => {
     await onCreateCheckpoint(composerText || 'Manual checkpoint')
@@ -137,7 +142,12 @@ export function HistoryTab({ history, onOpenDiff, onCreateCheckpoint, onRestore 
                     type="button"
                     onClick={() => {
                       if (!tipCommit) return
-                      onOpenDiff({ kind: 'current', relPath: c.relPath, baseSha: tipCommit })
+                      onOpenDiff({
+                        kind: 'current',
+                        relPath: c.relPath,
+                        baseSha: tipCommit,
+                        baseLabel: currentBaseLabel,
+                      })
                     }}
                     title={c.relPath}
                     className="group w-full flex items-center gap-1.5 pr-2 pl-3 py-[3px] text-[12.5px] rounded-sm text-muted hover:bg-hover hover:text-default transition-colors"
@@ -235,7 +245,13 @@ export function HistoryTab({ history, onOpenDiff, onCreateCheckpoint, onRestore 
                                 <span className="truncate flex-1" title={f}>{basename(f)}</span>
                                 <button
                                   type="button"
-                                  onClick={() => onOpenDiff({ kind: 'snapshot', relPath: f, snapshotId: s.id, commitSha: s.commit })}
+                                  onClick={() => onOpenDiff({
+                                    kind: 'snapshot',
+                                    relPath: f,
+                                    snapshotId: s.id,
+                                    commitSha: s.commit,
+                                    baseLabel: `${REASON_LABEL[s.reason]} · ${s.summary || 'Snapshot'} · ${shortTime(s.createdAt)}`,
+                                  })}
                                   className="text-[10.5px] text-subtle hover:text-default opacity-0 group-hover:opacity-100"
                                   title="View diff"
                                 >
