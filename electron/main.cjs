@@ -16,6 +16,7 @@ const serve = require('./serve-folder.cjs')
 const siteRegistry = require('./site-registry.cjs')
 const { maxMtimeForGlobs } = require('./glob-mtime.cjs')
 const workspaceConfig = require('./workspace-config.cjs')
+const { createHistoryService } = require('./history-service.cjs')
 
 const APP_ICON = path.join(__dirname, '..', 'build', 'icon.png')
 
@@ -68,9 +69,21 @@ const MAX_DEPTH = 8
 // Local: { kind: 'local', root }
 // Remote: { kind: 'remote', target, raw, pool, backend, unsub }
 let WORKSPACE = null
+let HISTORY = null
 let recentRemotes = null
 let watcher = null
 let mainWindow = null
+
+function getHistoryService() {
+  if (WORKSPACE?.kind !== 'local' || !WORKSPACE.root) {
+    throw new Error('History is not available (no local workspace open)')
+  }
+  if (!HISTORY || HISTORY.__root !== WORKSPACE.root) {
+    HISTORY = createHistoryService({ root: WORKSPACE.root })
+    HISTORY.__root = WORKSPACE.root
+  }
+  return HISTORY
+}
 
 function isInternal(rel) {
   return rel === '.canv' || rel.startsWith('.canv/')
@@ -233,6 +246,7 @@ async function closeWorkspace() {
     try { await WORKSPACE.pool.close() } catch { /* ignore */ }
   }
   WORKSPACE = null
+  HISTORY = null
 }
 
 function registerFsHandlers() {
@@ -246,6 +260,7 @@ function registerFsHandlers() {
     const root = result.filePaths[0]
     await closeWorkspace()
     WORKSPACE = { kind: 'local', root }
+    HISTORY = null
     startWatcher(root)
     return { root }
   })
@@ -256,6 +271,7 @@ function registerFsHandlers() {
     if (!stat || !stat.isDirectory()) throw new Error('workspace folder does not exist')
     await closeWorkspace()
     WORKSPACE = { kind: 'local', root }
+    HISTORY = null
     startWatcher(root)
   })
 
@@ -640,6 +656,7 @@ function registerFsHandlers() {
     })
     await closeWorkspace()
     WORKSPACE = { kind: 'remote', target: resolved, raw, pool, backend: rfs }
+    HISTORY = null
     WORKSPACE.unsub = rfs.subscribe((ev) => {
       if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('canvFS:event', ev)
     })
@@ -691,6 +708,19 @@ function registerFsHandlers() {
     }
     return s
   })
+
+  // Revision Archaeology — local-only history backed by isomorphic-git on
+  // a dedicated canv-history branch. See electron/history-service.cjs.
+  ipcMain.handle('canvHistory:init', async () => getHistoryService().initRevisionArchaeology())
+  ipcMain.handle('canvHistory:createSnapshot', async (_e, input) => getHistoryService().createSnapshot(input))
+  ipcMain.handle('canvHistory:listSnapshots', async (_e, opts) => getHistoryService().listSnapshots(opts))
+  ipcMain.handle('canvHistory:getSnapshot', async (_e, id) => getHistoryService().getSnapshot(id))
+  ipcMain.handle('canvHistory:diffSnapshot', async (_e, id, rel) => getHistoryService().diffSnapshot(id, rel))
+  ipcMain.handle('canvHistory:diffCurrent', async (_e, rel) => getHistoryService().diffCurrent(rel))
+  ipcMain.handle('canvHistory:getCurrentChanges', async () => getHistoryService().getCurrentChanges())
+  ipcMain.handle('canvHistory:restoreFilePreview', async (_e, id, rel) => getHistoryService().restoreFilePreview(id, rel))
+  ipcMain.handle('canvHistory:restoreFile', async (_e, id, rel) => getHistoryService().restoreFile(id, rel))
+  ipcMain.handle('canvHistory:hideSnapshot', async (_e, id) => getHistoryService().hideSnapshot(id))
 
   serve.onStatusChange((s) => {
     let payload = s

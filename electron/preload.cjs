@@ -168,6 +168,19 @@ if (!isDockPopout()) {
       return () => ipcRenderer.removeListener('canvSites:registryChanged', listener)
     },
   })
+
+  contextBridge.exposeInMainWorld('canvHistory', {
+    init: () => ipcRenderer.invoke('canvHistory:init'),
+    createSnapshot: (input) => ipcRenderer.invoke('canvHistory:createSnapshot', input),
+    listSnapshots: (opts) => ipcRenderer.invoke('canvHistory:listSnapshots', opts ?? {}),
+    getSnapshot: (id) => ipcRenderer.invoke('canvHistory:getSnapshot', id),
+    diffSnapshot: (id, rel) => ipcRenderer.invoke('canvHistory:diffSnapshot', id, rel),
+    diffCurrent: (rel) => ipcRenderer.invoke('canvHistory:diffCurrent', rel ?? null),
+    getCurrentChanges: () => ipcRenderer.invoke('canvHistory:getCurrentChanges'),
+    restoreFilePreview: (id, rel) => ipcRenderer.invoke('canvHistory:restoreFilePreview', id, rel),
+    restoreFile: (id, rel) => ipcRenderer.invoke('canvHistory:restoreFile', id, rel),
+    hideSnapshot: (id) => ipcRenderer.invoke('canvHistory:hideSnapshot', id),
+  })
 }
 
 // Available in both main and pop-out windows.
