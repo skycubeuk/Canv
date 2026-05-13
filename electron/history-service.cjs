@@ -333,7 +333,8 @@ function createHistoryService({ root }) {
       const abs = path.join(root, relPath)
       await fsp.mkdir(path.dirname(abs), { recursive: true })
       await fsp.writeFile(abs, text, 'utf8')
-      return { rollbackSnapshotId: rollback.id }
+      const stat = await fsp.stat(abs)
+      return { rollbackSnapshotId: rollback.id, mtimeMs: stat.mtimeMs }
     })
   }
 

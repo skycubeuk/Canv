@@ -668,8 +668,11 @@ export default function App() {
           snapshotId={restoreTarget.snapshotId}
           relPath={restoreTarget.relPath}
           onCancel={() => setRestoreTarget(null)}
-          onRestored={async (rollbackId) => {
+          onRestored={async (rollbackId, mtimeMs) => {
             const rel = restoreTarget.relPath
+            // Suppress the conflict popup for our own write — must run before the
+            // chokidar 'change' event echoes back from the disk watcher.
+            workspace.noteOwnDiskWrite(rel, mtimeMs)
             setRestoreTarget(null)
             showToast(`Restored ${rel}. Safety snapshot: ${rollbackId}`)
             try { await workspace.reloadTabFromDisk(rel) } catch { /* tab may not be open */ }

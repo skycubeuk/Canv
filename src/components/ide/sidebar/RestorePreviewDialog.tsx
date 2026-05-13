@@ -6,7 +6,7 @@ interface Props {
   snapshotId: string
   relPath: string
   onCancel: () => void
-  onRestored: (rollbackId: string) => void
+  onRestored: (rollbackId: string, mtimeMs: number) => void
   saveDirtyBuffer: (relPath: string) => Promise<void>
 }
 
@@ -27,7 +27,7 @@ export function RestorePreviewDialog({
     try {
       await saveDirtyBuffer(relPath)
       const r = await history.restoreFile(snapshotId, relPath)
-      onRestored(r.rollbackSnapshotId)
+      onRestored(r.rollbackSnapshotId, r.mtimeMs)
     } finally { setBusy(false) }
   }
 

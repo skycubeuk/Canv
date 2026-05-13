@@ -14,7 +14,7 @@ export interface CanvHistory {
   diffCurrent(relPath?: string): Promise<{ baseText: string; currentText: string } | CurrentChange[]>
   getCurrentChanges(): Promise<CurrentChange[]>
   restoreFilePreview(snapshotId: string, relPath: string): Promise<{ snapshotText: string; currentText: string }>
-  restoreFile(snapshotId: string, relPath: string): Promise<{ rollbackSnapshotId: string }>
+  restoreFile(snapshotId: string, relPath: string): Promise<{ rollbackSnapshotId: string; mtimeMs: number }>
   hideSnapshot(id: string): Promise<SnapshotEntry>
   patchSnapshotFiles(id: string, files: string[]): Promise<void>
   getTipCommit(): Promise<string | null>

@@ -235,6 +235,8 @@ describe('history-service restore', () => {
     const r = await svc.restoreFile(s1.id, 'a.md')
 
     expect(r.rollbackSnapshotId).toMatch(/^snap_/)
+    expect(typeof r.mtimeMs).toBe('number')
+    expect(r.mtimeMs).toBeGreaterThan(0)
     expect(await fsp.readFile(path.join(root, 'a.md'), 'utf8')).toBe('one\n')
 
     const rollback = await svc.getSnapshot(r.rollbackSnapshotId)

@@ -124,6 +124,14 @@ export interface WorkspaceApi {
    * an in-app source that bypasses the editor (e.g. the `edit_file` tool).
    */
   writeFileFromTool: (rel: string, content: string, expectedMtimeMs?: number) => Promise<WriteResult>
+  /**
+   * Mark an mtime as "we wrote this from the app" so the watcher's conflict
+   * prompt is suppressed when the corresponding chokidar 'change' event echoes
+   * back. Use after an out-of-band write performed by main (e.g. history
+   * restoreFile) — call it immediately after the IPC resolves, before chokidar
+   * has had time to fire the change event back to us.
+   */
+  noteOwnDiskWrite: (rel: string, mtimeMs: number) => void
   flushAll: () => Promise<void>
   pin: (rel: string) => Promise<void>
   unpin: (rel: string) => Promise<void>
@@ -315,6 +323,10 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
     setDirty(rel, false)
     return result
   }, [setDirty])
+
+  const noteOwnDiskWrite = useCallback((rel: string, mtimeMs: number) => {
+    recentWrites.current.set(rel, { mtimeMs, ts: Date.now() })
+  }, [])
 
   const saveTab = useCallback((rel: string, markdown: string, sourceGroupId?: EditorGroupId) => {
     pendingMarkdown.current.set(rel, markdown)
@@ -1112,6 +1124,7 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
     setActiveGroupId,
     saveTab,
     writeFileFromTool,
+    noteOwnDiskWrite,
     flushAll,
     pin,
     unpin,
@@ -1125,5 +1138,5 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
     reloadTabFromDisk,
     remoteStatus,
     reconnect,
-  }), [ready, available, root, kind, tree, treeTruncated, editorGroups, activeGroupId, activeTabKey, activeMarkdownRel, allOpenKeys, dirtySet, pinned, pickWorkspace, openRemote, closeWorkspace, openTab, closeTab, setActiveTab, openSettingsTab, openDiffTab, closeTabByKey, setActiveTabByKey, splitRight, moveTab, setActiveGroupId, saveTab, writeFileFromTool, flushAll, pin, unpin, createFile, createFolder, renameOp, remove, refreshTree, conflict, resolveConflict, reloadTabFromDisk, remoteStatus, reconnect])
+  }), [ready, available, root, kind, tree, treeTruncated, editorGroups, activeGroupId, activeTabKey, activeMarkdownRel, allOpenKeys, dirtySet, pinned, pickWorkspace, openRemote, closeWorkspace, openTab, closeTab, setActiveTab, openSettingsTab, openDiffTab, closeTabByKey, setActiveTabByKey, splitRight, moveTab, setActiveGroupId, saveTab, writeFileFromTool, noteOwnDiskWrite, flushAll, pin, unpin, createFile, createFolder, renameOp, remove, refreshTree, conflict, resolveConflict, reloadTabFromDisk, remoteStatus, reconnect])
 }

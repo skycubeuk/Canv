@@ -37,6 +37,8 @@ describe('history-service end-to-end', () => {
     // Restore from the manual snapshot → should produce before_rollback
     const r = await svc.restoreFile(manual.id, 'chapter-04.md')
     expect(await fsp.readFile(path.join(root, 'chapter-04.md'), 'utf8')).toBe('## v1\n')
+    expect(typeof r.mtimeMs).toBe('number')
+    expect(r.mtimeMs).toBeGreaterThan(0)
     const rollback = await svc.getSnapshot(r.rollbackSnapshotId)
     expect(rollback.reason).toBe('before_rollback')
 
