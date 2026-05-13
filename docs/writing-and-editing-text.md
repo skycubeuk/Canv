@@ -1,95 +1,102 @@
 # Writing and editing text
 
-The middle of the Canv window is where you write. This page covers how
-to set it up so it's comfortable to read for long stretches, how to keep
-several documents open at once, and how to flip between drafting and
-reading.
+This page is about the middle of the window — where your prose lives. It
+covers what the editor does on its own, how to format selected text, how
+to switch between editing and a rendered preview, how to jump around long
+documents, and how to keep two files visible at once.
 
-## Reading the page comfortably
+## How the editor behaves
 
-Three settings shape how the page looks while you write. Open the
-settings tab (the cog at the bottom-right of the status bar) to find
-them.
+The editor is a markdown editor that renders formatting as you type.
+Bold, italic, strikethrough, headings, lists, links and inline code all
+appear with their visible style applied; the markdown syntax stays in
+the file but the editor decorates it so you can read your prose without
+the asterisks getting in the way.
 
-- **Font size** controls the size of the writing area itself, between
-  14 and 24 pixels.
-- **Line width** has three presets — narrow, normal, and wide. Narrower
-  lines tend to feel more like a printed page; wider ones suit screens
-  with more room.
-- **Theme** picks between dark, light, and following your operating
-  system. The dark theme is the default. Pick whichever you find
-  easiest to read; the rest of this guide describes things in plain
-  terms rather than by colour.
-- **Accent** changes the highlight colour the app uses for active tabs,
-  selection, and so on. It's cosmetic.
+Your changes save to disk automatically. There is no "unsaved" state to
+worry about in normal use — Canv writes the file in the background as
+you type, with a short pause to coalesce edits. If something else on the
+system also changes the file (another editor, a sync tool, a script),
+Canv notices and offers you a choice: reload from disk, or overwrite the
+disk version with what is in your editor. See
+[Troubleshooting](troubleshooting.md) for what to do if that prompt
+appears.
 
-There's also a separate font-size slider for the chat conversation, so
-you can keep your manuscript at a reading size and the conversation at a
-slightly smaller one without straining either.
+The default theme is dark. If you prefer light, open the settings tab,
+find the **Appearance** section, and switch the theme there.
 
-## Keeping several documents open
+## Formatting selected text
 
-Each document you open becomes a tab along the top of the writing area.
-Click a tab to switch to it. Click the small cross to close it; if you
-have unsaved changes, Canv asks first.
+Select any run of text in the editor and a small toolbar appears next to
+the selection. The first row holds formatting controls — bold, italic,
+strikethrough, inline code, headings, bulleted and numbered lists, block
+quote, code block, and a link inserter. Click one and Canv applies the
+markdown syntax around your selection.
 
-If you want to see two documents at the same time, split the writing
-area in two. The active document copies into a second pane on the
-right. From there you can open different files in each pane — click in
-a pane to focus it, then click a file in the sidebar. Closing every tab
-in a pane collapses it back to a single writing area.
+The same floating toolbar also contains profile actions (Polish, Make
+Shorter, Brainstorm, and so on). Those are covered in
+[Getting the AI to help](getting-the-ai-to-help.md).
 
-You can drag a tab from one pane to the other if you'd rather move it
-than re-open it.
+## Reading the rendered page
 
-## Switching between drafting and reading
+The toolbar above the editor has an **Edit** / **Preview** switch. In
+Preview mode the markdown is rendered as a clean reading page —
+headings styled, lists formatted, links live — without any syntax in
+view. The preview is for reading; you cannot type into it. Flip back
+to Edit to keep writing.
 
-The page has two modes:
+The preview re-renders when you flip into it, so changes you make in
+Edit appear when you switch back. Headings in the preview are clickable
+and jump straight to that heading in the editor when you switch back.
 
-- **Edit** — what you see while you're writing. Headings show their
-  hashes, links show their targets, and you can put your cursor
-  anywhere.
-- **Preview** — the rendered version of the page. Headings are big,
-  links are clickable, and the markdown is interpreted.
+## Jumping by heading
 
-Switch between them with the small toggle at the top-right of the page.
+A long document is easier to navigate by structure than by scrolling.
+The outline panel on the right of the editor lists every heading in the
+current file as a collapsible tree. Click a heading to jump the editor
+to it. Headings update live as you type — if you rename a section, the
+outline catches up.
 
-The document outline (see below) keeps working in preview mode — clicking
-a heading scrolls there in either view.
+If the outline panel is hidden, the sidebar footer has a control to
+bring it back.
 
-## Jumping around inside a long document
+## Working with two files at once
 
-Below the file tree on the left, the **Outline** lists every heading in
-the file you're looking at. Click a heading to jump to it. This is
-useful for chapter-based writing or anything with sections — you can use
-it instead of scrolling. The outline collapses if you don't want it
-taking room.
+You can split the editor area into two columns and open a different file
+in each. Use the editor's split control (next to the tab strip) to
+create a second column on the right; drag a tab from one column to the
+other to move files between them, or open a file from the file tree
+while the second column is focused.
 
-If you'd rather search inside a single file, your platform's standard
-find-in-page works inside the writing area.
+To go back to a single column, close the tabs in one of the columns or
+close the column entirely.
 
-## Watching where you are in the document
+## Pinning a reference file
 
-The thin bar at the bottom of the window shows what's true right now:
+If you have a notes file or a series bible you want the AI to look at on
+every turn, right-click the file in the file tree and choose **Pin to
+context**. The pinned file is included alongside whatever you ask the
+AI to do — selection rewrites, document actions, chat replies — until
+you unpin it from the same menu. Pinning is per-workspace, so each
+project can keep its own reference material attached.
 
-- Whether the file is **Saved**, **Saving…**, or in **Conflict** (the
-  file changed on disk while you had unsaved edits — open it again to
-  pick a version).
-- Which profile is active. Click it to switch.
-- The current branch and a quick `+added/−removed` count if the workspace
-  is a Git repository.
-- Your cursor position (line and column) and either the document's word
-  count or the selected text's word count.
-- An estimated minutes-to-read.
-- A live token count and dollar cost when an AI run is in flight.
+The pin only applies to markdown files; non-markdown files do not show
+the pin menu entry.
 
-The two icons on the far right of the bar toggle the conversation panel
-and open settings.
+## Exporting a finished file
 
-## Right-clicking on text
+Canv's files are already plain markdown on your disk, so "exporting" is
+mostly a matter of getting a copy out. The command palette has two
+exports for the current file:
 
-Right-click anywhere in the writing area for cut, copy, paste, and
-select-all — the same menu you'd expect in any text editor. The same
-menu is available in the chat panel.
+- **Export as .md** — saves the file's markdown to a location you pick.
+- **Export as .txt** — saves the file as plain text without the markdown
+  syntax.
 
-Next: [Finding and organising your work](finding-and-organising-your-work.md).
+Both produce a fresh copy; the file in your workspace is unaffected.
+
+## Up next
+
+If you want to find a file you can't remember the name of, or you want
+the AI to always see a particular reference document, see
+[Finding and organising your work](finding-and-organising-your-work.md).

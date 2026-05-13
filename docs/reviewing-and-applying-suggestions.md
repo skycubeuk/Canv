@@ -1,82 +1,90 @@
 # Reviewing and applying AI suggestions
 
-Every editing action you trigger from the floating toolbar or from the
-**Run on document** menu produces a result. Results don't disappear —
-they collect in a panel below the writing area where you can compare
-them, refine them, run them again, or paste the new version into your
-draft. This page is about that loop.
+Every action you trigger from the floating toolbar or the run-on-document
+menu produces a **run** — a record of what you asked, what the AI said,
+and the rewrite (if any) it produced. Runs live in the bottom panel and
+stick around until you close them, so you can compare different
+attempts side-by-side, come back to an old one tomorrow, or refine a
+result with a follow-up. This page covers reading a result, applying
+it, and managing the history of runs in a session.
 
-## Where past results live
+## What a run looks like
 
-The bottom panel has a tab labelled **Runs**. Each run keeps its place
-in the list, with the action's icon and name, the time it ran, and a
-small dollar amount if a price is known. The list is roughly newest at
-the top.
+A new run opens in the **Runs** tab at the bottom of the window. The
+top of the run shows what action was used (for example, "Polish") and
+the model the AI used. Beneath that the response is split into two
+sections, depending on the action's output style:
 
-Click any row to bring that run's response back into view on the right.
-You can keep ten runs around at once — older ones drop off when you
-start a new one — or close a run yourself with the **×** on its row.
+- **Notes** — what the AI noticed, suggestions, things to consider.
+  Some actions, like Story Reviewer, are pure notes — there is no
+  rewrite, only feedback.
+- **Suggested rewrite** — the rewritten text. Where there is both
+  notes and a rewrite, the rewrite is shown alongside an inline diff
+  against the text you originally selected. The diff highlights
+  additions and removals so you can see at a glance how heavy-handed
+  the rewrite has been.
 
-Each run remembers:
+The response streams in live as the AI types it. You can start reading
+before it has finished.
 
-- Which paragraph it was triggered on.
-- The action's instruction, if you provided one.
-- The full response the AI gave.
-- The model and provider that produced it.
-- Token use and cost (when pricing is known).
+## Applying a rewrite
 
-You can see the source paragraph again by clicking **Show source** at
-the top of the run. Useful when you've moved on and forgotten which
-paragraph the response was for.
+The run header has an **Apply** button. Clicking it replaces the
+original selection in the editor with the AI's rewrite. If the run
+came from a document action rather than a selection action, **Apply**
+replaces the whole document.
 
-## Pasting the rewrite into your draft
+Apply is a one-click action — it doesn't ask you to confirm. The
+previous text is recoverable from Canv's revision history if it is
+turned on; see
+[Tracking changes and keeping things tidy](tracking-changes-and-keeping-things-tidy.md).
 
-Runs that produced a rewrite (Polish, Make Shorter, Free Edit, and so
-on) show an **Apply** button. Click it and Canv replaces the original
-selection in your file with the rewritten version. The button greys
-out afterwards so you can't accidentally paste the same change in
-twice.
+Each run can only be applied once. Once you've applied a rewrite,
+**Apply** is disabled for that run so a second click can't prepend
+another copy.
 
-If you've kept editing since the run started — added text, deleted
-the paragraph, moved things around — Canv may notice the original
-range no longer matches and warn you. In that case it's safer to copy
-the rewrite manually rather than apply it.
+## Asking for another go
 
-Older runs from earlier versions of Canv may not be applyable; the
-button is disabled with an explanation.
+If the rewrite isn't quite right, the run has two ways to ask again
+without losing what you already have:
 
-## Refining a result without starting over
+- **Rerun** sends the same request to the AI again. The new response
+  appears as a separate run; the original stays. This is how to get a
+  second draft you can compare against the first.
+- **Refine** lets you give the AI a short note about what to change
+  about the previous result. Type "tighten the dialogue" or "less
+  formal" into the refine box and submit; the AI rewrites with your
+  note in hand. The refined response also appears as a separate run.
 
-Sometimes the AI's reply is close but not quite right. Below the
-response there's a small input labelled something like "Add a follow-up
-note". Type a refinement — "make it past tense" or "use the original
-ending" — and submit. The AI replies again, building on its previous
-answer rather than starting from scratch. Multiple refinements stack
-up, so you can iterate without losing the earlier attempts.
+Both of those leave the original result intact, so you can compare
+attempts and pick the best one.
 
-## Running the same action again
+## Going back to an older run
 
-If the same action might give a better answer on a second try, click
-the **Re-run** circular-arrow button at the top of a run. The same
-prompt is sent against the same source. Useful for non-deterministic
-actions like Brainstorm, where you might want a second batch of ideas.
+The Runs tab keeps every run from your current session. Click an old
+run to bring it back into the panel; **Apply**, **Rerun**, and
+**Refine** all still work. To remove a run you no longer want, use the
+close control on its tab.
 
-Re-running costs another call to the provider; the cost shows up
-beside the new run.
+## Reading a cleaner copy or inspecting the raw exchange
 
-## Trying a different action on the same paragraph
+Next to **Runs** is an **Output** tab that gives you a cleaner reading
+view of a run — just the notes and the rewrite, with no controls — and
+also lets you inspect the raw exchange behind a chat message. This is
+helpful when an answer was confusing and you want to see exactly what
+the assistant was sent.
 
-The runs panel doesn't tie you to one action. Select the same
-paragraph again, click a different action — say try **Make Shorter**
-after **Polish** — and both runs sit alongside each other in the
-panel. Compare the two and apply whichever you prefer.
+## Watching for problems
 
-## Retrying a failed run
+The bottom panel also has a **Problems** tab. Canv runs a few automatic
+checks across your workspace — broken links to files that don't exist,
+references to headings that aren't there, that kind of thing. Each
+issue links to the line it found, so clicking jumps you to the right
+place to fix it. You can rescan from the tab when you've moved files
+around.
 
-If a run errored or was aborted (you clicked **Stop**), the row in
-the panel shows the failure state. Re-running with the circular-arrow
-button is the simplest way to try again. If the run errored because
-of a rate-limit or network issue, waiting a moment before re-running
-usually does it.
+## Up next
 
-Next: [Building visual views of your project](building-visual-views-of-your-project.md).
+Once you have a result and you've applied it, the obvious next concern
+is "can I get the old version back?" — see
+[Tracking changes and keeping things tidy](tracking-changes-and-keeping-things-tidy.md).

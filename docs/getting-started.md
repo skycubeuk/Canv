@@ -1,98 +1,115 @@
 # Getting started
 
-This page walks you from a fresh install to writing a paragraph and asking
-the AI to rewrite it. Five minutes, end to end.
+This page walks you from a fresh install through opening your writing,
+choosing a profile, adding an AI key, and running the AI on a paragraph.
+After this page you have a working setup; the other pages cover individual
+parts of the app in more depth.
 
 ## Installing Canv
 
-Download the build for your operating system from the project's releases
-page:
+Pre-built installers are on the project's
+[Releases page](https://github.com/skycubeuk/Canv/releases). Pick the one
+that matches your machine:
 
-- macOS: a `.dmg`. The build is unsigned, so on first launch right-click
-  the app and choose **Open** to bypass Gatekeeper. After that it opens
-  normally.
-- Windows: an installer or a portable executable. SmartScreen may warn
-  "publisher unknown". Click **More info → Run anyway**.
-- Linux: an `AppImage`, `.deb`, or `.rpm`. Make the AppImage executable
-  (`chmod +x`) before double-clicking it; install the `.deb` or `.rpm`
-  through your usual package tool.
+- **macOS** — `.dmg` for Intel or Apple Silicon. The build is currently
+  unsigned, so the first time you launch it macOS will refuse with a
+  "cannot verify the developer" message. Right-click the app icon and
+  choose **Open** to bypass that once, and the system will remember the
+  choice afterwards.
+- **Windows** — NSIS installer or a portable `.exe`. SmartScreen warns
+  "publisher unknown" on first launch; click **More info → Run anyway**.
+- **Linux** — `.AppImage`, `.deb`, or `.rpm`. Mark the AppImage executable
+  before running it, or install the `.deb`/`.rpm` with your package manager.
 
-Canv does not phone home. Your writing stays on your computer. When you
-ask an AI for help, the request goes from your machine straight to the
-provider you chose.
+System requirements: macOS 10.15 or later, Windows 10 or later, glibc 2.28
+or later on Linux.
 
-## Choosing the kind of writing this is
+## Picking a workspace
 
-The first time you launch Canv, it asks what kind of writing this is.
-There are three built-in profiles:
+The first time you launch Canv it asks you to pick a folder. This becomes
+your **workspace**. Everything Canv shows you — the file tree, the editor,
+the AI's view of "your work" — is rooted at that folder. Pick somewhere
+that already holds the markdown files you want to write, or an empty folder
+you intend to fill.
 
-- **Fiction** — stories, novels, short fiction. Voice and craft matter.
-- **Technical** — software docs, API guides, how-tos.
-- **Factual** — essays, journalism, reference work.
+Canv only reads and writes inside the workspace you pick. You can change
+workspace later from the workspace switcher, and Canv remembers each
+workspace's settings separately.
 
-Pick whichever fits. The AI's tone, the names of the editing actions, and
-the system prompts the model receives all change to suit the kind of
-writing you're doing. You can switch later — every new document asks
-again, and you can change the active profile from the bottom-left of the
-window.
+## First-time setup
 
-The rest of this guide uses the Fiction profile in its examples.
+When you open a workspace Canv hasn't seen before, a setup card appears.
+It asks two questions.
 
-## Pointing Canv at a folder of writing
+**Choose a default profile.** A profile is a flavour of writing — Fiction,
+Factual, or Technical. Each profile carries its own set of one-click
+actions (Grammar & Spelling, Make Shorter, Polish, and so on) and its own
+chat tone. You can switch profile per document later, so this is just the
+starting profile for new files in this workspace. The examples in this
+guide use Fiction.
 
-Canv treats one folder on disk as your workspace. Every file inside it
-shows up in the sidebar; new files you create land in that folder.
+**Turn on revision history.** If you tick this, Canv keeps a private,
+versioned history of the whole workspace in the background. It is stored
+inside the workspace folder under `.canv/` and never touches your normal
+git branch or index — Canv writes to its own dedicated branch called
+`canv-history`. Snapshots happen automatically (before and after each AI
+edit, after long idle periods with unsaved changes) and you can make
+named checkpoints by hand. See
+[Tracking changes and keeping things tidy](tracking-changes-and-keeping-things-tidy.md)
+for what the history can do for you.
 
-After you pick a profile, choose a workspace folder. An empty folder is
-fine — Canv will drop a short `Welcome.md` into it. If you already have a
-folder of markdown files, point Canv at it and your existing files appear
-straight away.
+Click **Set up workspace** and Canv writes the configuration file and is
+ready.
 
-To switch to a different folder later, click the workspace name in the
-top bar.
+## Adding an AI key
 
-## Adding an API key
+Canv does not ship with an AI account. To let the AI help, you bring your
+own key from a provider — Canv supports Anthropic and OpenAI.
 
-To get help from the AI, Canv needs an API key from a provider. Two
-providers are supported out of the box: Anthropic and OpenAI. You only
-need a key for the one you actually want to use.
+Open the settings tab and find the **Providers** section. Paste your key
+for whichever provider you want to use, pick a default model, and the
+field saves on blur. Keys are stored in the app's local settings, on your
+machine; Canv has no backend that sees them.
 
-1. Open the settings tab (the cog at the bottom-right of the status bar).
-2. Pick your provider in the **Default provider** dropdown.
-3. Paste your key into the field below. Follow the provider's
-   instructions if you don't have one yet.
+If you do not add a key, the rest of the app still works — you can write,
+organise, and read your files. The AI features show an "API key missing"
+warning until a key is set.
 
-The key is stored on your computer. Canv calls the provider directly from
-your machine — there's no Canv server in between.
+## Writing something
 
-## Writing your first paragraph
+Open a file from the file tree on the left, or create one with the **+**
+buttons at the top of the tree. The main panel becomes a markdown editor:
+type normally and your changes save to disk automatically. There is no
+separate "save" step in routine writing.
 
-Click any markdown file in the sidebar to open it, or right-click in the
-file tree and create a new one. The middle of the window is where you
-write.
+Canv's editor renders bold, italics, headings, and links as you type so
+the file you see and the file on disk match. When you want to read what
+you have written without the markdown syntax in view, the toolbar above
+the editor has an **Edit / Preview** switch — flipping to Preview shows
+the rendered page; flipping back returns to the editor.
 
-Type as you would in any text editor. Canv saves automatically as you
-write — the indicator on the left of the bottom status bar flips between
-**Saving…** and **Saved**. There's a word count, an estimated reading
-time, and your current line and column down there too.
+[More about the editor](writing-and-editing-text.md).
 
-## Asking the AI to do something with what you wrote
+## Asking the AI for help
 
-Select a paragraph by dragging across it. A small toolbar appears just
-above the selection. The buttons on it depend on your profile, but in
-Fiction you'll see things like **Polish**, **Make Shorter**, **Make
-Longer**, **Refine**, **Brainstorm**, and **Free Edit**. Click one.
+Once a provider key is set, select a paragraph in the editor. A small
+toolbar floats next to the selection with the profile's actions —
+Grammar & Spelling, Polish, Make Shorter, Free Edit, and so on. Click
+one. Canv sends just the selected text (plus a little context about
+the rest of the document) to the AI and streams the answer back. The
+response opens in a panel below your editor with an inline diff between
+the original and the rewrite, and an **Apply** button that drops the
+rewrite back into the document at the same place.
 
-For most actions, the AI starts working straight away and you watch its
-reply stream in. Some actions ask for a one-line instruction first —
-**Refine**, **Free Edit**, and **Brainstorm** all want to know what you'd
-like done. Type the note and press Enter.
+To run an action on the whole document instead of a selection, use the
+**Run on document** menu in the same toolbar.
 
-When the response is ready, you can paste the rewrite back into the page
-with the **Apply** button, or keep both versions side by side and decide
-later. Reviewing past results is covered on
-[its own page](reviewing-and-applying-suggestions.md).
+[More about asking the AI for help](getting-the-ai-to-help.md).
 
-That's the loop: write, select, ask, apply.
+## Where to go next
 
-Next: [Writing and editing text](writing-and-editing-text.md).
+- If you want a longer conversation rather than a one-off rewrite, see
+  [Working with an AI assistant](working-with-an-ai-assistant.md).
+- If you want to know exactly when Canv saves things and what's tracked,
+  see [Tracking changes and keeping things tidy](tracking-changes-and-keeping-things-tidy.md).
+- If something feels stuck, check [Troubleshooting](troubleshooting.md).
