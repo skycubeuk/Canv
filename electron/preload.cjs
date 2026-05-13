@@ -117,6 +117,8 @@ if (!isDockPopout()) {
     search: (query) => ipcRenderer.invoke('canvFS:search', query),
     gitStatus: () => ipcRenderer.invoke('canvFS:gitStatus'),
     gitDiff: (rel, baseRef) => ipcRenderer.invoke('canvFS:gitDiff', rel, baseRef ?? 'HEAD'),
+    readWorkspaceConfig: () => ipcRenderer.invoke('canvFS:readWorkspaceConfig'),
+    writeWorkspaceConfig: (cfg) => ipcRenderer.invoke('canvFS:writeWorkspaceConfig', cfg),
     subscribe: (cb) => {
       const listener = (_e, payload) => {
         try { cb(payload) } catch { /* ignore subscriber errors */ }

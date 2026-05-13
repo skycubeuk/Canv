@@ -15,6 +15,7 @@ const { RecentRemotes } = require('./recent-remotes.cjs')
 const serve = require('./serve-folder.cjs')
 const siteRegistry = require('./site-registry.cjs')
 const { maxMtimeForGlobs } = require('./glob-mtime.cjs')
+const workspaceConfig = require('./workspace-config.cjs')
 
 const APP_ICON = path.join(__dirname, '..', 'build', 'icon.png')
 
@@ -439,6 +440,24 @@ function registerFsHandlers() {
 
     await walk(root, '', 0)
     return { matches, truncated }
+  })
+
+  // ---------------------------------------------------------------------------
+  // Workspace config (local-only)
+  // ---------------------------------------------------------------------------
+
+  ipcMain.handle('canvFS:readWorkspaceConfig', async () => {
+    const root = WORKSPACE?.kind === 'local' ? WORKSPACE.root : null
+    if (!root) return null
+    return workspaceConfig.readWorkspaceConfig(root)
+  })
+
+  ipcMain.handle('canvFS:writeWorkspaceConfig', async (_e, cfg) => {
+    if (isRemote()) throw new Error('Workspace config is local-only')
+    const root = WORKSPACE?.kind === 'local' ? WORKSPACE.root : null
+    if (!root) throw new Error('No workspace open')
+    await workspaceConfig.writeWorkspaceConfig(root, cfg)
+    return true
   })
 
   // ---------------------------------------------------------------------------
