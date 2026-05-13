@@ -1,123 +1,133 @@
 # Working with an AI assistant alongside your draft
 
-The selection actions covered on the previous page are short, one-shot
-asks. The conversation panel is for the longer, looser kind of help —
-asking the AI to read your draft and discuss it, ask you questions,
-search across files for you, or carry out a small file change. This
-page covers how to use it well.
+The selection and document actions on the previous page are short
+one-shot requests. The chat is for longer conversations — asking
+questions about your work, planning a revision, walking through a
+scene, having the AI make changes to files for you. This page covers
+how the chat works, how it handles multiple conversations at once,
+what happens when the AI wants to change a file, and how to choose
+which model is doing the work.
 
-## Opening the conversation alongside your draft
+## Opening the chat
 
-Click the speech-bubble icon at the bottom-right of the status bar to
-open the conversation panel. By default it docks at the bottom of the
-window. You can dock it to the right instead, or pop it out into a
-separate window — useful on a second monitor. The dock controls live in
-the top bar of the panel.
+The chat lives in the bottom panel. If the panel is hidden, bring it
+up and pick the **Chat** tab. The panel can sit at the bottom of the
+window, at the right of the window, or in a separate window of its own
+— the placement control is in the top-right of the panel. The separate
+window is useful when you want the chat on a second display while you
+write on the first.
 
-When the panel is open, the file you're currently editing is shown as
-context above the input. The AI knows that file is what you're working
-on.
+The first time you open a chat in a workspace, Canv starts a new
+conversation for you. Type a message, send it, and the assistant
+replies. The assistant has been given a short system prompt that
+matches your current profile — Fiction's assistant is a craft-oriented
+writing partner, Factual's is a non-fiction editor, Technical's is a
+documentation reviewer.
 
-## Asking for help
+## What the assistant knows about your work
 
-Type into the input area and press Enter. The AI replies inline. You
-can ask in plain language — there's no syntax to learn:
+The assistant gets a short inventory of your workspace — the file
+tree, the names of pinned files, and the name of the file you have
+open. It does not get the contents of every file. When it needs to
+read a file it asks for it with a read tool, and Canv hands the file
+over without asking you for permission.
 
-- "Read the chapter and tell me where the pacing slows."
-- "Search the workspace for any mention of the locket."
-- "List every chapter that takes place at sea."
-- "Add a new file `notes/setting-rules.md` with three rules for how
-  magic works."
+When the file the assistant asks to read is the one you have open,
+Canv hands over the live editor buffer rather than the disk version,
+so the AI sees your latest unsaved edits.
 
-Shift-Enter adds a new line without sending. The input grows to fit
-what you've typed.
-
-## What the assistant can do for itself
-
-Unlike the selection actions, the conversation can take steps in your
-workspace on your behalf. It can:
-
-- **Read** any file in the workspace, list folders, and search across
-  files.
-- **Create**, **edit**, **delete**, or **rename** a file or folder.
-- Maintain a small to-do list of things it's working through, which
-  shows up in the conversation as a checklist so you can see what's
-  left.
-
-It can do this autonomously up to a small budget per message (ten
-rounds of action by default; tunable in settings under "Chat tool
-budget per message").
+A pinned file from the file tree rides along with every chat message
+on top of all that. See
+[Finding and organising your work](finding-and-organising-your-work.md)
+for pinning.
 
 ## Approving file changes
 
-You're in charge of changes to your files. Whenever the assistant
-wants to write, edit, delete, or rename anything, the conversation
-shows a card describing the change with three buttons:
+Most of the time the assistant just answers in prose. Sometimes it
+decides the best way to help is to change a file — create a new note,
+edit your draft, rename or move something, or delete a file you no
+longer need. When it does, an **approval card** appears in the chat
+showing what it's about to do, a preview of the change (full diff for
+edits, file contents for new files, the path for renames and deletes),
+and three buttons:
 
-- **Approve** lets that one change through.
-- **Deny** rejects that one change. The assistant carries on without
-  it.
-- **Approve rest of turn** lets every remaining change in this round
-  through without prompting again. Useful when the AI is making a
-  series of small mechanical edits and you've seen enough.
+- **Approve** — let this one action go ahead.
+- **Deny** — refuse this one action. The assistant is told you said no
+  and can decide what to do next.
+- **Approve all remaining** — let this action and any further file
+  changes in the rest of this turn through without prompting again.
+  The bypass resets when the turn ends; the next conversation starts
+  back at "ask for each one".
 
-Reads, listings, and searches don't require approval — they don't
-change anything.
+You decide every change. The assistant cannot write to your disk
+without an approval, except in one specific case: when it's building or
+updating a small site under `.canv/sites/` (covered in
+[Building visual views of your project](building-visual-views-of-your-project.md)).
+A site is typically a dozen related files; making you approve each one
+individually would be useless friction, so writes inside `.canv/sites/`
+are pre-approved.
 
-## Keeping more than one conversation going
+Read operations — listing a folder, reading a file, searching, looking
+at file metadata — never ask. The assistant uses them freely to learn
+about your workspace.
 
-The assistant supports several conversations at once. Down the side of
-the panel is a list of every conversation; click one to switch to it,
-or hit the **+** to start a new one. Closing a conversation doesn't
-delete it from your history.
+## Watching the AI's plan
 
-Each conversation is locked to whichever provider and model you used
-for its first message. If you want a different model, start a new
-conversation — that way an in-progress thread doesn't switch model
-mid-way and lose its sense of what's been said.
+For multi-step jobs, the assistant can post a working **todo list** in
+the chat. Each item has a status — pending, in progress, or done — and
+the assistant updates the list as it works. The todo card lives in the
+conversation; you don't have to act on it, but it's a useful way to
+see what's been done and what's still to do without re-reading the
+chat.
 
-Above the input area you can see (and change) the model for the
-*current* conversation only when no messages have been sent yet.
+## Stopping, retrying, and rewriting your last message
 
-## Watching what it costs
+If the assistant is going in a direction you don't want, the **Stop**
+button halts whatever it's doing — including a streaming reply,
+in-flight tool calls, and pending approvals.
 
-Below each assistant message Canv shows the tokens used and the dollar
-cost of that turn — based on the pricing for the chosen model.
-Conversation costs are per-message; Canv doesn't track a running total
-for you.
+Every assistant message has a small action row beneath it:
 
-If the model is one Canv doesn't have built-in pricing for, you can
-override the per-1M-tokens rate in settings under **Model pricing**.
+- **Retry** runs the same turn again from this point. The earlier
+  exchange is preserved; only the most recent assistant turn is
+  regenerated.
+- **Edit and retry** lets you rewrite your last user message and run
+  the turn again. Useful when your first prompt didn't quite say what
+  you meant.
 
-## When something goes wrong
+## Several conversations at once
 
-Sometimes a turn fails — the network blips, the model rate-limits you,
-the provider is having a bad day. When that happens, the failed
-message keeps a small set of retry buttons:
+The chat tab carries a list of conversations down the left. Each is
+independent — its own history, its own model, its own todo state.
+Create a new conversation from the **+** button at the top of the
+list, switch between them by clicking, close one you're done with.
 
-- **Retry** sends the same message again. If the failure was a
-  rate-limit, the button shows a countdown until it's safe to try
-  again.
-- **Edit and retry** lets you change your last message and try
-  again.
-- **Retry from here** is offered on earlier messages — useful when
-  you decide an earlier reply went down the wrong path and you'd
-  rather restart from there with the same prompt.
+Sessions are remembered per-workspace. Open the workspace tomorrow and
+your conversations are still there.
 
-If a turn was cancelled (you pressed **Stop** or hit Escape on a
-running response), the conversation shows a "(turn cancelled)" note
-so the history stays honest.
+## Picking a model per conversation
 
-## Following the response while it streams
+Each conversation has a provider and model dropdown above the input
+box. Changing it sets the model for any subsequent turn in that
+conversation; it does not affect other conversations.
 
-By default the conversation auto-scrolls to keep the latest message
-in view. If you'd rather read at your own pace, scroll up — Canv
-notices and stops following. The setting can also be flipped manually
-in the settings tab under **Auto-scroll chat**.
+Canv reads which provider owns the model you picked, so as long as you
+have keys for both Anthropic and OpenAI in settings, a single chat can
+hop between providers. If the key for the chosen model isn't set,
+sending a message shows a key-missing warning instead of starting the
+turn.
 
-If the response feels too fast to read in real time, set a **Slow-mode
-delay** in settings. Canv inserts a short pause between chunks (50,
-100, or 200 ms) so the words arrive at reading pace rather than as a
-wall.
+## Watching the cost
 
-Next: [Reviewing and applying AI suggestions](reviewing-and-applying-suggestions.md).
+A chat meter sits near the input box and accumulates the total tokens
+and (rough) dollar cost for the current conversation as it runs. The
+cost is local — Canv multiplies the token counts by pricing it stores
+in settings — and is meant as a rough gauge rather than a billing
+record.
+
+## Up next
+
+[Reviewing and applying suggestions](reviewing-and-applying-suggestions.md)
+is about the other place AI output lands — the runs panel — and what
+to do with it. [Tracking changes and keeping things tidy](tracking-changes-and-keeping-things-tidy.md)
+covers Canv's automatic safety captures around every AI turn.

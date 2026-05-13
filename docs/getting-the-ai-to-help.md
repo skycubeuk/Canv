@@ -1,104 +1,93 @@
 # Getting the AI to help with a passage
 
-Canv's editing actions are short, focused asks: rewrite this paragraph,
-shorten it, polish it, brainstorm ten alternatives. They're meant for
-the kind of quick pass you'd otherwise do by hand. This page covers how
-to trigger them, what each kind of action expects, and how to run a
-pass over an entire document.
+Canv's editing actions are short, focused requests — "rewrite this
+paragraph", "tell me what's wrong with this scene", "make this section
+shorter without losing the voice". You pick the text, click an action,
+and the answer arrives in a panel below the editor for you to look at
+before deciding what to keep. This page is about running those actions,
+the difference between running on a selection and on a whole document,
+and how the profile you've chosen changes what's on offer.
 
-## Picking a passage and asking for help
+## Running an action on a selection
 
-Drag across the text you want to work on. A small toolbar floats just
-above the selection. The buttons on it depend on the active profile;
-in the Fiction profile they include things like **Grammar & Spelling**,
-**Story Reviewer**, **Polish**, **Make Shorter**, and **Brainstorm**.
+Select any run of text in the editor. A floating toolbar appears next to
+your selection with the profile's selection actions — Grammar &
+Spelling, Polish, Make Shorter, Make Longer, Simplify, More
+Sophisticated, Brainstorm, Translate, and so on. Click one. Canv sends
+just the selected text (plus a few short lines of surrounding context)
+to the AI and streams the reply into a runs panel at the bottom of the
+window.
 
-Click an action. Canv sends your selection (plus any pinned context
-files) to the AI, opens the results panel below the writing area, and
-streams the response in as the model produces it. You can keep writing
-while it streams — the run keeps going in the background.
+Two of the selection actions need a short instruction from you before
+they run — **Free Edit** (which takes whatever you ask of it) and
+**Refine** (a follow-up against a previous result). When you click one,
+the toolbar opens a small text box; type your instruction and submit.
 
-When the response is finished, you can paste the rewrite back into the
-page or set it aside and try a different action. See
+The action panel that opens beneath the editor shows two halves: the
+AI's notes about what it found, and the rewrite itself with an inline
+diff against your original text. The next page,
+[Reviewing and applying suggestions](reviewing-and-applying-suggestions.md),
+covers what to do with that result.
+
+## Running an action on the whole document
+
+Some actions are about the document as a whole — Logic Checker, Story
+Reviewer, Test Reader, Summarise. These appear in the **Run on
+document** menu at the right end of the floating toolbar. With nothing
+selected (or with everything selected), pick an action from that menu
+and the AI receives the full document instead of a fragment.
+
+Document actions stream into the same runs panel as selection actions.
+Because they read the whole file, they take longer than a paragraph
+rewrite — the panel shows the response forming live so you can start
+reading before it finishes.
+
+You can also reach every document action from the command palette by
+name — see
+[Finding and organising your work](finding-and-organising-your-work.md)
+for the palette.
+
+## Switching profile
+
+The set of actions on the toolbar comes from the **profile** you've
+picked. Canv ships with three:
+
+- **Fiction** — stories, novels, short pieces, scene work. Actions are
+  tuned to preserve voice, character, and pacing.
+- **Factual** — essays, articles, reports, blog posts. Actions are
+  tuned for general non-fiction prose.
+- **Technical** — documentation, specs, how-tos, references. Actions
+  are tuned for precision and consistency.
+
+The current profile is named in the bottom status bar. Click it to
+switch. Switching the profile changes the toolbar's action set, the
+chat assistant's tone, and the system instructions that go with every
+AI request.
+
+You picked the workspace's default profile during first-time setup; the
+switcher applies to the current document and remembers your choice on
+that file. New files use the workspace default.
+
+## Adding a new profile or changing an existing one
+
+The bundled profiles are YAML files that live alongside the app. You
+can copy one to your own machine and tweak the action prompts to suit
+your work — for example, give the **Polish** action a more
+old-fashioned brief, or add a new action that always converts British
+spellings to American. The repo README has instructions for the YAML
+shape; restart Canv after editing for the changes to load.
+
+## What the AI is allowed to do during a selection or document action
+
+Selection and document actions only read the text you sent them and
+write nothing to disk on their own. The AI's reply lives entirely in
+the runs panel until you click **Apply** — see
+[Reviewing and applying suggestions](reviewing-and-applying-suggestions.md).
+If you want the AI to create files, edit other files, or run a
+multi-step task, that is the chat assistant's job; see
+[Working with an AI assistant](working-with-an-ai-assistant.md).
+
+## Up next
+
 [Reviewing and applying suggestions](reviewing-and-applying-suggestions.md)
-for the full apply-and-refine flow.
-
-## The kinds of action
-
-Profiles bundle several different *kinds* of action. They behave
-slightly differently, and it helps to know which is which.
-
-- **Direct rewrites** replace your selection with a new version. Polish,
-  Make Shorter, Make Longer, Simplify, More Sophisticated all work this
-  way: the AI's reply is the rewrite, no commentary.
-- **Feedback only** — the AI reads your selection and replies with
-  notes, not a rewrite. Story Reviewer, Logic Checker, and Test Reader
-  in the Fiction profile work this way. Use these when you want a
-  reaction, not a substitute paragraph.
-- **Feedback plus a rewrite** — you get both: bullet-point notes
-  explaining what was changed, plus the changed text. Grammar & Spelling
-  and Free Edit work this way. Useful when you'd like to know *why*
-  something was changed.
-- **Brainstorm** — generates a numbered list of ideas. Always asks you
-  for an instruction first ("ten alternative chapter titles", "five
-  ways the scene could end").
-
-A small icon next to each action's name hints at its kind, but the
-fastest way to learn the difference is to try a couple on the same
-paragraph and compare.
-
-## Actions that ask for a one-line note
-
-Some actions need direction from you — they don't have a fixed job.
-**Refine**, **Free Edit**, and **Brainstorm** all open a small input
-field when you click them. Type a short instruction and press Enter:
-
-- *Refine*: "make this more present-tense" or "tighten the dialogue".
-- *Free Edit*: "remove the phrase 'just' wherever it appears" or "use
-  British spelling".
-- *Brainstorm*: "ten alternative names for the inn" or "five reasons
-  the door is locked".
-
-Keep the instruction short. The AI already has the passage; you don't
-need to repeat what's in it.
-
-## Running a pass over a whole document
-
-Some actions are designed to read an entire document, not a paragraph
-— a story review, a logic check, an end-to-end grammar pass. To trigger
-those without selecting any text, look at the top-right of the writing
-area: there's a **Run** button with a small chevron next to it. Click
-the chevron to see every document-level action your profile offers,
-then pick one.
-
-Canv shows the active filename in the menu so you know what the run is
-about to read.
-
-## Stopping a run that's gone on too long
-
-The bottom panel shows the run as it streams. If the AI is taking too
-long or going off track, click **Stop** in the run's row. The partial
-response is preserved and the run is marked aborted. You can re-run, or
-edit your selection and try again.
-
-The status bar shows a live token count and dollar cost while the run
-is in flight, so you can see the bill before it lands.
-
-## Choosing which model handles which action
-
-By default, every action uses your default model (set in the settings
-tab). If you'd rather have, say, a stronger model for full-document
-reviews and a faster, cheaper one for one-line edits, you can override
-the model per action. In the settings tab, untick **Use default model
-for all actions** and pick a provider/model for each action you want to
-treat differently. Actions you don't override fall back to the default.
-
-Useful patterns:
-
-- A faster model on **Polish** so quick rewrites feel snappy.
-- A stronger model on **Story Reviewer** so full-document reads are
-  worth the wait.
-
-Each action remembers its model between sessions.
-
-Next: [Working with an AI assistant alongside your draft](working-with-an-ai-assistant.md).
+covers what you do with the output the AI just produced.
