@@ -355,19 +355,10 @@ function createHistoryService({ root }) {
 
   async function readBlobOidAt(commit, relPath) {
     // Returns the blob OID for `relPath` at `commit`, or null if absent.
+    // isomorphic-git's readBlob with `filepath` walks the tree for us.
     try {
-      const { commit: c } = await git.readCommit({ fs: nodefs, dir: root, oid: commit })
-      const parts = relPath.split('/')
-      let treeOid = c.tree
-      for (let i = 0; i < parts.length - 1; i++) {
-        const { tree } = await git.readTree({ fs: nodefs, dir: root, oid: treeOid })
-        const ent = tree.find((e) => e.path === parts[i] && e.type === 'tree')
-        if (!ent) return null
-        treeOid = ent.oid
-      }
-      const { tree } = await git.readTree({ fs: nodefs, dir: root, oid: treeOid })
-      const leaf = tree.find((e) => e.path === parts[parts.length - 1] && e.type === 'blob')
-      return leaf ? leaf.oid : null
+      const { oid } = await git.readBlob({ fs: nodefs, dir: root, oid: commit, filepath: relPath })
+      return oid
     } catch (e) {
       if (e && e.code === 'NotFoundError') return null
       throw e
