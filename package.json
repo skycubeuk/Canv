@@ -53,6 +53,9 @@
     "yaml": "^2.8.4",
     "zod": "^4.4.3"
   },
+  "overrides": {
+    "cpu-features": "npm:@favware/skip-dependency@latest"
+  },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@tailwindcss/postcss": "^4.3.0",
