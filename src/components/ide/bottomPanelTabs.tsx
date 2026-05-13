@@ -1,9 +1,10 @@
-import { Play, MessageSquare, AlertTriangle, FileText } from 'lucide-react'
+import { Play, MessageSquare, AlertTriangle, FileText, History } from 'lucide-react'
 import type { BottomPanelTabDef } from './BottomPanel'
 import { RunsTab } from './bottom/RunsTab'
 import { ChatTab } from './bottom/ChatTab'
 import { ProblemsTab } from './bottom/ProblemsTab'
 import { OutputTab } from './bottom/OutputTab'
+import { FileHistoryTab } from './bottom/FileHistoryTab'
 import type { ChatMessage, ChatProvider, PendingApproval } from '../ChatPanel'
 import type { SidebarSession } from '../ChatSessionsSidebar'
 import type { ApprovalDecision } from '../../agents/chatRunner'
@@ -70,6 +71,14 @@ export interface BottomPanelTabsAdapter {
 
   // Settings (subset the tabs need)
   pricingOverrides: Record<string, ModelPricing>
+
+  // File history
+  fileHistoryEnabled: boolean
+  fileHistoryTarget: string | null
+  fileHistoryNonce: number
+  fileHistoryHistory: import('../../lib/history').CanvHistory | null
+  onFileHistoryOpenDiff: (r: import('./bottom/FileHistoryTab').FileHistoryOpenDiff) => void
+  onFileHistoryRestore: (r: import('./bottom/FileHistoryTab').FileHistoryRestore) => void
 }
 
 export function buildBottomPanelTabs(adapter: BottomPanelTabsAdapter): BottomPanelTabDef[] {
@@ -155,5 +164,19 @@ export function buildBottomPanelTabs(adapter: BottomPanelTabsAdapter): BottomPan
         />
       ),
     },
+    ...(adapter.fileHistoryEnabled && adapter.fileHistoryHistory ? [{
+      id: 'fileHistory' as const,
+      label: 'History',
+      icon: History,
+      render: () => (
+        <FileHistoryTab
+          target={adapter.fileHistoryTarget}
+          nonce={adapter.fileHistoryNonce}
+          history={adapter.fileHistoryHistory!}
+          onOpenDiff={adapter.onFileHistoryOpenDiff}
+          onRestore={adapter.onFileHistoryRestore}
+        />
+      ),
+    }] : []),
   ]
 }
