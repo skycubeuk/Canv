@@ -2,10 +2,16 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { diffLines, type Change } from 'diff'
 import { getFs, isElectron } from '../../../lib/fs'
 import type { GitDiffPayload } from '../../../lib/gitTypes'
+import { getCanvHistory } from '../../../lib/history'
+import { formatSnapshotLabel } from '../../../lib/historyLabels'
+
+const SHA_RE = /^[0-9a-f]{40}$/i
 
 interface Props {
   relPath: string
   baseRef: string
+  /** Friendly label for the base — used in the toolbar in place of the raw ref/SHA. */
+  baseLabel?: string
   isActive: boolean
 }
 
@@ -17,10 +23,29 @@ interface DiffState {
   error: string | null
 }
 
-export function DiffTab({ relPath, baseRef, isActive }: Props) {
+export function DiffTab({ relPath, baseRef, baseLabel, isActive }: Props) {
   const [state, setState] = useState<DiffState>({ payload: null, loading: false, error: null })
   const [viewMode, setViewMode] = useState<ViewMode>('side-by-side')
+  const [resolvedLabel, setResolvedLabel] = useState<string | null>(null)
   const fetchCount = useRef(0)
+
+  // Reconstruct the base label from the on-disk history index when the tab was
+  // restored from localStorage (no prop label) and the baseRef is a snapshot SHA.
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    if (baseLabel || !SHA_RE.test(baseRef)) { setResolvedLabel(null); return }
+    const history = getCanvHistory()
+    if (!history) { setResolvedLabel(null); return }
+    let cancelled = false
+    history.getSnapshotByCommit(baseRef).then((snap) => {
+      if (cancelled) return
+      setResolvedLabel(snap ? formatSnapshotLabel(snap) : null)
+    }).catch(() => { if (!cancelled) setResolvedLabel(null) })
+    return () => { cancelled = true }
+  }, [baseLabel, baseRef])
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  const effectiveLabel = baseLabel ?? resolvedLabel ?? (SHA_RE.test(baseRef) ? baseRef.slice(0, 7) : baseRef)
 
   const fetchDiff = useCallback(async () => {
     if (!isElectron()) return
@@ -53,7 +78,7 @@ export function DiffTab({ relPath, baseRef, isActive }: Props) {
       {/* Toolbar */}
       <div className="shrink-0 flex items-center gap-2 px-3 py-1.5 border-b border-default bg-panel text-[11px]">
         <span className="text-muted select-none">
-          {relPath} vs {baseRef}
+          {relPath} vs {effectiveLabel}
         </span>
         <div className="flex-1" />
         <button

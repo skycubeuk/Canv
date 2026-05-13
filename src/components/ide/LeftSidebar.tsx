@@ -17,7 +17,8 @@ interface Props {
   onSelectTab: (tab: SidebarTab) => void
   files: ReactNode
   search?: ReactNode
-  git?: ReactNode
+  history?: ReactNode
+  historyEnabled: boolean
   sites?: ReactNode
   settings: Settings
   onUpdateSettings: (patch: Partial<Settings>) => void
@@ -40,7 +41,7 @@ function ComingSoon({ label }: { label: string }) {
 
 export function LeftSidebar(props: Props) {
   const {
-    activeTab, files, search, git, sites, settings, onUpdateSettings,
+    activeTab, files, search, history, historyEnabled, sites, settings, onUpdateSettings,
     workspaceName,
     outline, outlineSize, onOutlineSizeChange,
     onNewFile, onNewFolder, onChangeWorkspace,
@@ -48,7 +49,7 @@ export function LeftSidebar(props: Props) {
   const tabs: SidebarTabDef[] = [
     { id: 'files', label: 'Files', body: files },
     { id: 'search', label: 'Search', body: search ?? <ComingSoon label="Search" /> },
-    { id: 'git', label: 'Git', body: git ?? <ComingSoon label="Source control" /> },
+    ...(historyEnabled ? [{ id: 'history' as const, label: 'History', body: history ?? <ComingSoon label="History" /> }] : []),
     { id: 'sites', label: 'Sites', body: sites ?? <ComingSoon label="Sites" /> },
   ]
   const active = tabs.find((t) => t.id === activeTab) ?? tabs[0]

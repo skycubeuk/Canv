@@ -107,7 +107,7 @@ export interface WorkspaceApi {
   /** Set the active tab in the given group (or in the active group if unspecified). */
   setActiveTab: (rel: string | null, groupId?: EditorGroupId) => void
   openSettingsTab: (groupId?: EditorGroupId) => void
-  openDiffTab: (relPath: string, baseRef?: string, groupId?: EditorGroupId) => void
+  openDiffTab: (relPath: string, baseRef?: string, baseLabel?: string, groupId?: EditorGroupId) => void
   closeTabByKey: (key: string, groupId?: EditorGroupId) => Promise<void>
   setActiveTabByKey: (key: string | null, groupId?: EditorGroupId) => void
   /** Promote the focused tab in `fromGroupId` to a new group on the right (creates `g2`). */
@@ -124,6 +124,14 @@ export interface WorkspaceApi {
    * an in-app source that bypasses the editor (e.g. the `edit_file` tool).
    */
   writeFileFromTool: (rel: string, content: string, expectedMtimeMs?: number) => Promise<WriteResult>
+  /**
+   * Mark an mtime as "we wrote this from the app" so the watcher's conflict
+   * prompt is suppressed when the corresponding chokidar 'change' event echoes
+   * back. Use after an out-of-band write performed by main (e.g. history
+   * restoreFile) — call it immediately after the IPC resolves, before chokidar
+   * has had time to fire the change event back to us.
+   */
+  noteOwnDiskWrite: (rel: string, mtimeMs: number) => void
   flushAll: () => Promise<void>
   pin: (rel: string) => Promise<void>
   unpin: (rel: string) => Promise<void>
@@ -316,6 +324,10 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
     return result
   }, [setDirty])
 
+  const noteOwnDiskWrite = useCallback((rel: string, mtimeMs: number) => {
+    recentWrites.current.set(rel, { mtimeMs, ts: Date.now() })
+  }, [])
+
   const saveTab = useCallback((rel: string, markdown: string, sourceGroupId?: EditorGroupId) => {
     pendingMarkdown.current.set(rel, markdown)
     if (sourceGroupId) lastWriterGroupRef.current.set(rel, sourceGroupId)
@@ -473,10 +485,10 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
     setActiveGroupIdState(target)
   }, [persistGroups])
 
-  const openDiffTab = useCallback((relPath: string, baseRef = 'HEAD', groupId?: EditorGroupId) => {
+  const openDiffTab = useCallback((relPath: string, baseRef = 'HEAD', baseLabel?: string, groupId?: EditorGroupId) => {
     const target = groupId ?? activeGroupIdRef.current
     const key = `diff:${relPath}@${baseRef}`
-    const tab: OpenTab = { kind: 'diff', relPath, baseRef }
+    const tab: OpenTab = { kind: 'diff', relPath, baseRef, baseLabel }
     setEditorGroups((prev) => {
       // Singleton check inside the updater so batched calls see the latest state.
       const existingGroup = findGroupContaining(prev, key)
@@ -1112,6 +1124,7 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
     setActiveGroupId,
     saveTab,
     writeFileFromTool,
+    noteOwnDiskWrite,
     flushAll,
     pin,
     unpin,
@@ -1125,5 +1138,5 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
     reloadTabFromDisk,
     remoteStatus,
     reconnect,
-  }), [ready, available, root, kind, tree, treeTruncated, editorGroups, activeGroupId, activeTabKey, activeMarkdownRel, allOpenKeys, dirtySet, pinned, pickWorkspace, openRemote, closeWorkspace, openTab, closeTab, setActiveTab, openSettingsTab, openDiffTab, closeTabByKey, setActiveTabByKey, splitRight, moveTab, setActiveGroupId, saveTab, writeFileFromTool, flushAll, pin, unpin, createFile, createFolder, renameOp, remove, refreshTree, conflict, resolveConflict, reloadTabFromDisk, remoteStatus, reconnect])
+  }), [ready, available, root, kind, tree, treeTruncated, editorGroups, activeGroupId, activeTabKey, activeMarkdownRel, allOpenKeys, dirtySet, pinned, pickWorkspace, openRemote, closeWorkspace, openTab, closeTab, setActiveTab, openSettingsTab, openDiffTab, closeTabByKey, setActiveTabByKey, splitRight, moveTab, setActiveGroupId, saveTab, writeFileFromTool, noteOwnDiskWrite, flushAll, pin, unpin, createFile, createFolder, renameOp, remove, refreshTree, conflict, resolveConflict, reloadTabFromDisk, remoteStatus, reconnect])
 }

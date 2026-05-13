@@ -18,7 +18,7 @@ interface Props {
   bottomPlacement: InAppDockPlacement | 'popout'
   onSetBottomPlacementBottom: () => void
   onSetBottomPlacementRight: () => void
-  gitBadge?: string | null
+  historyEnabled: boolean
 }
 
 interface SectionTab {
@@ -34,13 +34,13 @@ export function TopBar(props: Props) {
     onOpenCommandPalette, profile, hasMarkdownTab, activeFileName, onRunDocAgent,
     sidebarVisible, bottomVisible, bottomPlacement,
     onSetBottomPlacementBottom, onSetBottomPlacementRight,
-    gitBadge,
+    historyEnabled,
   } = props
 
   const sectionTabs: SectionTab[] = [
     { id: 'files', label: 'Files', icon: Folder },
     { id: 'search', label: 'Search', icon: Search },
-    { id: 'git', label: 'Git', icon: GitBranch, badge: gitBadge ?? null },
+    ...(historyEnabled ? [{ id: 'history' as const, label: 'History', icon: GitBranch }] : []),
     { id: 'sites', label: 'Sites', icon: LayoutDashboard },
   ]
 

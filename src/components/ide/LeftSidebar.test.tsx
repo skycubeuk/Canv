@@ -36,7 +36,8 @@ function baseProps() {
     onSelectTab: vi.fn(),
     files: <div data-testid="files-tab">FILES</div>,
     search: <div data-testid="search-tab">SEARCH</div>,
-    git: <div data-testid="git-tab">GIT</div>,
+    history: <div data-testid="history-tab">HISTORY</div>,
+    historyEnabled: true,
     settings: SETTINGS,
     onUpdateSettings: vi.fn(),
     workspaceName: 'test-workspace',
@@ -79,8 +80,8 @@ describe('LeftSidebar', () => {
     expect(screen.getByTestId('search-tab')).toBeInTheDocument()
   })
 
-  it('does not render outline-solid when active tab is git', () => {
-    const props = { ...baseProps(), activeTab: 'git' as const }
+  it('does not render outline-solid when active tab is history', () => {
+    const props = { ...baseProps(), activeTab: 'history' as const }
     render(
       <LeftSidebar
         {...props}
@@ -88,7 +89,7 @@ describe('LeftSidebar', () => {
       />,
     )
     expect(screen.queryByTestId('outline-section')).not.toBeInTheDocument()
-    expect(screen.getByTestId('git-tab')).toBeInTheDocument()
+    expect(screen.getByTestId('history-tab')).toBeInTheDocument()
   })
 
   it('shows search body when activeTab is search', () => {

@@ -349,4 +349,19 @@ describe('useWorkspace — watcher own-write suppression', () => {
 
     expect(hook.result.current.conflict).toEqual({ relPath: 'body.md', diskMtimeMs: EXTERNAL_MTIME })
   })
+
+  it('noteOwnDiskWrite seeds recentWrites so the watcher does not raise a conflict', async () => {
+    const RESTORE_MTIME = 3_000
+    fsMock.readFile.mockImplementation(async () => ({ content: 'original', mtimeMs: 1 }))
+
+    const hook = await withWorkspace()
+    await act(async () => { await hook.result.current.openTab('body.md') })
+
+    // Simulate what App.tsx does after restoreFile resolves: note the mtime,
+    // then the watcher 'change' event echoes back with that same mtime.
+    act(() => { hook.result.current.noteOwnDiskWrite('body.md', RESTORE_MTIME) })
+    act(() => { watcherCb!({ type: 'change', relPath: 'body.md', mtimeMs: RESTORE_MTIME }) })
+
+    expect(hook.result.current.conflict).toBeNull()
+  })
 })

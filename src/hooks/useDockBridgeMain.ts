@@ -66,6 +66,13 @@ export interface UseDockBridgeMainArgs {
   // Settings (for serialisable bits the popout needs)
   settings: SettingsApi['settings']
   pricingOverrides: Record<string, ModelPricing>
+  // File history
+  revisionArchaeologyEnabled: boolean
+  fileHistoryTarget: string | null
+  fileHistoryNonce: number
+  onOpenFileHistory: (rel: string) => void
+  onFileHistoryOpenDiff: (r: { kind: 'fileHistory'; relPath: string; snapshotId: string; commitSha: string; baseLabel: string }) => void
+  onFileHistoryRestore: (snapshotId: string, relPath: string) => void
 }
 
 export function useDockBridgeMain(args: UseDockBridgeMainArgs): void {
@@ -112,6 +119,12 @@ export function useDockBridgeMain(args: UseDockBridgeMainArgs): void {
     jumpToProblem,
     settings,
     pricingOverrides,
+    revisionArchaeologyEnabled,
+    fileHistoryTarget,
+    fileHistoryNonce,
+    onOpenFileHistory,
+    onFileHistoryOpenDiff,
+    onFileHistoryRestore,
   } = args
 
   // Parse each run on the main side so the popout can render Notes / Rewrite / Diff
@@ -158,6 +171,9 @@ export function useDockBridgeMain(args: UseDockBridgeMainArgs): void {
       chatSystemPreamble,
       activeSessionId,
       availableModels,
+      revisionArchaeologyEnabled,
+      fileHistoryTarget,
+      fileHistoryNonce,
       problems,
       lintScanState,
       lintScanError,
@@ -185,6 +201,9 @@ export function useDockBridgeMain(args: UseDockBridgeMainArgs): void {
     chatSystemPreamble,
     activeSessionId,
     availableModels,
+    revisionArchaeologyEnabled,
+    fileHistoryTarget,
+    fileHistoryNonce,
     problems,
     lintScanState,
     lintScanError,
@@ -320,6 +339,15 @@ export function useDockBridgeMain(args: UseDockBridgeMainArgs): void {
         case 'jump-to-problem':
           jumpToProblem(action.issue)
           return
+        case 'open-file-history':
+          onOpenFileHistory(action.relPath)
+          return
+        case 'file-history-open-diff':
+          onFileHistoryOpenDiff(action.req)
+          return
+        case 'file-history-restore':
+          onFileHistoryRestore(action.snapshotId, action.relPath)
+          return
         case 'set-placement':
           ideLayout.setDockPlacement(action.placement)
           return
@@ -331,6 +359,7 @@ export function useDockBridgeMain(args: UseDockBridgeMainArgs): void {
     clearChat, stopChat, retryFromAnchor, editAndRetry, onApprovalDecide,
     setFollowLatest, createSession, selectSession, closeSession, setActiveSessionProviderModel,
     scanProblems, clearProblems, jumpToProblem,
+    onOpenFileHistory, onFileHistoryOpenDiff, onFileHistoryRestore,
     setActiveTabId,
   ])
 

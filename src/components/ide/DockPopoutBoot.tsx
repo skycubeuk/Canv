@@ -11,6 +11,7 @@ import type { LintIssue } from '../../lib/lintTypes'
 import { applyAccent, applyTheme, resolveTheme } from '../../lib/accent'
 import { DialogProvider } from '../../lib/dialogs'
 import { ContextMenuProvider } from '../../lib/contextMenu'
+import { getCanvHistory } from '../../lib/history'
 
 /** Pop-out shell. Receives a state snapshot from the main window over the IPC
  *  bridge, builds a `BottomPanelTabsAdapter` whose handlers dispatch user
@@ -113,6 +114,13 @@ export function DockPopoutBoot() {
       jumpToProblem: (issue: LintIssue) => dispatch({ type: 'jump-to-problem', issue }),
 
       pricingOverrides: state.pricingOverrides,
+
+      fileHistoryEnabled: state.revisionArchaeologyEnabled,
+      fileHistoryTarget: state.fileHistoryTarget,
+      fileHistoryNonce: state.fileHistoryNonce,
+      fileHistoryHistory: state.revisionArchaeologyEnabled ? getCanvHistory() : null,
+      onFileHistoryOpenDiff: (r) => dispatch({ type: 'file-history-open-diff', req: r }),
+      onFileHistoryRestore: (r) => dispatch({ type: 'file-history-restore', snapshotId: r.snapshotId, relPath: r.relPath }),
     }
   }, [state, bridge, pendingApprovalsMap])
 
