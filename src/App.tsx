@@ -34,6 +34,7 @@ import { TopBar } from './components/ide/TopBar'
 import { useChatSessions } from './hooks/useChatSessions'
 import { useAppCommands } from './hooks/useAppCommands'
 import { useDockBridgeMain } from './hooks/useDockBridgeMain'
+import { useIdleAutosnapshot } from './hooks/useIdleAutosnapshot'
 import type { ChatProvider } from './components/ChatPanel'
 import { getAdapter } from './adapters'
 
@@ -222,6 +223,13 @@ export default function App() {
   }, [ideLayout])
 
   const raEnabled = setup.config?.revisionArchaeology.enabled === true
+
+  useIdleAutosnapshot({
+    enabled: raEnabled,
+    idleMs: 10 * 60 * 1000,
+    history: raEnabled ? getCanvHistory() : null,
+  })
+
   const [restoreTarget, setRestoreTarget] = useState<{ snapshotId: string; relPath: string } | null>(null)
 
   // TODO(0.7.1): wire cursor line/col from Canvas's CodeMirror via onCursorChange prop.
