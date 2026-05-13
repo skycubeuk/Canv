@@ -142,7 +142,13 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
                 }}
                 onCreateCheckpoint={async (summary) => {
                   const h = getCanvHistory(); if (!h) return
-                  await h.createSnapshot({ reason: 'manual', summary, files: [], metadata: {} })
+                  const changes = await h.getCurrentChanges()
+                  await h.createSnapshot({
+                    reason: 'manual',
+                    summary,
+                    files: changes.map((c) => c.relPath),
+                    metadata: {},
+                  })
                 }}
                 onRestore={onOpenRestore}
               />
