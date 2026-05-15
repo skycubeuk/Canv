@@ -155,7 +155,7 @@ async function readNDJSON(
 
   const queue: string[] = []
   let wireDone = false
-  let wireError: Error | null = null
+  let wireError = null as Error | null
 
   let buffer = ''
   let full = ''
@@ -249,7 +249,7 @@ async function readNDJSON(
     throw err
   }
 
-  if (signal?.aborted || (wireError as Error | null)?.name === 'AbortError') {
+  if (signal?.aborted || wireError?.name === 'AbortError') {
     try { await reader.cancel() } catch { /* already closed */ }
     return {
       text: full,
