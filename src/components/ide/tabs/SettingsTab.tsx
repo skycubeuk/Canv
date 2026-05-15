@@ -76,25 +76,44 @@ export function SettingsTab(props: Props) {
             </p>
           </Field>
 
-          <Field label={`${adapter?.name ?? ''} API key`}>
-            <div className="flex gap-2">
+          {settings.provider === 'ollama' ? (
+            <Field label="Ollama base URL">
               <input
-                type={keyVisible ? 'text' : 'password'}
-                className="input flex-1"
-                value={settings.apiKeys[provider] ?? ''}
-                placeholder={provider === 'anthropic' ? 'sk-ant-…' : 'sk-…'}
+                type="text"
+                className="input"
+                placeholder="http://localhost:11434"
+                value={settings.baseUrls?.ollama ?? ''}
                 onChange={(e) =>
-                  onUpdate({ apiKeys: { ...settings.apiKeys, [provider]: e.target.value } })
+                  onUpdate({ baseUrls: { ...settings.baseUrls, ollama: e.target.value } })
                 }
               />
-              <button type="button" className="btn-secondary" onClick={() => setKeyVisible((v) => !v)}>
-                {keyVisible ? 'Hide' : 'Show'}
-              </button>
-            </div>
-            <p className="text-xs text-muted mt-1">
-              Stored in browser localStorage. Calls go directly from your browser to {adapter?.name}.
-            </p>
-          </Field>
+              <p className="text-xs text-muted mt-1">
+                If Ollama is running locally but Canv can't reach it, set{' '}
+                <code>OLLAMA_ORIGINS=*</code> in the environment where you launch{' '}
+                <code>ollama serve</code>.
+              </p>
+            </Field>
+          ) : (
+            <Field label={`${adapter?.name ?? ''} API key`}>
+              <div className="flex gap-2">
+                <input
+                  type={keyVisible ? 'text' : 'password'}
+                  className="input flex-1"
+                  value={settings.apiKeys[provider] ?? ''}
+                  placeholder={provider === 'anthropic' ? 'sk-ant-…' : 'sk-…'}
+                  onChange={(e) =>
+                    onUpdate({ apiKeys: { ...settings.apiKeys, [provider]: e.target.value } })
+                  }
+                />
+                <button type="button" className="btn-secondary" onClick={() => setKeyVisible((v) => !v)}>
+                  {keyVisible ? 'Hide' : 'Show'}
+                </button>
+              </div>
+              <p className="text-xs text-muted mt-1">
+                Stored in browser localStorage. Calls go directly from your browser to {adapter?.name}.
+              </p>
+            </Field>
+          )}
 
           <Field label="Default model">
             <select
