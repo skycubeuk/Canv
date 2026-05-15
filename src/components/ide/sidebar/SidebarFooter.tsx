@@ -96,7 +96,7 @@ function WorkspaceSwitcherButton({
           ? settings.provider
           : ((visibleProviders[0]?.id as Provider | undefined) ?? settings.provider)
         const displayAdapter = getAdapter(displayProvider)
-        const displayModels = displayProvider === 'ollama' && settings.ollamaModels.length
+        const displayModels = displayProvider === 'ollama'
           ? settings.ollamaModels
           : displayAdapter.models
         const displayModel = providerVisible
@@ -129,9 +129,13 @@ function WorkspaceSwitcherButton({
                   })
                 }
               >
-                {displayModels.map((m) => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
+                {displayModels.length === 0 ? (
+                  <option disabled value="">No models — Refresh in Settings</option>
+                ) : (
+                  displayModels.map((m) => (
+                    <option key={m} value={m}>{m}</option>
+                  ))
+                )}
               </select>
             </div>
           </div>
