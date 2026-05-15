@@ -355,6 +355,7 @@ export function useChatSessions(args: UseChatSessionsArgs): UseChatSessionsApi {
           model,
           maxTokens: args.settings.maxOutputTokens[lockedProvider],
           apiKey: args.settings.apiKeys[lockedProvider],
+          baseUrl: args.settings.baseUrls?.[lockedProvider],
           signal: rt.abort.signal,
           chunkDelayMs: args.settings.streamChunkDelayMs,
           historyClient: args.historyClient ?? null,

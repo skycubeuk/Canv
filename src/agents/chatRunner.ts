@@ -71,6 +71,8 @@ export interface RunChatTurnParams {
   model: string
   maxTokens: number
   apiKey: string
+  /** Provider-specific endpoint URL (Ollama). Cloud providers ignore this. */
+  baseUrl?: string
   signal: AbortSignal
   chunkDelayMs?: number
   /** When provided, AI turns are bracketed with before/after snapshots. */
@@ -198,7 +200,7 @@ async function runChatTurnInner(p: RunChatTurnParams, messages: ChatMessage[]): 
 
     console.debug('[chatRunner] >>> adapter.complete round', round, 'historyLen=', messages.length - 1)
     const result = await p.adapter.complete({
-      apiKey: p.apiKey, model: p.model, maxTokens: p.maxTokens,
+      apiKey: p.apiKey, baseUrl: p.baseUrl, model: p.model, maxTokens: p.maxTokens,
       system,
       messages: toAdapterMessages(messages.slice(0, -1)),
       signal: p.signal,
@@ -388,7 +390,7 @@ async function runChatTurnInner(p: RunChatTurnParams, messages: ChatMessage[]): 
   p.onUpdate(messages)
 
   const finalResult = await p.adapter.complete({
-    apiKey: p.apiKey, model: p.model, maxTokens: p.maxTokens,
+    apiKey: p.apiKey, baseUrl: p.baseUrl, model: p.model, maxTokens: p.maxTokens,
     system: `${system}\n\nYou have used your tool budget — write your final answer without further tool calls.`,
     messages: toAdapterMessages(messages.slice(0, -1)),
     signal: p.signal,
