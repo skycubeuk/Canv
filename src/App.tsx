@@ -292,9 +292,13 @@ export default function App() {
 
   const availableModels: Record<ChatProvider, string[]> = useMemo(() => {
     const visible = new Set<Provider>(configuredProviders({ apiKeys: settings.apiKeys, baseUrls: settings.baseUrls }))
-    visible.add(chatProvider as Provider) // keep the active session's provider visible even if its key was removed
+    // Preserve the active session's provider only when the chat is locked (has messages) —
+    // an empty session inherited settings.provider and shouldn't keep an unconfigured
+    // provider visible just because it's the current default.
+    if (chatMessages.length > 0) visible.add(chatProvider as Provider)
     if (visible.size === 0) {
-      // No provider configured and no active selection — show everything so the picker isn't empty.
+      // Nothing configured and no locked chat to preserve — fall back to the full list
+      // so the picker isn't empty.
       ;(['anthropic', 'openai', 'ollama'] as Provider[]).forEach((p) => visible.add(p))
     }
     const result = {} as Record<ChatProvider, string[]>
@@ -304,7 +308,7 @@ export default function App() {
         : getAdapter(id).models
     }
     return result
-  }, [settings.apiKeys, settings.baseUrls, settings.ollamaModels, chatProvider])
+  }, [settings.apiKeys, settings.baseUrls, settings.ollamaModels, chatProvider, chatMessages.length])
 
   const handleExport = useCallback(
     (fmt: 'txt' | 'md') => {

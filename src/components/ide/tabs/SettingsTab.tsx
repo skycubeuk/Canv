@@ -59,6 +59,38 @@ export function SettingsTab(props: Props) {
   const provider = settings.provider
   const adapter = adapterList.find((a) => a.id === provider)
 
+  const handleFactoryReset = useCallback(async () => {
+    const ok = await dialogs.confirm({
+      title: 'Factory reset Canv?',
+      message:
+        'This wipes ALL settings, API keys, chat history, runs, recent workspaces, and your custom modes/actions. The app reloads as if freshly installed. This cannot be undone — export a backup first if you want a way back.',
+      confirmLabel: 'Wipe everything',
+      danger: true,
+    })
+    if (!ok) return
+    const confirmation = await dialogs.prompt({
+      title: 'Type RESET to confirm',
+      message: 'Final check. Type RESET (capitals) to erase everything.',
+      submitLabel: 'Erase',
+      validate: (v) => (v.trim() === 'RESET' ? null : 'Type RESET exactly.'),
+    })
+    if (confirmation === null) return
+    try {
+      const keys: string[] = []
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i)
+        if (k) keys.push(k)
+      }
+      for (const k of keys) localStorage.removeItem(k)
+      try { sessionStorage.clear() } catch { /* sessionStorage may be unavailable */ }
+      if (typeof window !== 'undefined' && window.canvConfig?.factoryReset) {
+        await window.canvConfig.factoryReset()
+      }
+    } finally {
+      location.reload()
+    }
+  }, [dialogs])
+
   const handleImportFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     e.target.value = ''
@@ -281,7 +313,21 @@ export function SettingsTab(props: Props) {
                         {mode.actions.map((a) => {
                           const ref = settings.perAgentModel[mode.id]?.[a.id]
                             ?? { provider, model: settings.defaultModel[provider] }
-                          const selectValue = `${ref.provider}/${ref.model}`
+                          const configuredIds = new Set<Provider>(configuredProviders(settings))
+                          const visibleAdapters = configuredIds.size > 0
+                            ? adapterList.filter((ad) => configuredIds.has(ad.id as Provider))
+                            : adapterList
+                          // Clamp the picker's value to a visible option so React doesn't warn
+                          // about a value with no matching <option>. The underlying ref in
+                          // perAgentModel is never overwritten here — only the displayed value.
+                          const refVisible = visibleAdapters.some((ad) => ad.id === ref.provider)
+                          const fallbackAdapter = visibleAdapters[0]
+                          const fallbackModels = fallbackAdapter?.id === 'ollama' && settings.ollamaModels.length
+                            ? settings.ollamaModels
+                            : (fallbackAdapter?.models ?? [])
+                          const selectValue = refVisible
+                            ? `${ref.provider}/${ref.model}`
+                            : (fallbackAdapter ? `${fallbackAdapter.id}/${fallbackModels[0] ?? ref.model}` : `${ref.provider}/${ref.model}`)
                           return (
                           <Field key={a.id} label={<span className="flex items-center gap-1"><a.icon aria-hidden className="w-3.5 h-3.5" />{a.label}</span>}>
                             <select
@@ -303,27 +349,20 @@ export function SettingsTab(props: Props) {
                                 })
                               }}
                             >
-                              {(() => {
-                                const configuredIds = new Set<Provider>(configuredProviders(settings))
-                                configuredIds.add(ref.provider) // keep the per-action selection visible even if its key was removed
-                                const visibleAdapters = configuredIds.size > 0
-                                  ? adapterList.filter((ad) => configuredIds.has(ad.id as Provider))
-                                  : adapterList
-                                return visibleAdapters.map((ad) => {
-                                  const opts = ad.id === 'ollama' && settings.ollamaModels.length
-                                    ? settings.ollamaModels
-                                    : ad.models
-                                  return (
-                                    <optgroup key={ad.id} label={ad.name}>
-                                      {opts.map((m) => (
-                                        <option key={`${ad.id}/${m}`} value={`${ad.id}/${m}`}>
-                                          {ad.name} — {m}
-                                        </option>
-                                      ))}
-                                    </optgroup>
-                                  )
-                                })
-                              })()}
+                              {visibleAdapters.map((ad) => {
+                                const opts = ad.id === 'ollama' && settings.ollamaModels.length
+                                  ? settings.ollamaModels
+                                  : ad.models
+                                return (
+                                  <optgroup key={ad.id} label={ad.name}>
+                                    {opts.map((m) => (
+                                      <option key={`${ad.id}/${m}`} value={`${ad.id}/${m}`}>
+                                        {ad.name} — {m}
+                                      </option>
+                                    ))}
+                                  </optgroup>
+                                )
+                              })}
                             </select>
                           </Field>
                           )
@@ -519,6 +558,27 @@ export function SettingsTab(props: Props) {
       ),
     },
     {
+      id: 'factory-reset',
+      title: 'Factory reset',
+      keywords: ['factory', 'reset', 'wipe', 'erase', 'clear', 'danger', 'fresh', 'install', 'nuke'],
+      body: (
+        <>
+          <p className="text-xs text-muted mb-2">
+            Erase ALL settings, API keys, chats, runs, recent workspaces, and custom modes/actions.
+            Canv reloads as if freshly installed. Export a backup first if you want a way back.
+          </p>
+          <button
+            type="button"
+            className="px-3 py-1.5 text-sm rounded-md bg-red-600 text-white hover:bg-red-500"
+            onClick={handleFactoryReset}
+            data-testid="factory-reset-button"
+          >
+            Factory reset Canv
+          </button>
+        </>
+      ),
+    },
+    {
       id: 'problems',
       title: 'Problems',
       keywords: ['problems', 'lint', 'broken', 'links', 'front', 'matter', 'heading', 'image'],
@@ -547,7 +607,7 @@ export function SettingsTab(props: Props) {
         </>
       ),
     },
-  ], [settings, onUpdate, adapter, provider, keyVisible, modes, onExportBackup, openModes, setOpenModes, handleImportFile, ollamaStatus, refreshOllamaModels])
+  ], [settings, onUpdate, adapter, provider, keyVisible, modes, onExportBackup, openModes, setOpenModes, handleImportFile, handleFactoryReset, ollamaStatus, refreshOllamaModels])
 
   const filtered = useMemo(() => {
     const q = filter.trim().toLowerCase()

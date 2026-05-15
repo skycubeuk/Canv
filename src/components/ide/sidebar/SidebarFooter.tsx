@@ -32,7 +32,6 @@ function WorkspaceSwitcherButton({
 }) {
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement | null>(null)
-  const adapter = getAdapter(settings.provider)
   const currentModel = settings.defaultModel[settings.provider]
   const rawName = workspaceName
     ? (Math.max(workspaceName.lastIndexOf('/'), workspaceName.lastIndexOf('\\')) >= 0
@@ -86,10 +85,23 @@ function WorkspaceSwitcherButton({
       </button>
       {open && (() => {
         const configuredIds = new Set<Provider>(configuredProviders(settings))
-        configuredIds.add(settings.provider) // keep the current selection visible even if its key was removed
         const visibleProviders = configuredIds.size > 0
           ? adapterList.filter((a) => configuredIds.has(a.id as Provider))
           : adapterList // empty-state fallback so the picker isn't empty
+        // Settings → Default provider remembers an unconfigured choice; the sidebar
+        // dropdown clamps display to a visible option so the <select> value matches
+        // a rendered <option>. settings.provider itself is never overwritten here.
+        const providerVisible = visibleProviders.some((a) => a.id === settings.provider)
+        const displayProvider: Provider = providerVisible
+          ? settings.provider
+          : ((visibleProviders[0]?.id as Provider | undefined) ?? settings.provider)
+        const displayAdapter = getAdapter(displayProvider)
+        const displayModels = displayProvider === 'ollama' && settings.ollamaModels.length
+          ? settings.ollamaModels
+          : displayAdapter.models
+        const displayModel = providerVisible
+          ? currentModel
+          : (displayModels[0] ?? currentModel)
         return (
           <div className="absolute left-0 right-0 bottom-full mb-1 bg-elev border border-default rounded-lg shadow-lg z-30 p-3 space-y-2">
             <div>
@@ -97,7 +109,7 @@ function WorkspaceSwitcherButton({
               <select
                 id="sidebar-footer-provider"
                 className="input w-full"
-                value={settings.provider}
+                value={displayProvider}
                 onChange={(e) => onUpdate({ provider: e.target.value as Provider })}
               >
                 {visibleProviders.map((a) => (
@@ -110,17 +122,14 @@ function WorkspaceSwitcherButton({
               <select
                 id="sidebar-footer-model"
                 className="input w-full"
-                value={currentModel}
+                value={displayModel}
                 onChange={(e) =>
                   onUpdate({
-                    defaultModel: { ...settings.defaultModel, [settings.provider]: e.target.value },
+                    defaultModel: { ...settings.defaultModel, [displayProvider]: e.target.value },
                   })
                 }
               >
-                {(settings.provider === 'ollama' && settings.ollamaModels.length
-                  ? settings.ollamaModels
-                  : adapter.models
-                ).map((m) => (
+                {displayModels.map((m) => (
                   <option key={m} value={m}>{m}</option>
                 ))}
               </select>
