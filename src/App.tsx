@@ -289,7 +289,7 @@ export default function App() {
   } = chatSession
 
   const availableModels: Record<ChatProvider, string[]> = useMemo(() => {
-    const visible = new Set<Provider>(configuredProviders(settings))
+    const visible = new Set<Provider>(configuredProviders({ apiKeys: settings.apiKeys, baseUrls: settings.baseUrls }))
     visible.add(chatProvider as Provider) // keep the active session's provider visible even if its key was removed
     if (visible.size === 0) {
       // No provider configured and no active selection — show everything so the picker isn't empty.
