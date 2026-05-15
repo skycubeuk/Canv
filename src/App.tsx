@@ -291,7 +291,7 @@ export default function App() {
   } = chatSession
 
   const availableModels: Record<ChatProvider, string[]> = useMemo(() => {
-    const visible = new Set<Provider>(configuredProviders({ apiKeys: settings.apiKeys, baseUrls: settings.baseUrls }))
+    const visible = new Set<Provider>(configuredProviders({ apiKeys: settings.apiKeys, baseUrls: settings.baseUrls, ollamaModels: settings.ollamaModels }))
     // Preserve the active session's provider only when the chat is locked (has messages) —
     // an empty session inherited settings.provider and shouldn't keep an unconfigured
     // provider visible just because it's the current default.
@@ -303,7 +303,7 @@ export default function App() {
     }
     const result = {} as Record<ChatProvider, string[]>
     for (const id of visible) {
-      result[id as ChatProvider] = id === 'ollama' && settings.ollamaModels.length
+      result[id as ChatProvider] = id === 'ollama'
         ? settings.ollamaModels
         : getAdapter(id).models
     }
