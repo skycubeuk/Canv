@@ -130,13 +130,17 @@ export function useSettings() {
       lintRules: { ...DEFAULT_SETTINGS.lintRules, ...(settings?.lintRules || {}) },
       pricingOverrides: { ...DEFAULT_SETTINGS.pricingOverrides, ...(settings?.pricingOverrides || {}) },
     }
+    // For Ollama the adapter's static `models` array is just a pre-refresh seed;
+    // once the user has hit Refresh, settings.ollamaModels is the source of
+    // truth for what's actually installed. Validate against that exclusively so
+    // a stale seed entry (e.g. 'qwen2.5') can't survive into a model send and
+    // produce an "Ollama 404: model not found" at runtime.
     for (const provider of Object.keys(m.defaultModel) as Provider[]) {
-      const adapterModels = adapters[provider]?.models ?? []
-      const available = provider === 'ollama'
-        ? [...adapterModels, ...m.ollamaModels]
-        : adapterModels
+      const available = provider === 'ollama' && m.ollamaModels.length
+        ? m.ollamaModels
+        : (adapters[provider]?.models ?? [])
       if (!available.includes(m.defaultModel[provider])) {
-        m.defaultModel[provider] = DEFAULT_SETTINGS.defaultModel[provider]
+        m.defaultModel[provider] = available[0] ?? DEFAULT_SETTINGS.defaultModel[provider]
       }
     }
     // Clamp out-of-range streamChunkDelayMs from older builds or hand-edited storage.
@@ -174,10 +178,13 @@ export function useSettings() {
       provider: m.provider,
       model: m.defaultModel[m.provider],
     }
-    const allKnownModels = new Set([
-      ...Object.values(adapters).flatMap((a) => a.models),
-      ...m.ollamaModels,
-    ])
+    // Same "ollamaModels supersedes seed once refreshed" rule the defaultModel
+    // validator above uses, applied provider-aware so the seed of one adapter
+    // can't accidentally validate a model owned by another.
+    const modelsForProvider = (p: Provider): string[] =>
+      p === 'ollama' && m.ollamaModels.length
+        ? m.ollamaModels
+        : (adapters[p]?.models ?? [])
     for (const modeId of Object.keys(m.perAgentModel)) {
       const inner = m.perAgentModel[modeId] as unknown as Record<string, AgentModelRef | string>
       for (const actionId of Object.keys(inner)) {
@@ -190,8 +197,10 @@ export function useSettings() {
             inner[actionId] = fallbackRef
           }
         } else if (v && typeof v === 'object' && 'provider' in v && 'model' in v) {
-          // Validate the composite still resolves to an extant model.
-          if (!allKnownModels.has(v.model)) inner[actionId] = fallbackRef
+          // Validate the composite still resolves to an extant model under its own provider.
+          if (!modelsForProvider(v.provider as Provider).includes(v.model)) {
+            inner[actionId] = fallbackRef
+          }
         } else {
           inner[actionId] = fallbackRef
         }
