@@ -22,7 +22,7 @@ import { ChatRetryActions, type RetryActionKind } from './ChatRetryActions'
 import { getTool } from '../tools/registry'
 import { ChatSessionsSidebar, type SidebarSession } from './ChatSessionsSidebar'
 
-export type ChatProvider = 'anthropic' | 'openai'
+export type ChatProvider = 'anthropic' | 'openai' | 'ollama'
 
 export type FailureReason = 'cancelled' | 'provider_error'
 

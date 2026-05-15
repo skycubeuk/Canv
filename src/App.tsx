@@ -290,6 +290,7 @@ export default function App() {
   const availableModels: Record<ChatProvider, string[]> = useMemo(() => ({
     anthropic: getAdapter('anthropic').models,
     openai: getAdapter('openai').models,
+    ollama: getAdapter('ollama').models,
   }), [])
 
   const handleExport = useCallback(

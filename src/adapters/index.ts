@@ -1,12 +1,14 @@
 import type { LLMAdapter } from './types'
 import { anthropicAdapter } from './anthropic'
 import { openaiAdapter } from './openai'
+import { ollamaAdapter } from './ollama'
 
-export type Provider = 'anthropic' | 'openai'
+export type Provider = 'anthropic' | 'openai' | 'ollama'
 
 export const adapters: Record<Provider, LLMAdapter> = {
   anthropic: anthropicAdapter,
   openai: openaiAdapter,
+  ollama: ollamaAdapter,
 }
 
 export const adapterList: LLMAdapter[] = Object.values(adapters)

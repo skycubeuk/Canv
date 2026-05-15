@@ -55,7 +55,7 @@ export interface WritePreview {
 
 export interface RunChatTurnParams {
   adapter: LLMAdapter
-  provider: 'anthropic' | 'openai'
+  provider: 'anthropic' | 'openai' | 'ollama'
   /** Existing chat history INCLUDING the new user message. */
   history: ChatMessage[]
   /** Pre-built inventory block (workspace JSON + helper text). */
