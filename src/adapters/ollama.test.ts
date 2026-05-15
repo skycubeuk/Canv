@@ -303,3 +303,41 @@ describe('ollamaAdapter.complete — tool calls (streaming)', () => {
     expect(result.tokenUsage).toEqual({ input: 5, output: 1 })
   })
 })
+
+describe('ollamaAdapter.complete — cancellation', () => {
+  let originalFetch: typeof globalThis.fetch
+  beforeEach(() => { originalFetch = globalThis.fetch })
+  afterEach(() => { globalThis.fetch = originalFetch })
+
+  it('returns partial text with stopReason "cancelled" when signal aborts mid-stream', async () => {
+    // Build a stream that yields one chunk, then waits — we abort before the second arrives.
+    const stream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        const enc = new TextEncoder()
+        controller.enqueue(enc.encode(JSON.stringify({
+          message: { role: 'assistant', content: 'partial' }, done: false,
+        }) + '\n'))
+        // Hold open; the test will abort and reader.cancel() will drain.
+        await new Promise((r) => setTimeout(r, 50))
+        controller.close()
+      },
+    })
+    globalThis.fetch = vi.fn(async () =>
+      new Response(stream, { status: 200, headers: { 'Content-Type': 'application/x-ndjson' } })
+    ) as unknown as typeof fetch
+
+    const ac = new AbortController()
+    const tokens: string[] = []
+    const promise = ollamaAdapter.complete({
+      apiKey: '', baseUrl: 'http://localhost:11434',
+      model: 'llama3.1', messages: [{ role: 'user', content: 'q' }],
+      onToken: (c) => { tokens.push(c); ac.abort() },
+      signal: ac.signal,
+      chunkDelayMs: 10,
+    })
+
+    const result = await promise
+    expect(result.stopReason).toBe('cancelled')
+    expect(result.text).toContain('partial')
+  })
+})
