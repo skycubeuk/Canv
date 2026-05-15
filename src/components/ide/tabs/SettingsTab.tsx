@@ -122,7 +122,7 @@ export function SettingsTab(props: Props) {
                   type="button"
                   className="btn-secondary"
                   onClick={refreshOllamaModels}
-                  disabled={ollamaStatus.kind === 'loading'}
+                  disabled={ollamaStatus.kind === 'loading' || !settings.baseUrls?.ollama}
                 >
                   {ollamaStatus.kind === 'loading' ? 'Refreshing…' : 'Refresh models'}
                 </button>
