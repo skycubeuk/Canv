@@ -304,6 +304,42 @@ describe('ollamaAdapter.complete — tool calls (streaming)', () => {
   })
 })
 
+describe('ollamaAdapter.complete — tool calls on non-final NDJSON line (Ollama 0.23+)', () => {
+  let originalFetch: typeof globalThis.fetch
+  beforeEach(() => { originalFetch = globalThis.fetch })
+  afterEach(() => { globalThis.fetch = originalFetch })
+
+  it('extracts tool_calls that arrive before done:true and prefers the native id when supplied', async () => {
+    globalThis.fetch = vi.fn(async () => ndjsonResponse([
+      // Reasoning-model thinking traces — content is empty, thinking is dropped
+      { message: { role: 'assistant', content: '', thinking: ' directory' }, done: false },
+      // Tool call arrives on a non-final line — must NOT be missed
+      { message: {
+          role: 'assistant', content: '',
+          tool_calls: [{ id: 'call_gl82turs', function: { name: 'list_dir', arguments: { path: '/' } } }],
+        }, done: false },
+      // Final line carries usage + stop reason but no tool_calls
+      { message: { role: 'assistant', content: '' },
+        done: true, done_reason: 'stop', prompt_eval_count: 465, eval_count: 73 },
+    ])) as unknown as typeof fetch
+
+    const started: Array<{ id: string; name: string }> = []
+    const result = await ollamaAdapter.complete({
+      apiKey: '', baseUrl: 'http://localhost:11434',
+      model: 'qwen3.5:9b', messages: [{ role: 'user', content: 'list files' }],
+      onToken: () => {},
+      onToolCallStart: (call) => started.push(call),
+    })
+
+    expect(result.stopReason).toBe('tool_use')
+    expect(result.toolCalls).toEqual([
+      { id: 'call_gl82turs', name: 'list_dir', input: { path: '/' } },
+    ])
+    expect(started).toEqual([{ id: 'call_gl82turs', name: 'list_dir' }])
+    expect(result.tokenUsage).toEqual({ input: 465, output: 73 })
+  })
+})
+
 describe('ollamaAdapter.complete — cancellation', () => {
   let originalFetch: typeof globalThis.fetch
   beforeEach(() => { originalFetch = globalThis.fetch })

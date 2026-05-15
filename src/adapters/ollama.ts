@@ -47,7 +47,8 @@ function parseToolCalls(raw: unknown): ToolCall[] {
   if (!Array.isArray(raw)) return []
   const out: ToolCall[] = []
   raw.forEach((tc, idx) => {
-    const fn = (tc as { function?: { name?: unknown; arguments?: unknown } }).function
+    const tcObj = tc as { id?: unknown; function?: { name?: unknown; arguments?: unknown } }
+    const fn = tcObj.function
     if (!fn || typeof fn.name !== 'string') return
     const args = fn.arguments
     // Ollama returns arguments as an object; some compat layers send a JSON string.
@@ -56,7 +57,10 @@ function parseToolCalls(raw: unknown): ToolCall[] {
     else if (typeof args === 'string' && args) {
       try { input = JSON.parse(args) } catch { input = {} }
     }
-    out.push({ id: `ollama_tc_${idx}`, name: fn.name, input })
+    // Ollama 0.23+ supplies a native id (`call_*`); fall back to synthesising
+    // one for older daemons where the wire format didn't carry one.
+    const nativeId = typeof tcObj.id === 'string' && tcObj.id ? tcObj.id : null
+    out.push({ id: nativeId ?? `ollama_tc_${idx}`, name: fn.name, input })
   })
   return out
 }
@@ -180,18 +184,27 @@ async function readNDJSON(
     }
     const chunk = p.message?.content
     if (typeof chunk === 'string' && chunk.length) queue.push(chunk)
-    if (p.done) {
-      const mapped = mapStopReason(p.done_reason)
-      stopReason = mapped.stopReason
-      truncated = mapped.truncated
-      if (typeof p.prompt_eval_count === 'number' && typeof p.eval_count === 'number') {
-        usageOut = { input: p.prompt_eval_count, output: p.eval_count }
-      }
-      const tcs = parseToolCalls(p.message?.tool_calls)
+    // Extract tool_calls on ANY line, not just done:true. Ollama 0.23+ emits
+    // them mid-stream; earlier versions only on the final line. The spec
+    // assumed final-only — that assumption no longer holds.
+    if (p.message?.tool_calls) {
+      const tcs = parseToolCalls(p.message.tool_calls)
       if (tcs.length) {
         finalToolCalls = tcs
         stopReason = 'tool_use'
         for (const c of tcs) onToolCallStart?.({ id: c.id, name: c.name })
+      }
+    }
+    if (p.done) {
+      const mapped = mapStopReason(p.done_reason)
+      // Don't clobber 'tool_use' set above when a tool call arrived earlier
+      // in the stream and the daemon then closes with done_reason:'stop'.
+      if (!finalToolCalls.length) {
+        stopReason = mapped.stopReason
+        truncated = mapped.truncated
+      }
+      if (typeof p.prompt_eval_count === 'number' && typeof p.eval_count === 'number') {
+        usageOut = { input: p.prompt_eval_count, output: p.eval_count }
       }
     }
   }
