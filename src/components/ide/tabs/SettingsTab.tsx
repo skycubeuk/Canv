@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
-import { adapterList } from '../../../adapters'
+import { adapterList, configuredProviders } from '../../../adapters'
 import { ollamaAdapter } from '../../../adapters/ollama'
 import { PRICING, pricingKey, type ModelPricing } from '../../../config/pricing'
 import { useModes } from '../../../hooks/useModes'
@@ -303,24 +303,27 @@ export function SettingsTab(props: Props) {
                                 })
                               }}
                             >
-                              {adapterList.map((ad) => {
-                                const hasKey = !!settings.apiKeys[ad.id as Provider]
-                                const opts = ad.id === 'ollama' && settings.ollamaModels.length
-                                  ? settings.ollamaModels
-                                  : ad.models
-                                return (
-                                  <optgroup
-                                    key={ad.id}
-                                    label={hasKey ? ad.name : `${ad.name} (no API key)`}
-                                  >
-                                    {opts.map((m) => (
-                                      <option key={`${ad.id}/${m}`} value={`${ad.id}/${m}`}>
-                                        {ad.name} — {m}
-                                      </option>
-                                    ))}
-                                  </optgroup>
-                                )
-                              })}
+                              {(() => {
+                                const configuredIds = new Set<Provider>(configuredProviders(settings))
+                                configuredIds.add(ref.provider) // keep the per-action selection visible even if its key was removed
+                                const visibleAdapters = configuredIds.size > 0
+                                  ? adapterList.filter((ad) => configuredIds.has(ad.id as Provider))
+                                  : adapterList
+                                return visibleAdapters.map((ad) => {
+                                  const opts = ad.id === 'ollama' && settings.ollamaModels.length
+                                    ? settings.ollamaModels
+                                    : ad.models
+                                  return (
+                                    <optgroup key={ad.id} label={ad.name}>
+                                      {opts.map((m) => (
+                                        <option key={`${ad.id}/${m}`} value={`${ad.id}/${m}`}>
+                                          {ad.name} — {m}
+                                        </option>
+                                      ))}
+                                    </optgroup>
+                                  )
+                                })
+                              })()}
                             </select>
                           </Field>
                           )
