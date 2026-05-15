@@ -266,3 +266,40 @@ describe('ollamaAdapter.complete (streaming)', () => {
     expect(JSON.parse(captured).stream).toBe(true)
   })
 })
+
+describe('ollamaAdapter.complete — tool calls (streaming)', () => {
+  let originalFetch: typeof globalThis.fetch
+  beforeEach(() => { originalFetch = globalThis.fetch })
+  afterEach(() => { globalThis.fetch = originalFetch })
+
+  it('emits onToolCallStart and returns toolCalls from the final NDJSON line', async () => {
+    globalThis.fetch = vi.fn(async () => ndjsonResponse([
+      { message: { role: 'assistant', content: 'thinking…' }, done: false },
+      {
+        message: {
+          role: 'assistant', content: '',
+          tool_calls: [{ function: { name: 'read_file', arguments: { path: '/tmp/x' } } }],
+        },
+        done: true, done_reason: 'stop', prompt_eval_count: 5, eval_count: 1,
+      },
+    ])) as unknown as typeof fetch
+
+    const tokens: string[] = []
+    const started: Array<{ id: string; name: string }> = []
+    const result = await ollamaAdapter.complete({
+      apiKey: '', baseUrl: 'http://localhost:11434',
+      model: 'llama3.1', messages: [{ role: 'user', content: 'go' }],
+      onToken: (c) => tokens.push(c),
+      onToolCallStart: (call) => started.push(call),
+    })
+
+    expect(tokens).toEqual(['thinking…'])
+    expect(started).toEqual([{ id: 'ollama_tc_0', name: 'read_file' }])
+    expect(result.text).toBe('thinking…')
+    expect(result.stopReason).toBe('tool_use')
+    expect(result.toolCalls).toEqual([
+      { id: 'ollama_tc_0', name: 'read_file', input: { path: '/tmp/x' } },
+    ])
+    expect(result.tokenUsage).toEqual({ input: 5, output: 1 })
+  })
+})
