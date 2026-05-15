@@ -92,7 +92,14 @@ export const ollamaAdapter: LLMAdapter = {
       model,
       messages: ollamaMessages(system, messages),
       stream: useStream,
-      options: { num_predict: maxTokens },
+      // num_ctx default is 4096 in current Ollama; Canv's chat preamble +
+      // workspace inventory + tool schemas routinely exceed that. When the
+      // prompt overflows num_ctx, Ollama silently drops the oldest tokens —
+      // which often includes the tool definitions appended high in context.
+      // Result: the model "forgets" it has tools and answers from memory.
+      // 8192 is comfortable for 9–14B models on a 12 GB GPU and lets the
+      // tool set survive alongside a reasonable workspace inventory.
+      options: { num_predict: maxTokens, num_ctx: 8192 },
     }
     const tools = ollamaTools(params.tools)
     if (tools) body.tools = tools

@@ -72,7 +72,7 @@ describe('ollamaAdapter.complete (non-streaming)', () => {
     const sent = JSON.parse(calls[0].body)
     expect(sent.model).toBe('llama3.1')
     expect(sent.stream).toBe(false)
-    expect(sent.options).toEqual({ num_predict: 256 })
+    expect(sent.options).toEqual({ num_predict: 256, num_ctx: 8192 })
     expect(sent.messages).toEqual([{ role: 'user', content: 'hi' }])
   })
 
