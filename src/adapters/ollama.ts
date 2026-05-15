@@ -97,9 +97,13 @@ export const ollamaAdapter: LLMAdapter = {
       // prompt overflows num_ctx, Ollama silently drops the oldest tokens —
       // which often includes the tool definitions appended high in context.
       // Result: the model "forgets" it has tools and answers from memory.
-      // 8192 is comfortable for 9–14B models on a 12 GB GPU and lets the
-      // tool set survive alongside a reasonable workspace inventory.
-      options: { num_predict: maxTokens, num_ctx: 8192 },
+      //
+      // 32768 lets us fit a full chapter (~5K tokens) plus preamble, inventory,
+      // tools, and meaningful history. Pair this with q8_0 KV-cache quant on
+      // the daemon (OLLAMA_FLASH_ATTENTION=1, OLLAMA_KV_CACHE_TYPE=q8_0) to
+      // keep KV memory around ~900 MB on a 9B model — comfortable on a 12 GB
+      // GPU.
+      options: { num_predict: maxTokens, num_ctx: 32768 },
     }
     const tools = ollamaTools(params.tools)
     if (tools) body.tools = tools
