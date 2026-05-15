@@ -215,3 +215,54 @@ describe('ollamaAdapter.complete — tool calls (non-streaming)', () => {
     ])
   })
 })
+
+function ndjsonResponse(lines: unknown[]): Response {
+  const body = lines.map((l) => JSON.stringify(l)).join('\n') + '\n'
+  return new Response(body, { status: 200, headers: { 'Content-Type': 'application/x-ndjson' } })
+}
+
+describe('ollamaAdapter.complete (streaming)', () => {
+  let originalFetch: typeof globalThis.fetch
+  beforeEach(() => { originalFetch = globalThis.fetch })
+  afterEach(() => { globalThis.fetch = originalFetch })
+
+  it('streams text via onToken and parses usage from the final done:true line', async () => {
+    globalThis.fetch = vi.fn(async () => ndjsonResponse([
+      { message: { role: 'assistant', content: 'hello ' }, done: false },
+      { message: { role: 'assistant', content: 'world' },  done: false },
+      { message: { role: 'assistant', content: '' }, done: true,
+        done_reason: 'stop', prompt_eval_count: 7, eval_count: 3 },
+    ])) as unknown as typeof fetch
+
+    const tokens: string[] = []
+    const result = await ollamaAdapter.complete({
+      apiKey: '', baseUrl: 'http://localhost:11434',
+      model: 'llama3.1', messages: [{ role: 'user', content: 'q' }],
+      onToken: (c) => tokens.push(c),
+    })
+
+    expect(tokens).toEqual(['hello ', 'world'])
+    expect(result.text).toBe('hello world')
+    expect(result.tokenUsage).toEqual({ input: 7, output: 3 })
+    expect(result.stopReason).toBe('end_turn')
+  })
+
+  it('sets stream:true in the request body when onToken is provided', async () => {
+    let captured = ''
+    globalThis.fetch = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      captured = typeof init?.body === 'string' ? init.body : ''
+      return ndjsonResponse([
+        { message: { role: 'assistant', content: 'ok' }, done: false },
+        { message: { role: 'assistant', content: '' }, done: true,
+          done_reason: 'stop', prompt_eval_count: 1, eval_count: 1 },
+      ])
+    }) as unknown as typeof fetch
+
+    await ollamaAdapter.complete({
+      apiKey: '', baseUrl: 'http://localhost:11434',
+      model: 'llama3.1', messages: [{ role: 'user', content: 'q' }],
+      onToken: () => {},
+    })
+    expect(JSON.parse(captured).stream).toBe(true)
+  })
+})

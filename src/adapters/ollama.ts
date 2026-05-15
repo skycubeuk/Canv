@@ -142,13 +142,129 @@ export const ollamaAdapter: LLMAdapter = {
   },
 }
 
-// Streaming implementation lands in Task 6.
 async function readNDJSON(
-  _res: Response,
-  _onToken: (chunk: string) => void,
-  _onToolCallStart: ((call: { id: string; name: string }) => void) | undefined,
-  _signal: AbortSignal | undefined,
-  _chunkDelayMs: number,
+  res: Response,
+  onToken: (chunk: string) => void,
+  onToolCallStart: ((call: { id: string; name: string }) => void) | undefined,
+  signal: AbortSignal | undefined,
+  chunkDelayMs: number,
 ): Promise<CompleteResult> {
-  throw new Error('ollama streaming: not implemented yet')
+  const reader = res.body?.getReader()
+  if (!reader) throw new Error('No response body')
+  const decoder = new TextDecoder()
+
+  const queue: string[] = []
+  let wireDone = false
+  let wireError: Error | null = null
+
+  let buffer = ''
+  let full = ''
+  let truncated = false
+  let stopReason: StopReason = 'end_turn'
+  let usageOut: { input: number; output: number } | null = null
+  let finalToolCalls: ToolCall[] = []
+
+  const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
+
+  const processLine = (line: string): void => {
+    const trimmed = line.trim()
+    if (!trimmed) return
+    let parsed: unknown
+    try { parsed = JSON.parse(trimmed) } catch { return }
+    const p = parsed as {
+      message?: { content?: string; tool_calls?: unknown }
+      done?: boolean
+      done_reason?: string
+      prompt_eval_count?: number
+      eval_count?: number
+    }
+    const chunk = p.message?.content
+    if (typeof chunk === 'string' && chunk.length) queue.push(chunk)
+    if (p.done) {
+      const mapped = mapStopReason(p.done_reason)
+      stopReason = mapped.stopReason
+      truncated = mapped.truncated
+      if (typeof p.prompt_eval_count === 'number' && typeof p.eval_count === 'number') {
+        usageOut = { input: p.prompt_eval_count, output: p.eval_count }
+      }
+      const tcs = parseToolCalls(p.message?.tool_calls)
+      if (tcs.length) {
+        finalToolCalls = tcs
+        stopReason = 'tool_use'
+        for (const c of tcs) onToolCallStart?.({ id: c.id, name: c.name })
+      }
+    }
+  }
+
+  const wirePromise = (async () => {
+    try {
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) {
+          if (buffer.length) processLine(buffer)
+          buffer = ''
+          wireDone = true
+          return
+        }
+        buffer += decoder.decode(value, { stream: true })
+        const lines = buffer.split('\n')
+        buffer = lines.pop() ?? ''
+        for (const line of lines) processLine(line)
+      }
+    } catch (err) {
+      wireError = err as Error
+      wireDone = true
+    }
+  })()
+
+  let lastDispatchAt = 0
+
+  try {
+    while (!wireDone || queue.length > 0) {
+      if (queue.length === 0) {
+        if (signal?.aborted) break
+        await Promise.race([wirePromise, sleep(5)])
+        continue
+      }
+      const text = queue.shift()!
+      if (chunkDelayMs > 0) {
+        const elapsed = Date.now() - lastDispatchAt
+        if (elapsed < chunkDelayMs) await sleep(chunkDelayMs - elapsed)
+        if (signal?.aborted) throw new DOMException('aborted', 'AbortError')
+      }
+      onToken(text)
+      full += text
+      lastDispatchAt = Date.now()
+    }
+  } catch (err) {
+    if ((err as Error).name === 'AbortError' || signal?.aborted) {
+      try { await reader.cancel() } catch { /* already closed */ }
+      return {
+        text: full,
+        truncated: false,
+        stopReason: 'cancelled',
+        ...(usageOut ? { tokenUsage: usageOut } : {}),
+      }
+    }
+    throw err
+  }
+
+  if (signal?.aborted || (wireError as Error | null)?.name === 'AbortError') {
+    try { await reader.cancel() } catch { /* already closed */ }
+    return {
+      text: full,
+      truncated: false,
+      stopReason: 'cancelled',
+      ...(usageOut ? { tokenUsage: usageOut } : {}),
+    }
+  }
+  if (wireError) throw wireError
+
+  return {
+    text: full,
+    truncated,
+    stopReason,
+    ...(finalToolCalls.length ? { toolCalls: finalToolCalls } : {}),
+    ...(usageOut ? { tokenUsage: usageOut } : {}),
+  }
 }
