@@ -75,6 +75,7 @@ export default function App() {
 
   const setup = useWorkspaceSetup({
     workspaceReady: workspace.ready,
+    workspaceRoot: workspace.root,
     remote: workspace.kind?.kind === 'remote',
     fs: getFs(),
     // Provide a no-op stub when canvHistory is not exposed (e.g. dock popout / web build).
@@ -109,6 +110,7 @@ export default function App() {
     profile,
     setProfile,
     workspaceReady: workspace.ready,
+    workspaceRoot: workspace.root,
     migrationOpen,
   })
 

@@ -14,6 +14,7 @@ interface HistoryLike {
 
 export interface UseWorkspaceSetupArgs {
   workspaceReady: boolean
+  workspaceRoot: string | null
   remote: boolean
   fs: FsLike
   history: HistoryLike
@@ -33,6 +34,7 @@ export function useWorkspaceSetup(args: UseWorkspaceSetupArgs): UseWorkspaceSetu
 
   useEffect(() => {
     if (!args.workspaceReady) return
+    if (!args.workspaceRoot) return
     let cancelled = false
     args.fs.readWorkspaceConfig().then((cfg) => {
       if (cancelled) return
@@ -40,7 +42,7 @@ export function useWorkspaceSetup(args: UseWorkspaceSetupArgs): UseWorkspaceSetu
       else { setConfig(null); setPhase('needs-setup') }
     }).catch(() => { if (!cancelled) setPhase('needs-setup') })
     return () => { cancelled = true }
-  }, [args.workspaceReady, args.fs])
+  }, [args.workspaceReady, args.workspaceRoot, args.fs])
 
   const confirm = useCallback(async (r: WorkspaceSetupResult) => {
     const raEnabled = r.enableRA && !args.remote
