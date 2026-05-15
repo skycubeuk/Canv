@@ -305,12 +305,15 @@ export function SettingsTab(props: Props) {
                             >
                               {adapterList.map((ad) => {
                                 const hasKey = !!settings.apiKeys[ad.id as Provider]
+                                const opts = ad.id === 'ollama' && settings.ollamaModels.length
+                                  ? settings.ollamaModels
+                                  : ad.models
                                 return (
                                   <optgroup
                                     key={ad.id}
                                     label={hasKey ? ad.name : `${ad.name} (no API key)`}
                                   >
-                                    {ad.models.map((m) => (
+                                    {opts.map((m) => (
                                       <option key={`${ad.id}/${m}`} value={`${ad.id}/${m}`}>
                                         {ad.name} — {m}
                                       </option>
