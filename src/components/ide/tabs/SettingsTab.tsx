@@ -193,22 +193,6 @@ export function SettingsTab(props: Props) {
             </div>
           </Field>
 
-          <Field label="Chat tool budget per message">
-            <input
-              type="number"
-              min={1}
-              max={50}
-              value={settings.chatToolBudget}
-              onChange={(e) => {
-                const n = Math.max(1, Math.min(50, Number(e.target.value) || 10))
-                onUpdate({ chatToolBudget: n })
-              }}
-              className="input w-24"
-            />
-            <p className="text-xs text-muted mt-1">
-              How many tool rounds the model may take per chat message before being asked to finalise. Default 10.
-            </p>
-          </Field>
         </>
       ),
     },
@@ -430,7 +414,7 @@ export function SettingsTab(props: Props) {
     {
       id: 'streaming',
       title: 'Generation',
-      keywords: ['streaming', 'slow', 'mode', 'chunk', 'delay', 'auto', 'scroll', 'follow', 'tokens', 'max', 'output', 'generation'],
+      keywords: ['streaming', 'slow', 'mode', 'chunk', 'delay', 'auto', 'scroll', 'follow', 'tokens', 'max', 'output', 'generation', 'budget', 'tool', 'rounds'],
       body: (
         <div data-testid="streaming-controls" className="space-y-3">
           <Field label="Streaming">
@@ -506,6 +490,22 @@ export function SettingsTab(props: Props) {
               />
             </Field>
           ))}
+          <Field label="Chat tool budget per message">
+            <input
+              type="number"
+              min={1}
+              max={50}
+              value={settings.chatToolBudget}
+              onChange={(e) => {
+                const n = Math.max(1, Math.min(50, Number(e.target.value) || 10))
+                onUpdate({ chatToolBudget: n })
+              }}
+              className="input w-24"
+            />
+            <p className="text-xs text-muted mt-1">
+              How many tool rounds the model may take per chat message before being asked to finalise. Default 10.
+            </p>
+          </Field>
         </div>
       ),
     },
