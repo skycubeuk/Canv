@@ -34,3 +34,102 @@ describe('ollamaAdapter.listModels', () => {
       .rejects.toThrow(/Ollama 500/)
   })
 })
+
+describe('ollamaAdapter.complete (non-streaming)', () => {
+  let originalFetch: typeof globalThis.fetch
+  beforeEach(() => { originalFetch = globalThis.fetch })
+  afterEach(() => { globalThis.fetch = originalFetch })
+
+  it('POSTs /api/chat and returns text + tokenUsage', async () => {
+    const calls: { url: string; body: string }[] = []
+    globalThis.fetch = vi.fn(async (url: unknown, init?: RequestInit) => {
+      calls.push({ url: String(url), body: typeof init?.body === 'string' ? init.body : '' })
+      return new Response(JSON.stringify({
+        model: 'llama3.1',
+        message: { role: 'assistant', content: 'hello world' },
+        done: true,
+        done_reason: 'stop',
+        prompt_eval_count: 12,
+        eval_count: 5,
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    }) as unknown as typeof fetch
+
+    const result = await ollamaAdapter.complete({
+      apiKey: '',
+      baseUrl: 'http://localhost:11434',
+      model: 'llama3.1',
+      messages: [{ role: 'user', content: 'hi' }],
+      maxTokens: 256,
+    })
+
+    expect(result.text).toBe('hello world')
+    expect(result.tokenUsage).toEqual({ input: 12, output: 5 })
+    expect(result.stopReason).toBe('end_turn')
+    expect(result.truncated).toBe(false)
+
+    expect(calls).toHaveLength(1)
+    expect(calls[0].url).toBe('http://localhost:11434/api/chat')
+    const sent = JSON.parse(calls[0].body)
+    expect(sent.model).toBe('llama3.1')
+    expect(sent.stream).toBe(false)
+    expect(sent.options).toEqual({ num_predict: 256 })
+    expect(sent.messages).toEqual([{ role: 'user', content: 'hi' }])
+  })
+
+  it('maps done_reason: "length" → stopReason "max_tokens" with truncated true', async () => {
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({
+      message: { role: 'assistant', content: 'partial' },
+      done: true,
+      done_reason: 'length',
+      prompt_eval_count: 3,
+      eval_count: 1,
+    }), { status: 200 })) as unknown as typeof fetch
+
+    const result = await ollamaAdapter.complete({
+      apiKey: '',
+      baseUrl: 'http://localhost:11434',
+      model: 'llama3.1',
+      messages: [{ role: 'user', content: 'q' }],
+    })
+
+    expect(result.stopReason).toBe('max_tokens')
+    expect(result.truncated).toBe(true)
+  })
+
+  it('prepends a system message when system is provided', async () => {
+    let captured = ''
+    globalThis.fetch = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      captured = typeof init?.body === 'string' ? init.body : ''
+      return new Response(JSON.stringify({
+        message: { role: 'assistant', content: 'ok' },
+        done: true, done_reason: 'stop', prompt_eval_count: 1, eval_count: 1,
+      }), { status: 200 })
+    }) as unknown as typeof fetch
+
+    await ollamaAdapter.complete({
+      apiKey: '',
+      baseUrl: 'http://localhost:11434',
+      model: 'llama3.1',
+      system: 'You are concise.',
+      messages: [{ role: 'user', content: 'hi' }],
+    })
+
+    const sent = JSON.parse(captured)
+    expect(sent.messages[0]).toEqual({ role: 'system', content: 'You are concise.' })
+    expect(sent.messages[1]).toEqual({ role: 'user', content: 'hi' })
+  })
+
+  it('throws Ollama-prefixed error on non-2xx', async () => {
+    globalThis.fetch = vi.fn(async () => new Response('model not found', { status: 404 })) as unknown as typeof fetch
+    await expect(ollamaAdapter.complete({
+      apiKey: '', baseUrl: 'http://localhost:11434',
+      model: 'mystery', messages: [{ role: 'user', content: 'q' }],
+    })).rejects.toThrow(/Ollama 404/)
+  })
+
+  it('rejects when baseUrl is missing', async () => {
+    await expect(ollamaAdapter.complete({
+      apiKey: '', model: 'llama3.1', messages: [{ role: 'user', content: 'q' }],
+    })).rejects.toThrow(/baseUrl/)
+  })
+})
