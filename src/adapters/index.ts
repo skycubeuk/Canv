@@ -56,10 +56,11 @@ export function providerName(id: string): string {
 export function configuredProviders(input: {
   apiKeys: Partial<Record<Provider, string>>
   baseUrls?: { ollama?: string }
+  ollamaModels?: string[]
 }): Provider[] {
   return (Object.keys(adapters) as Provider[]).filter((id) =>
     id === 'ollama'
-      ? !!input.baseUrls?.ollama
+      ? !!input.baseUrls?.ollama && (input.ollamaModels?.length ?? 0) > 0
       : !!input.apiKeys[id],
   )
 }

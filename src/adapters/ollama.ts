@@ -68,7 +68,7 @@ function parseToolCalls(raw: unknown): ToolCall[] {
 export const ollamaAdapter: LLMAdapter = {
   id: 'ollama',
   name: 'Ollama',
-  models: ['llama3.1', 'qwen2.5', 'mistral'],
+  models: [],
 
   async listModels(baseUrl: string, signal?: AbortSignal): Promise<string[]> {
     const url = `${stripTrailingSlash(baseUrl)}/api/tags`

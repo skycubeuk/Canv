@@ -9,10 +9,11 @@ describe('configuredProviders', () => {
     })).toEqual(['openai'])
   })
 
-  it('treats ollama as configured when baseUrls.ollama is set', () => {
+  it('treats ollama as configured when baseUrls.ollama is set AND ollamaModels is non-empty', () => {
     expect(configuredProviders({
       apiKeys: { anthropic: '', openai: '', ollama: '' },
       baseUrls: { ollama: 'http://localhost:11434' },
+      ollamaModels: ['llama3.1:8b'],
     })).toEqual(['ollama'])
   })
 
@@ -20,6 +21,7 @@ describe('configuredProviders', () => {
     const result = configuredProviders({
       apiKeys: { anthropic: 'a', openai: 'o', ollama: '' },
       baseUrls: { ollama: 'http://localhost:11434' },
+      ollamaModels: ['llama3.1:8b'],
     })
     expect(result).toEqual(expect.arrayContaining(['anthropic', 'openai', 'ollama']))
     expect(result).toHaveLength(3)
@@ -43,6 +45,21 @@ describe('configuredProviders', () => {
     expect(configuredProviders({
       apiKeys: { anthropic: '', openai: '', ollama: '' },
       baseUrls: { ollama: '' },
+    })).toEqual([])
+  })
+
+  it('treats ollama as unconfigured when baseUrls.ollama is set but ollamaModels is empty', () => {
+    expect(configuredProviders({
+      apiKeys: { anthropic: '', openai: '', ollama: '' },
+      baseUrls: { ollama: 'http://localhost:11434' },
+      ollamaModels: [],
+    })).toEqual([])
+  })
+
+  it('treats ollama as unconfigured when ollamaModels is omitted', () => {
+    expect(configuredProviders({
+      apiKeys: { anthropic: '', openai: '', ollama: '' },
+      baseUrls: { ollama: 'http://localhost:11434' },
     })).toEqual([])
   })
 })

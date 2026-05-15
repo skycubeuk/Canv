@@ -340,6 +340,12 @@ describe('ollamaAdapter.complete — tool calls on non-final NDJSON line (Ollama
   })
 })
 
+describe('ollamaAdapter.models', () => {
+  it('is empty — Ollama models are user-installed, not a fixed catalog', () => {
+    expect(ollamaAdapter.models).toEqual([])
+  })
+})
+
 describe('ollamaAdapter.complete — cancellation', () => {
   let originalFetch: typeof globalThis.fetch
   beforeEach(() => { originalFetch = globalThis.fetch })
