@@ -64,7 +64,7 @@ const SETTINGS_KEY = 'canv:settings'
 const DEFAULT_SETTINGS: Settings = {
   provider: 'anthropic',
   apiKeys: { anthropic: '', openai: '', ollama: '' },
-  baseUrls: { ollama: 'http://localhost:11434' },
+  baseUrls: { ollama: '' },
   ollamaModels: [],
   defaultModel: { anthropic: 'claude-sonnet-4-6', openai: 'gpt-5.5', ollama: 'llama3.1' },
   useDefaultModelForAll: true,

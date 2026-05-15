@@ -38,4 +38,11 @@ describe('configuredProviders', () => {
       baseUrls: undefined,
     })).toEqual([])
   })
+
+  it('treats empty-string baseUrls.ollama as unconfigured', () => {
+    expect(configuredProviders({
+      apiKeys: { anthropic: '', openai: '', ollama: '' },
+      baseUrls: { ollama: '' },
+    })).toEqual([])
+  })
 })
