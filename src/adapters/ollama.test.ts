@@ -133,3 +133,85 @@ describe('ollamaAdapter.complete (non-streaming)', () => {
     })).rejects.toThrow(/baseUrl/)
   })
 })
+
+describe('ollamaAdapter.complete — tool calls (non-streaming)', () => {
+  let originalFetch: typeof globalThis.fetch
+  beforeEach(() => { originalFetch = globalThis.fetch })
+  afterEach(() => { globalThis.fetch = originalFetch })
+
+  it('passes tools array as OpenAI-shape functions in body', async () => {
+    let captured = ''
+    globalThis.fetch = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      captured = typeof init?.body === 'string' ? init.body : ''
+      return new Response(JSON.stringify({
+        message: { role: 'assistant', content: 'ok' },
+        done: true, done_reason: 'stop', prompt_eval_count: 1, eval_count: 1,
+      }), { status: 200 })
+    }) as unknown as typeof fetch
+
+    await ollamaAdapter.complete({
+      apiKey: '', baseUrl: 'http://localhost:11434',
+      model: 'llama3.1',
+      messages: [{ role: 'user', content: 'hi' }],
+      tools: [{
+        name: 'read_file',
+        description: 'Read a file',
+        inputSchema: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] },
+      }],
+    })
+
+    const sent = JSON.parse(captured)
+    expect(sent.tools).toEqual([{
+      type: 'function',
+      function: {
+        name: 'read_file',
+        description: 'Read a file',
+        parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] },
+      },
+    }])
+  })
+
+  it('parses tool_calls from the response (arguments as object)', async () => {
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({
+      message: {
+        role: 'assistant',
+        content: '',
+        tool_calls: [
+          { function: { name: 'read_file', arguments: { path: '/tmp/a' } } },
+          { function: { name: 'write_file', arguments: { path: '/tmp/b', text: 'hi' } } },
+        ],
+      },
+      done: true, done_reason: 'stop', prompt_eval_count: 4, eval_count: 2,
+    }), { status: 200 })) as unknown as typeof fetch
+
+    const result = await ollamaAdapter.complete({
+      apiKey: '', baseUrl: 'http://localhost:11434',
+      model: 'llama3.1', messages: [{ role: 'user', content: 'go' }],
+    })
+
+    expect(result.stopReason).toBe('tool_use')
+    expect(result.toolCalls).toEqual([
+      { id: 'ollama_tc_0', name: 'read_file', input: { path: '/tmp/a' } },
+      { id: 'ollama_tc_1', name: 'write_file', input: { path: '/tmp/b', text: 'hi' } },
+    ])
+  })
+
+  it('parses tool_calls when arguments arrive as a JSON string (compat path)', async () => {
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({
+      message: {
+        role: 'assistant', content: '',
+        tool_calls: [{ function: { name: 'read_file', arguments: '{"path":"/tmp/x"}' } }],
+      },
+      done: true, done_reason: 'stop', prompt_eval_count: 1, eval_count: 1,
+    }), { status: 200 })) as unknown as typeof fetch
+
+    const result = await ollamaAdapter.complete({
+      apiKey: '', baseUrl: 'http://localhost:11434',
+      model: 'llama3.1', messages: [{ role: 'user', content: 'go' }],
+    })
+
+    expect(result.toolCalls).toEqual([
+      { id: 'ollama_tc_0', name: 'read_file', input: { path: '/tmp/x' } },
+    ])
+  })
+})
