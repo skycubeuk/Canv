@@ -131,7 +131,10 @@ export function useSettings() {
       pricingOverrides: { ...DEFAULT_SETTINGS.pricingOverrides, ...(settings?.pricingOverrides || {}) },
     }
     for (const provider of Object.keys(m.defaultModel) as Provider[]) {
-      const available = adapters[provider]?.models ?? []
+      const adapterModels = adapters[provider]?.models ?? []
+      const available = provider === 'ollama'
+        ? [...adapterModels, ...m.ollamaModels]
+        : adapterModels
       if (!available.includes(m.defaultModel[provider])) {
         m.defaultModel[provider] = DEFAULT_SETTINGS.defaultModel[provider]
       }
@@ -171,7 +174,10 @@ export function useSettings() {
       provider: m.provider,
       model: m.defaultModel[m.provider],
     }
-    const allKnownModels = new Set(Object.values(adapters).flatMap((a) => a.models))
+    const allKnownModels = new Set([
+      ...Object.values(adapters).flatMap((a) => a.models),
+      ...m.ollamaModels,
+    ])
     for (const modeId of Object.keys(m.perAgentModel)) {
       const inner = m.perAgentModel[modeId] as unknown as Record<string, AgentModelRef | string>
       for (const actionId of Object.keys(inner)) {

@@ -120,6 +120,31 @@ describe('useSettings — perAgentModel migration', () => {
       provider: 'anthropic', model: 'claude-sonnet-4-6',
     })
   })
+
+  it('preserves an ollama ref whose model is in the refreshed ollamaModels cache', () => {
+    localStorage.setItem('canv:settings', JSON.stringify({
+      provider: 'anthropic',
+      defaultModel: { anthropic: 'claude-sonnet-4-6', openai: 'gpt-5.5', ollama: 'llama3.1' },
+      ollamaModels: ['qwen3.5:9b', 'llama3.1:8b'],
+      perAgentModel: {
+        writing: { grammar: { provider: 'ollama', model: 'qwen3.5:9b' } },
+      },
+    }))
+    const { result } = renderHook(() => useSettings())
+    expect(result.current.settings.perAgentModel.writing.grammar).toEqual({
+      provider: 'ollama', model: 'qwen3.5:9b',
+    })
+  })
+
+  it('preserves defaultModel.ollama when it matches a refreshed ollamaModels entry', () => {
+    localStorage.setItem('canv:settings', JSON.stringify({
+      provider: 'ollama',
+      defaultModel: { anthropic: 'claude-sonnet-4-6', openai: 'gpt-5.5', ollama: 'qwen3.5:9b' },
+      ollamaModels: ['qwen3.5:9b', 'llama3.1:8b'],
+    }))
+    const { result } = renderHook(() => useSettings())
+    expect(result.current.settings.defaultModel.ollama).toBe('qwen3.5:9b')
+  })
 })
 
 describe('useSettings — streamChunkDelayMs', () => {
