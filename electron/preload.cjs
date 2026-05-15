@@ -141,6 +141,7 @@ if (!isDockPopout()) {
   contextBridge.exposeInMainWorld('canvConfig', {
     list: () => ipcRenderer.invoke('canvConfig:list'),
     revealFolder: () => ipcRenderer.invoke('canvConfig:revealFolder'),
+    factoryReset: () => ipcRenderer.invoke('canvConfig:factoryReset'),
   })
 
   contextBridge.exposeInMainWorld('canvServe', {

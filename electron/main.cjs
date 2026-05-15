@@ -610,6 +610,18 @@ function registerFsHandlers() {
     await shell.openPath(configDir)
   })
 
+  // Factory reset: delete every Canv-owned file under userData so the next
+  // launch sees first-run state. Defaults will be re-seeded by loadConfigDir.
+  // Renderer is responsible for wiping its own localStorage before/after.
+  ipcMain.handle('canvConfig:factoryReset', async () => {
+    const userDataDir = app.getPath('userData')
+    const configDir = path.join(userDataDir, 'config')
+    const recentRemotesFile = path.join(userDataDir, 'recent-remotes.json')
+    fs.rmSync(configDir, { recursive: true, force: true })
+    fs.rmSync(recentRemotesFile, { force: true })
+    return { ok: true }
+  })
+
   ipcMain.handle('canvFS:closeWorkspace', () => closeWorkspace())
 
   ipcMain.handle('canvFS:listRecentRemotes', async () => recentRemotes ? recentRemotes.list() : [])

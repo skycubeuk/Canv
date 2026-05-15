@@ -72,6 +72,7 @@ declare global {
         files: { file: string; absPath: string; content: string }[]
       }>
       revealFolder(): Promise<void>
+      factoryReset(): Promise<{ ok: true }>
     }
   }
 }
