@@ -57,7 +57,6 @@ export function SettingsTab(props: Props) {
   }, [settings.baseUrls?.ollama, onUpdate])
 
   const provider = settings.provider
-  const adapter = adapterList.find((a) => a.id === provider)
 
   const handleFactoryReset = useCallback(async () => {
     const ok = await dialogs.confirm({
@@ -114,127 +113,84 @@ export function SettingsTab(props: Props) {
   const sections: SectionDef[] = useMemo(() => [
     {
       id: 'provider-keys',
-      title: 'Provider & Keys',
-      keywords: ['provider', 'api', 'key', 'anthropic', 'openai', 'streaming', 'tokens', 'model'],
+      title: 'API keys & endpoints',
+      keywords: ['api', 'key', 'anthropic', 'openai', 'ollama', 'url', 'endpoint', 'base url', 'refresh'],
       body: (
         <>
-          <Field label="Default provider">
-            <select
-              className="input"
-              value={settings.provider}
-              onChange={(e) => onUpdate({ provider: e.target.value as Provider })}
-            >
-              {adapterList.map((a) => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
-            </select>
-            <p className="text-xs text-muted mt-1">
-              Used as the default for new chats and runs. Existing chats keep the provider/model they were started with.
-            </p>
-          </Field>
+          <p className="text-xs text-muted mb-3">
+            Switch the active provider and model from the workspace menu in the sidebar.
+          </p>
 
-          {settings.provider === 'ollama' ? (
-            <Field label="Ollama base URL">
+          <Field label="Anthropic API key">
+            <div className="flex gap-2">
               <input
-                type="text"
-                className="input"
-                placeholder="http://localhost:11434"
-                value={settings.baseUrls?.ollama ?? ''}
+                type={keyVisible ? 'text' : 'password'}
+                className="input flex-1"
+                value={settings.apiKeys.anthropic ?? ''}
+                placeholder="sk-ant-…"
                 onChange={(e) =>
-                  onUpdate({ baseUrls: { ...settings.baseUrls, ollama: e.target.value } })
+                  onUpdate({ apiKeys: { ...settings.apiKeys, anthropic: e.target.value } })
                 }
               />
-              <p className="text-xs text-muted mt-1">
-                If Ollama is running locally but Canv can't reach it, set{' '}
-                <code>OLLAMA_ORIGINS=*</code> in the environment where you launch{' '}
-                <code>ollama serve</code>.
-              </p>
-              <div className="flex items-center gap-2 mt-2">
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={refreshOllamaModels}
-                  disabled={ollamaStatus.kind === 'loading' || !settings.baseUrls?.ollama}
-                >
-                  {ollamaStatus.kind === 'loading' ? 'Refreshing…' : 'Refresh models'}
-                </button>
-                <span className="text-xs text-muted">
-                  {ollamaStatus.kind === 'ok' && `Connected · ${ollamaStatus.count} models`}
-                  {ollamaStatus.kind === 'error' &&
-                    `Could not reach Ollama at ${settings.baseUrls?.ollama ?? ''} — ${ollamaStatus.message}`}
-                </span>
-              </div>
-            </Field>
-          ) : (
-            <Field label={`${adapter?.name ?? ''} API key`}>
-              <div className="flex gap-2">
-                <input
-                  type={keyVisible ? 'text' : 'password'}
-                  className="input flex-1"
-                  value={settings.apiKeys[provider] ?? ''}
-                  placeholder={provider === 'anthropic' ? 'sk-ant-…' : 'sk-…'}
-                  onChange={(e) =>
-                    onUpdate({ apiKeys: { ...settings.apiKeys, [provider]: e.target.value } })
-                  }
-                />
-                <button type="button" className="btn-secondary" onClick={() => setKeyVisible((v) => !v)}>
-                  {keyVisible ? 'Hide' : 'Show'}
-                </button>
-              </div>
-              <p className="text-xs text-muted mt-1">
-                Stored in browser localStorage. Calls go directly from your browser to {adapter?.name}.
-              </p>
-            </Field>
-          )}
-
-          <Field label="Default model">
-            <select
-              className="input"
-              value={settings.defaultModel[provider]}
-              onChange={(e) =>
-                onUpdate({ defaultModel: { ...settings.defaultModel, [provider]: e.target.value } })
-              }
-            >
-              {(settings.provider === 'ollama'
-                ? (settings.ollamaModels.length ? settings.ollamaModels : ollamaAdapter.models)
-                : (adapter?.models ?? [])
-              ).map((m) => (
-                <option key={m} value={m}>{m}</option>
-              ))}
-            </select>
+              <button type="button" className="btn-secondary" onClick={() => setKeyVisible((v) => !v)}>
+                {keyVisible ? 'Hide' : 'Show'}
+              </button>
+            </div>
+            <p className="text-xs text-muted mt-1">
+              Stored in browser localStorage. Calls go directly from your browser to Anthropic.
+            </p>
           </Field>
 
-          <Field label="Streaming">
-            <label className="flex items-center gap-2 text-sm">
+          <Field label="OpenAI API key">
+            <div className="flex gap-2">
               <input
-                type="checkbox"
-                checked={settings.streaming}
-                onChange={(e) => onUpdate({ streaming: e.target.checked })}
+                type={keyVisible ? 'text' : 'password'}
+                className="input flex-1"
+                value={settings.apiKeys.openai ?? ''}
+                placeholder="sk-…"
+                onChange={(e) =>
+                  onUpdate({ apiKeys: { ...settings.apiKeys, openai: e.target.value } })
+                }
               />
-              Enable streaming responses
-            </label>
+              <button type="button" className="btn-secondary" onClick={() => setKeyVisible((v) => !v)}>
+                {keyVisible ? 'Hide' : 'Show'}
+              </button>
+            </div>
+            <p className="text-xs text-muted mt-1">
+              Stored in browser localStorage. Calls go directly from your browser to OpenAI.
+            </p>
           </Field>
 
-          <Field label={`Max output tokens: ${settings.maxOutputTokens[provider]}`}>
+          <Field label="Ollama base URL">
             <input
-              type="range"
-              min={1024}
-              max={32768}
-              step={512}
-              value={settings.maxOutputTokens[provider]}
+              type="text"
+              className="input"
+              placeholder="http://localhost:11434"
+              value={settings.baseUrls?.ollama ?? ''}
               onChange={(e) =>
-                onUpdate({
-                  maxOutputTokens: {
-                    ...settings.maxOutputTokens,
-                    [provider]: Number(e.target.value),
-                  },
-                })
+                onUpdate({ baseUrls: { ...settings.baseUrls, ollama: e.target.value } })
               }
-              className="w-full"
             />
             <p className="text-xs text-muted mt-1">
-              Bigger selections need a bigger budget. If responses get cut off, raise this.
+              If Ollama is running locally but Canv can't reach it, set{' '}
+              <code>OLLAMA_ORIGINS=*</code> in the environment where you launch{' '}
+              <code>ollama serve</code>.
             </p>
+            <div className="flex items-center gap-2 mt-2">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={refreshOllamaModels}
+                disabled={ollamaStatus.kind === 'loading' || !settings.baseUrls?.ollama}
+              >
+                {ollamaStatus.kind === 'loading' ? 'Refreshing…' : 'Refresh models'}
+              </button>
+              <span className="text-xs text-muted">
+                {ollamaStatus.kind === 'ok' && `Connected · ${ollamaStatus.count} models`}
+                {ollamaStatus.kind === 'error' &&
+                  `Could not reach Ollama at ${settings.baseUrls?.ollama ?? ''} — ${ollamaStatus.message}`}
+              </span>
+            </div>
           </Field>
 
           <Field label="Chat tool budget per message">
@@ -473,10 +429,20 @@ export function SettingsTab(props: Props) {
     },
     {
       id: 'streaming',
-      title: 'Streaming',
-      keywords: ['streaming', 'slow', 'mode', 'chunk', 'delay', 'auto', 'scroll', 'follow'],
+      title: 'Generation',
+      keywords: ['streaming', 'slow', 'mode', 'chunk', 'delay', 'auto', 'scroll', 'follow', 'tokens', 'max', 'output', 'generation'],
       body: (
         <div data-testid="streaming-controls" className="space-y-3">
+          <Field label="Streaming">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={settings.streaming}
+                onChange={(e) => onUpdate({ streaming: e.target.checked })}
+              />
+              Enable streaming responses
+            </label>
+          </Field>
           <Field label="Slow-mode delay">
             <div className="flex gap-1" role="radiogroup" aria-label="Stream chunk delay">
               {([0, 50, 100, 200] as const).map((d) => (
@@ -523,6 +489,23 @@ export function SettingsTab(props: Props) {
               </span>
             </div>
           </Field>
+          {(['anthropic', 'openai', 'ollama'] as const).map((p) => (
+            <Field key={p} label={`Max output tokens · ${p}: ${settings.maxOutputTokens[p]}`}>
+              <input
+                type="range"
+                min={1024}
+                max={32768}
+                step={512}
+                value={settings.maxOutputTokens[p]}
+                onChange={(e) =>
+                  onUpdate({
+                    maxOutputTokens: { ...settings.maxOutputTokens, [p]: Number(e.target.value) },
+                  })
+                }
+                className="w-full"
+              />
+            </Field>
+          ))}
         </div>
       ),
     },
@@ -607,7 +590,7 @@ export function SettingsTab(props: Props) {
         </>
       ),
     },
-  ], [settings, onUpdate, adapter, provider, keyVisible, modes, onExportBackup, openModes, setOpenModes, handleImportFile, handleFactoryReset, ollamaStatus, refreshOllamaModels])
+  ], [settings, onUpdate, provider, keyVisible, modes, onExportBackup, openModes, setOpenModes, handleImportFile, handleFactoryReset, ollamaStatus, refreshOllamaModels])
 
   const filtered = useMemo(() => {
     const q = filter.trim().toLowerCase()
