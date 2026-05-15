@@ -156,7 +156,7 @@ describe('useChatSessions — active-session selectors', () => {
 
   it('apiKeyMissing reflects the active session provider', () => {
     const args = makeArgs()
-    args.settings.apiKeys = { anthropic: '', openai: 'sk-x' }
+    args.settings.apiKeys = { anthropic: '', openai: 'sk-x', ollama: '' }
     const { result } = renderHook(() => useChatSessions(args))
     expect(result.current.apiKeyMissing).toBe(true)
     act(() => { result.current.setActiveSessionProviderModel('openai', 'gpt-4o') })

@@ -111,7 +111,10 @@ function WorkspaceSwitcherButton({
                 })
               }
             >
-              {adapter.models.map((m) => (
+              {(settings.provider === 'ollama' && settings.ollamaModels.length
+                ? settings.ollamaModels
+                : adapter.models
+              ).map((m) => (
                 <option key={m} value={m}>{m}</option>
               ))}
             </select>

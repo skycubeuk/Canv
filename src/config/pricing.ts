@@ -36,4 +36,7 @@ export const PRICING: Record<string, ModelPricing> = {
   'openai/gpt-5.5-pro':                  { input: 30,   output: 180 },
   'openai/gpt-5.4-mini':                 { input: 0.75, output: 4.5 },
   'openai/gpt-5.4-nano':                 { input: 0.2,  output: 1.25 },
+  'ollama/llama3.1':                     { input: 0,    output: 0 },
+  'ollama/qwen2.5':                      { input: 0,    output: 0 },
+  'ollama/mistral':                      { input: 0,    output: 0 },
 }

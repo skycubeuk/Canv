@@ -263,7 +263,12 @@ export function useChatSessions(args: UseChatSessionsArgs): UseChatSessionsApi {
     })
   }, [])
 
-  const apiKeyMissing = !settings.apiKeys[active.provider]
+  const apiKeyMissing = active.provider === 'ollama'
+    ? !settings.baseUrls?.ollama
+    : !settings.apiKeys[active.provider]
+  const missingProviderToast = active.provider === 'ollama'
+    ? 'Set the Ollama base URL first.'
+    : 'Add an API key first.'
 
   const meterTotals = useMemo(
     () => chatTotals(active.messages, active.provider, active.model, settings.pricingOverrides),
@@ -355,6 +360,7 @@ export function useChatSessions(args: UseChatSessionsArgs): UseChatSessionsApi {
           model,
           maxTokens: args.settings.maxOutputTokens[lockedProvider],
           apiKey: args.settings.apiKeys[lockedProvider],
+          baseUrl: args.settings.baseUrls?.[lockedProvider],
           signal: rt.abort.signal,
           chunkDelayMs: args.settings.streamChunkDelayMs,
           historyClient: args.historyClient ?? null,
@@ -376,7 +382,7 @@ export function useChatSessions(args: UseChatSessionsArgs): UseChatSessionsApi {
   const sendChat = useCallback(async (text: string) => {
     if (apiKeyMissing) {
       args.openSettingsTab()
-      args.showToast('Add an API key first.')
+      args.showToast(missingProviderToast)
       return
     }
     const sessionId = active.id
@@ -415,7 +421,7 @@ export function useChatSessions(args: UseChatSessionsArgs): UseChatSessionsApi {
   }, [active.id, bumpRuntime])
 
   const retryFromAnchor = useCallback((anchorId: string) => {
-    if (apiKeyMissing) { args.openSettingsTab(); args.showToast('Add an API key first.'); return }
+    if (apiKeyMissing) { args.openSettingsTab(); args.showToast(missingProviderToast); return }
     const rt = getRuntime(active.id)
     if (rt.busy) return
     const { kept, discarded } = truncateForRetry(active.messages, anchorId)
@@ -426,7 +432,7 @@ export function useChatSessions(args: UseChatSessionsArgs): UseChatSessionsApi {
   }, [active, apiKeyMissing, args, runTurn, getRuntime, patchSession])
 
   const editAndRetry = useCallback((newText: string) => {
-    if (apiKeyMissing) { args.openSettingsTab(); args.showToast('Add an API key first.'); return }
+    if (apiKeyMissing) { args.openSettingsTab(); args.showToast(missingProviderToast); return }
     const rt = getRuntime(active.id)
     if (rt.busy) return
     const { kept, discarded } = truncateForEditAndRetry(active.messages, newText)

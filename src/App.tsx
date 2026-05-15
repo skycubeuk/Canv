@@ -290,7 +290,8 @@ export default function App() {
   const availableModels: Record<ChatProvider, string[]> = useMemo(() => ({
     anthropic: getAdapter('anthropic').models,
     openai: getAdapter('openai').models,
-  }), [])
+    ollama: settings.ollamaModels.length ? settings.ollamaModels : getAdapter('ollama').models,
+  }), [settings.ollamaModels])
 
   const handleExport = useCallback(
     (fmt: 'txt' | 'md') => {

@@ -4,13 +4,19 @@ import react from '@vitejs/plugin-react'
 // Strict CSP for the packaged app. The meta tag in index.html ships this
 // to production. In dev, Vite's HMR needs ws + eval, so we swap a relaxed
 // CSP in via transformIndexHtml below.
+//
+// `connect-src` includes `http:` so the user-configurable Ollama base URL
+// works (localhost by default, but the spec allows pointing at a LAN host).
+// CSP can't express "private network only", and we ship to a single trusted
+// renderer with no remote untrusted content loaded, so the trade-off is
+// acceptable for the spike. Tighten if/when an Electron-main IPC proxy lands.
 const PROD_CSP =
   "default-src 'self'; " +
   "script-src 'self'; " +
   "style-src 'self' 'unsafe-inline'; " +
   "font-src 'self' data:; " +
   "img-src 'self' data: blob:; " +
-  "connect-src https://api.anthropic.com https://api.openai.com; " +
+  "connect-src http: https://api.anthropic.com https://api.openai.com; " +
   "worker-src 'self' blob:; " +
   "object-src 'none'; " +
   "base-uri 'self'; " +
@@ -22,7 +28,7 @@ const DEV_CSP =
   "style-src 'self' 'unsafe-inline'; " +
   "font-src 'self' data:; " +
   "img-src 'self' data: blob:; " +
-  "connect-src 'self' ws: wss: https://api.anthropic.com https://api.openai.com; " +
+  "connect-src 'self' ws: wss: http: https://api.anthropic.com https://api.openai.com; " +
   "worker-src 'self' blob:;"
 
 function cspByMode(): Plugin {

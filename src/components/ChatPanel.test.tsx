@@ -41,7 +41,7 @@ const baseProps = {
   onSelectSession: vi.fn(),
   onCloseSession: vi.fn(),
   onChangeProviderModel: vi.fn(),
-  availableModels: { anthropic: ['claude-sonnet-4-6'], openai: ['gpt-4o'] } as Record<ChatProvider, string[]>,
+  availableModels: { anthropic: ['claude-sonnet-4-6'], openai: ['gpt-4o'], ollama: [] } as Record<ChatProvider, string[]>,
 }
 
 const sessionProps = {
@@ -51,7 +51,7 @@ const sessionProps = {
   onSelectSession: vi.fn(),
   onCloseSession: vi.fn(),
   onChangeProviderModel: vi.fn(),
-  availableModels: { anthropic: ['claude-sonnet-4-6'], openai: ['gpt-4o'] } as Record<ChatProvider, string[]>,
+  availableModels: { anthropic: ['claude-sonnet-4-6'], openai: ['gpt-4o'], ollama: [] } as Record<ChatProvider, string[]>,
 }
 
 describe('ChatPanel — tool rendering', () => {
