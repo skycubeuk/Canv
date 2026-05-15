@@ -108,6 +108,14 @@ export function EditorTabs({
               onDragStart={(e) => setTabDragPayload(e, { sourceGroupId: groupId, key })}
               onClick={() => onSelect(key)}
               onMouseDown={(e) => {
+                // Suppress Chromium's middle-button autoscroll cursor. The
+                // close itself is deferred to onAuxClick so that the mouseup
+                // lands on the tab (non-editable) instead of the editor that
+                // would otherwise surface under the cursor — which on Linux
+                // would trigger a primary-selection / clipboard paste.
+                if (e.button === 1) e.preventDefault()
+              }}
+              onAuxClick={(e) => {
                 if (e.button === 1) {
                   e.preventDefault()
                   void requestClose(key, dirty)
