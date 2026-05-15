@@ -40,6 +40,12 @@ export interface Settings {
   theme: Theme
   streaming: boolean
   maxOutputTokens: Record<Provider, number>
+  /** Provider-specific endpoint URLs. Only Ollama uses this today. */
+  baseUrls: Partial<Record<Provider, string>>
+  /** Cached list of models fetched from a live Ollama instance via /api/tags.
+   *  Empty until the user clicks Refresh in Settings; falls back to the adapter's
+   *  static seed list when empty. */
+  ollamaModels: string[]
   chatToolBudget: number
   pricingOverrides: Record<string, ModelPricing>
   streamChunkDelayMs: StreamChunkDelayMs
@@ -57,8 +63,10 @@ const SETTINGS_KEY = 'canv:settings'
 
 const DEFAULT_SETTINGS: Settings = {
   provider: 'anthropic',
-  apiKeys: { anthropic: '', openai: '' },
-  defaultModel: { anthropic: 'claude-sonnet-4-6', openai: 'gpt-5.5' },
+  apiKeys: { anthropic: '', openai: '', ollama: '' },
+  baseUrls: { ollama: 'http://localhost:11434' },
+  ollamaModels: [],
+  defaultModel: { anthropic: 'claude-sonnet-4-6', openai: 'gpt-5.5', ollama: 'llama3.1' },
   useDefaultModelForAll: true,
   perAgentModel: {},
   fontSize: 16,
@@ -66,7 +74,7 @@ const DEFAULT_SETTINGS: Settings = {
   lineWidth: 'normal',
   theme: 'system',
   streaming: true,
-  maxOutputTokens: { anthropic: 8192, openai: 8192 },
+  maxOutputTokens: { anthropic: 8192, openai: 8192, ollama: 4096 },
   chatToolBudget: 10,
   pricingOverrides: {},
   streamChunkDelayMs: 0,
@@ -117,6 +125,8 @@ export function useSettings() {
       defaultModel: { ...DEFAULT_SETTINGS.defaultModel, ...(settings?.defaultModel || {}) },
       perAgentModel: { ...DEFAULT_SETTINGS.perAgentModel, ...(settings?.perAgentModel || {}) },
       maxOutputTokens: { ...DEFAULT_SETTINGS.maxOutputTokens, ...(settings?.maxOutputTokens || {}) },
+      baseUrls: { ...DEFAULT_SETTINGS.baseUrls, ...(settings?.baseUrls || {}) },
+      ollamaModels: Array.isArray(settings?.ollamaModels) ? settings!.ollamaModels : DEFAULT_SETTINGS.ollamaModels,
       lintRules: { ...DEFAULT_SETTINGS.lintRules, ...(settings?.lintRules || {}) },
       pricingOverrides: { ...DEFAULT_SETTINGS.pricingOverrides, ...(settings?.pricingOverrides || {}) },
     }
