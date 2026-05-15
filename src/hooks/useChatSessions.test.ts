@@ -178,6 +178,22 @@ describe('useChatSessions — active-session selectors', () => {
     expect(result.current.apiKeyMissing).toBe(false)
   })
 
+  it('sendChat short-circuits when the active session provider lacks credentials, even if another provider is configured', async () => {
+    const args = makeArgs()
+    // Global apiKeyMissing is false (openai has a key) but active session is anthropic (no key).
+    args.settings.apiKeys = { anthropic: '', openai: 'sk-x', ollama: '' }
+    args.settings.baseUrls = {}
+    const openSettingsTab = vi.fn()
+    const showToast = vi.fn()
+    args.openSettingsTab = openSettingsTab
+    args.showToast = showToast
+    const { result } = renderHook(() => useChatSessions(args))
+    expect(result.current.apiKeyMissing).toBe(false)
+    await act(async () => { await result.current.sendChat('hello') })
+    expect(openSettingsTab).toHaveBeenCalledTimes(1)
+    expect(showToast).toHaveBeenCalledWith('Add an API key first.')
+  })
+
   it('meterTotals are computed from the active session messages', () => {
     const { result } = renderHook(() => useChatSessions(makeArgs()))
     act(() => { result.current.__test_pushUserMessage('hello') })
