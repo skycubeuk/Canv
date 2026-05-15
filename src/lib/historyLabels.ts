@@ -20,11 +20,6 @@ function isSameLocalDay(a: Date, b: Date): boolean {
     && a.getDate() === b.getDate()
 }
 
-export function shortTime(iso: string): string {
-  const d = new Date(iso)
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
-
 /** Context-aware snapshot timestamp. Buckets evaluated against the local
  *  calendar day so "Today" / "Yesterday" match user intuition rather than a
  *  rolling 24-hour window. The optional `now` argument is for test injection. */
