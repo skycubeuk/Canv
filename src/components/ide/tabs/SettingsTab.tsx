@@ -262,7 +262,7 @@ export function SettingsTab(props: Props) {
                           // perAgentModel is never overwritten here — only the displayed value.
                           const refVisible = visibleAdapters.some((ad) => ad.id === ref.provider)
                           const fallbackAdapter = visibleAdapters[0]
-                          const fallbackModels = fallbackAdapter?.id === 'ollama' && settings.ollamaModels.length
+                          const fallbackModels = fallbackAdapter?.id === 'ollama'
                             ? settings.ollamaModels
                             : (fallbackAdapter?.models ?? [])
                           const selectValue = refVisible
@@ -290,7 +290,7 @@ export function SettingsTab(props: Props) {
                               }}
                             >
                               {visibleAdapters.map((ad) => {
-                                const opts = ad.id === 'ollama' && settings.ollamaModels.length
+                                const opts = ad.id === 'ollama'
                                   ? settings.ollamaModels
                                   : ad.models
                                 return (
@@ -327,59 +327,63 @@ export function SettingsTab(props: Props) {
             USD per 1M tokens. Edit to override the default for a model. Reset removes the override.
           </p>
           <div className="space-y-3">
-            {adapterList.map((ad) => (
-              <div key={ad.id}>
-                <div className="text-[11px] font-medium text-muted mb-1">{ad.name}</div>
-                <div className="space-y-1.5">
-                  {ad.models.map((m) => {
-                    const key = pricingKey(ad.id as Provider, m)
-                    const def: ModelPricing = PRICING[key] ?? { input: 0, output: 0 }
-                    const ov = settings.pricingOverrides[key]
-                    const cur: ModelPricing = ov ?? def
-                    const isOverride = !!ov
-                    const setField = (field: 'input' | 'output', val: number) => {
-                      const next: ModelPricing = { ...cur, [field]: val }
-                      onUpdate({ pricingOverrides: { ...settings.pricingOverrides, [key]: next } })
-                    }
-                    const reset = () => {
-                      const rest = { ...settings.pricingOverrides }
-                      delete rest[key]
-                      onUpdate({ pricingOverrides: rest })
-                    }
-                    return (
-                      <div key={key} className="flex items-center gap-2 text-xs">
-                        <span className="flex-1 font-mono truncate">{m}</span>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          className="input w-20 text-right"
-                          value={cur.input}
-                          onChange={(e) => setField('input', Number(e.target.value))}
-                          aria-label={`${ad.name} ${m} input price per 1M`}
-                        />
-                        <span className="text-subtle">in</span>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          className="input w-20 text-right"
-                          value={cur.output}
-                          onChange={(e) => setField('output', Number(e.target.value))}
-                          aria-label={`${ad.name} ${m} output price per 1M`}
-                        />
-                        <span className="text-subtle">out</span>
-                        {isOverride ? (
-                          <button type="button" className="btn-ghost text-xs" onClick={reset} aria-label={`reset ${ad.name} ${m} pricing`}>reset</button>
-                        ) : (
-                          <span className="w-12" />
-                        )}
-                      </div>
-                    )
-                  })}
+            {adapterList.map((ad) => {
+              const models = ad.id === 'ollama' ? settings.ollamaModels : ad.models
+              if (models.length === 0) return null
+              return (
+                <div key={ad.id}>
+                  <div className="text-[11px] font-medium text-muted mb-1">{ad.name}</div>
+                  <div className="space-y-1.5">
+                    {models.map((m) => {
+                      const key = pricingKey(ad.id as Provider, m)
+                      const def: ModelPricing = PRICING[key] ?? { input: 0, output: 0 }
+                      const ov = settings.pricingOverrides[key]
+                      const cur: ModelPricing = ov ?? def
+                      const isOverride = !!ov
+                      const setField = (field: 'input' | 'output', val: number) => {
+                        const next: ModelPricing = { ...cur, [field]: val }
+                        onUpdate({ pricingOverrides: { ...settings.pricingOverrides, [key]: next } })
+                      }
+                      const reset = () => {
+                        const rest = { ...settings.pricingOverrides }
+                        delete rest[key]
+                        onUpdate({ pricingOverrides: rest })
+                      }
+                      return (
+                        <div key={key} className="flex items-center gap-2 text-xs">
+                          <span className="flex-1 font-mono truncate">{m}</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            className="input w-20 text-right"
+                            value={cur.input}
+                            onChange={(e) => setField('input', Number(e.target.value))}
+                            aria-label={`${ad.name} ${m} input price per 1M`}
+                          />
+                          <span className="text-subtle">in</span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            className="input w-20 text-right"
+                            value={cur.output}
+                            onChange={(e) => setField('output', Number(e.target.value))}
+                            aria-label={`${ad.name} ${m} output price per 1M`}
+                          />
+                          <span className="text-subtle">out</span>
+                          {isOverride ? (
+                            <button type="button" className="btn-ghost text-xs" onClick={reset} aria-label={`reset ${ad.name} ${m} pricing`}>reset</button>
+                          ) : (
+                            <span className="w-12" />
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </>
       ),
