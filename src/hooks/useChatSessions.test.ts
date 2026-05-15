@@ -154,12 +154,27 @@ describe('useChatSessions — per-session model lock', () => {
 describe('useChatSessions — active-session selectors', () => {
   beforeEach(() => { localStorage.clear() })
 
-  it('apiKeyMissing reflects the active session provider', () => {
+  it('apiKeyMissing is true only when no provider has credentials anywhere', () => {
     const args = makeArgs()
-    args.settings.apiKeys = { anthropic: '', openai: 'sk-x', ollama: '' }
+    args.settings.apiKeys = { anthropic: '', openai: '', ollama: '' }
+    args.settings.baseUrls = {}
     const { result } = renderHook(() => useChatSessions(args))
     expect(result.current.apiKeyMissing).toBe(true)
-    act(() => { result.current.setActiveSessionProviderModel('openai', 'gpt-4o') })
+  })
+
+  it('apiKeyMissing is false when any provider is configured, even if the active session is not', () => {
+    const args = makeArgs()
+    args.settings.apiKeys = { anthropic: '', openai: 'sk-x', ollama: '' }
+    args.settings.baseUrls = {}
+    const { result } = renderHook(() => useChatSessions(args))
+    expect(result.current.apiKeyMissing).toBe(false)
+  })
+
+  it('apiKeyMissing is false when only the ollama base URL is set', () => {
+    const args = makeArgs()
+    args.settings.apiKeys = { anthropic: '', openai: '', ollama: '' }
+    args.settings.baseUrls = { ollama: 'http://localhost:11434' }
+    const { result } = renderHook(() => useChatSessions(args))
     expect(result.current.apiKeyMissing).toBe(false)
   })
 
