@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { adapterList } from '../../../adapters'
+import { ollamaAdapter } from '../../../adapters/ollama'
 import { PRICING, pricingKey, type ModelPricing } from '../../../config/pricing'
 import { useModes } from '../../../hooks/useModes'
 import type { Provider, Settings } from '../../../hooks/useSettings'
@@ -30,6 +31,30 @@ export function SettingsTab(props: Props) {
   const importInputRef = useRef<HTMLInputElement>(null)
   const dialogs = useDialogs()
   const [openModes, setOpenModes] = useState<Record<string, boolean>>({})
+
+  type OllamaStatus =
+    | { kind: 'idle' }
+    | { kind: 'loading' }
+    | { kind: 'ok'; count: number }
+    | { kind: 'error'; message: string }
+
+  const [ollamaStatus, setOllamaStatus] = useState<OllamaStatus>({ kind: 'idle' })
+
+  const refreshOllamaModels = useCallback(async () => {
+    const url = settings.baseUrls?.ollama
+    if (!url) {
+      setOllamaStatus({ kind: 'error', message: 'Set a base URL first.' })
+      return
+    }
+    setOllamaStatus({ kind: 'loading' })
+    try {
+      const names = await ollamaAdapter.listModels!(url)
+      onUpdate({ ollamaModels: names })
+      setOllamaStatus({ kind: 'ok', count: names.length })
+    } catch (err) {
+      setOllamaStatus({ kind: 'error', message: (err as Error).message || String(err) })
+    }
+  }, [settings.baseUrls?.ollama, onUpdate])
 
   const provider = settings.provider
   const adapter = adapterList.find((a) => a.id === provider)
@@ -92,6 +117,21 @@ export function SettingsTab(props: Props) {
                 <code>OLLAMA_ORIGINS=*</code> in the environment where you launch{' '}
                 <code>ollama serve</code>.
               </p>
+              <div className="flex items-center gap-2 mt-2">
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  onClick={refreshOllamaModels}
+                  disabled={ollamaStatus.kind === 'loading'}
+                >
+                  {ollamaStatus.kind === 'loading' ? 'Refreshing…' : 'Refresh models'}
+                </button>
+                <span className="text-xs text-muted">
+                  {ollamaStatus.kind === 'ok' && `Connected · ${ollamaStatus.count} models`}
+                  {ollamaStatus.kind === 'error' &&
+                    `Could not reach Ollama at ${settings.baseUrls?.ollama ?? ''} — ${ollamaStatus.message}`}
+                </span>
+              </div>
             </Field>
           ) : (
             <Field label={`${adapter?.name ?? ''} API key`}>
@@ -123,7 +163,10 @@ export function SettingsTab(props: Props) {
                 onUpdate({ defaultModel: { ...settings.defaultModel, [provider]: e.target.value } })
               }
             >
-              {adapter?.models.map((m) => (
+              {(settings.provider === 'ollama'
+                ? (settings.ollamaModels.length ? settings.ollamaModels : ollamaAdapter.models)
+                : (adapter?.models ?? [])
+              ).map((m) => (
                 <option key={m} value={m}>{m}</option>
               ))}
             </select>
@@ -498,7 +541,7 @@ export function SettingsTab(props: Props) {
         </>
       ),
     },
-  ], [settings, onUpdate, adapter, provider, keyVisible, modes, onExportBackup, openModes, setOpenModes, handleImportFile])
+  ], [settings, onUpdate, adapter, provider, keyVisible, modes, onExportBackup, openModes, setOpenModes, handleImportFile, ollamaStatus, refreshOllamaModels])
 
   const filtered = useMemo(() => {
     const q = filter.trim().toLowerCase()
