@@ -37,7 +37,8 @@ import { useAppCommands } from './hooks/useAppCommands'
 import { useDockBridgeMain } from './hooks/useDockBridgeMain'
 import { useIdleAutosnapshot } from './hooks/useIdleAutosnapshot'
 import type { ChatProvider } from './components/ChatPanel'
-import { getAdapter } from './adapters'
+import { getAdapter, configuredProviders } from './adapters'
+import type { Provider } from './adapters'
 
 function basename(rel: string): string {
   const i = rel.lastIndexOf('/')
@@ -287,11 +288,21 @@ export default function App() {
     getSession,
   } = chatSession
 
-  const availableModels: Record<ChatProvider, string[]> = useMemo(() => ({
-    anthropic: getAdapter('anthropic').models,
-    openai: getAdapter('openai').models,
-    ollama: settings.ollamaModels.length ? settings.ollamaModels : getAdapter('ollama').models,
-  }), [settings.ollamaModels])
+  const availableModels: Record<ChatProvider, string[]> = useMemo(() => {
+    const visible = new Set<Provider>(configuredProviders(settings))
+    visible.add(chatProvider as Provider) // keep the active session's provider visible even if its key was removed
+    if (visible.size === 0) {
+      // No provider configured and no active selection — show everything so the picker isn't empty.
+      ;(['anthropic', 'openai', 'ollama'] as Provider[]).forEach((p) => visible.add(p))
+    }
+    const result = {} as Record<ChatProvider, string[]>
+    for (const id of visible) {
+      result[id as ChatProvider] = id === 'ollama' && settings.ollamaModels.length
+        ? settings.ollamaModels
+        : getAdapter(id).models
+    }
+    return result
+  }, [settings.apiKeys, settings.baseUrls, settings.ollamaModels, chatProvider])
 
   const handleExport = useCallback(
     (fmt: 'txt' | 'md') => {
