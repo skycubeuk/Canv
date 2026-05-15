@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Plus, FileText, ChevronRight, ChevronDown } from 'lucide-react'
 import type { CanvHistory, SnapshotEntry, CurrentChange, SnapshotDeltaEntry } from '../../../lib/history'
-import { REASON_LABEL, shortTime, formatSnapshotLabel } from '../../../lib/historyLabels'
+import { REASON_LABEL, smartTime, fullTime, formatSnapshotLabel } from '../../../lib/historyLabels'
 
 export type OpenDiffRequest =
   | { kind: 'current'; relPath: string; baseSha: string; baseLabel: string }
@@ -181,8 +181,11 @@ export function HistoryTab({ history, onOpenDiff, onCreateCheckpoint, onRestore 
                       {isOpen
                         ? <ChevronDown aria-hidden className="w-2.5 h-2.5 shrink-0 text-subtle" />
                         : <ChevronRight aria-hidden className="w-2.5 h-2.5 shrink-0 text-subtle" />}
-                      <span className="text-[10px] font-mono text-subtle tabular-nums">
-                        {shortTime(s.createdAt)}
+                      <span
+                        className="text-[10px] font-mono text-subtle tabular-nums shrink-0"
+                        title={fullTime(s.createdAt)}
+                      >
+                        {smartTime(s.createdAt)}
                       </span>
                       <span className="text-[9.5px] uppercase tracking-wider text-subtle px-1 py-0 rounded-sm bg-elev shrink-0">
                         {REASON_LABEL[s.reason]}
