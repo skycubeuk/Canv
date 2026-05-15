@@ -44,4 +44,24 @@ export function providerName(id: string): string {
   return (adapters as Record<string, LLMAdapter>)[id]?.name ?? id
 }
 
+/**
+ * Providers for which the user has supplied credentials — an API key for
+ * cloud providers, or a base URL for local Ollama. Used to filter the
+ * model/provider pickers down to what the user can actually run.
+ *
+ * Takes a minimal settings shape rather than the full `Settings` type so
+ * this module does not need to import from `hooks/useSettings.ts` (which
+ * itself imports from this file).
+ */
+export function configuredProviders(input: {
+  apiKeys: Partial<Record<Provider, string>>
+  baseUrls?: { ollama?: string }
+}): Provider[] {
+  return (Object.keys(adapters) as Provider[]).filter((id) =>
+    id === 'ollama'
+      ? !!input.baseUrls?.ollama
+      : !!input.apiKeys[id],
+  )
+}
+
 export type { LLMAdapter, CompleteParams, Message } from './types'
