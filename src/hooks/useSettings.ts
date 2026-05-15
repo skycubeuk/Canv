@@ -136,7 +136,7 @@ export function useSettings() {
     // a stale seed entry (e.g. 'qwen2.5') can't survive into a model send and
     // produce an "Ollama 404: model not found" at runtime.
     for (const provider of Object.keys(m.defaultModel) as Provider[]) {
-      const available = provider === 'ollama' && m.ollamaModels.length
+      const available = provider === 'ollama'
         ? m.ollamaModels
         : (adapters[provider]?.models ?? [])
       if (!available.includes(m.defaultModel[provider])) {
@@ -182,7 +182,7 @@ export function useSettings() {
     // validator above uses, applied provider-aware so the seed of one adapter
     // can't accidentally validate a model owned by another.
     const modelsForProvider = (p: Provider): string[] =>
-      p === 'ollama' && m.ollamaModels.length
+      p === 'ollama'
         ? m.ollamaModels
         : (adapters[p]?.models ?? [])
     for (const modeId of Object.keys(m.perAgentModel)) {
