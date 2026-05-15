@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { FileText } from 'lucide-react'
 import type { CanvHistory, FileHistoryEntry } from '../../../lib/history'
-import { REASON_LABEL, shortTime, formatSnapshotLabel } from '../../../lib/historyLabels'
+import { REASON_LABEL, smartTime, fullTime, formatSnapshotLabel } from '../../../lib/historyLabels'
 
 export interface FileHistoryOpenDiff {
   kind: 'fileHistory'
@@ -69,8 +69,11 @@ export function FileHistoryTab({ target, nonce, history, onOpenDiff, onRestore }
                 className="group flex items-center gap-1.5 px-3 py-[5px] text-[12.5px] text-muted hover:bg-hover hover:text-default"
               >
                 <FileText aria-hidden className="w-3 h-3 shrink-0 text-subtle" />
-                <span className="text-[10px] font-mono text-subtle tabular-nums shrink-0">
-                  {shortTime(e.createdAt)}
+                <span
+                  className="text-[10px] font-mono text-subtle tabular-nums shrink-0"
+                  title={fullTime(e.createdAt)}
+                >
+                  {smartTime(e.createdAt)}
                 </span>
                 <span className="text-[9.5px] uppercase tracking-wider text-subtle px-1 py-0 rounded-sm bg-elev shrink-0">
                   {REASON_LABEL[e.reason]}
