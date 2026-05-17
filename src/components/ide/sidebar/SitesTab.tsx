@@ -26,6 +26,7 @@ export function SitesTab({ onRegenerate }: Props) {
   }, [])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- refresh is async; setState runs after the fetch resolves, not synchronously in the effect body
     void refresh()
     if (!window.canvSites) return
     const off = window.canvSites.onRegistryChanged(() => { void refresh() })
