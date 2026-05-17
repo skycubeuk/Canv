@@ -17,7 +17,7 @@
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
-const cp = require('node:child_process')
+const asar = require('@electron/asar')
 
 // Add to this list if other transitive deps go missing for the same reason.
 const MISSING_TOPLEVEL = ['call-bind-apply-helpers']
@@ -37,7 +37,7 @@ exports.default = async function afterPack(context) {
 
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'canv-afterpack-'))
   try {
-    cp.execFileSync('npx', ['asar', 'extract', asarPath, tempDir], { stdio: 'inherit' })
+    asar.extractAll(asarPath, tempDir)
 
     let injected = 0
     for (const name of MISSING_TOPLEVEL) {
@@ -59,7 +59,7 @@ exports.default = async function afterPack(context) {
     }
 
     fs.unlinkSync(asarPath)
-    cp.execFileSync('npx', ['asar', 'pack', tempDir, asarPath], { stdio: 'inherit' })
+    await asar.createPackage(tempDir, asarPath)
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true })
   }

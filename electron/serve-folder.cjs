@@ -865,6 +865,17 @@ async function start(absRoot) {
   })
   watcher.on('error', () => { stop().catch(() => {}) })
   state.watcher = watcher
+  // Independent fallback: chokidar's unlinkDir for the watched root is unreliable
+  // on macOS (the cascade depends on a readdir race against rm -rf). Poll for the
+  // root's existence so auto-stop fires regardless of the watcher's behaviour.
+  state.rootExistsPoller = setInterval(() => {
+    if (!state) return
+    try { fs.accessSync(state.root) }
+    catch (e) {
+      if (e && (e.code === 'ENOENT' || e.code === 'ENOTDIR')) stop().catch(() => {})
+    }
+  }, 250)
+  state.rootExistsPoller.unref?.()
   await new Promise((resolve) => watcher.once('ready', resolve))
   emitStatus()
   return { url }
@@ -874,6 +885,7 @@ async function stop() {
   if (!state) return
   const local = state
   state = null
+  if (local.rootExistsPoller) clearInterval(local.rootExistsPoller)
   if (local.broadcast?.cancel) local.broadcast.cancel()
   for (const res of local.sseClients) { try { res.end() } catch { /* ignore */ } }
   local.sseClients.clear()
