@@ -23,7 +23,7 @@ export const ASSETS: Record<'macos' | 'windows' | 'linux', AssetLink[]> = {
   ],
   windows: [
     { label: 'Installer (.exe)',  filename: `Canv-Setup-${v}.exe` },
-    { label: 'Portable (.exe)',   filename: `Canv-${v}-portable.exe` },
+    { label: 'Portable (.exe)',   filename: `Canv-${v}.exe` },
   ],
   linux: [
     { label: 'AppImage',          filename: `Canv-${v}.AppImage` },
