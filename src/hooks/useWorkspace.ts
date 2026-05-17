@@ -194,7 +194,7 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
 
   const saveTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
   const pendingMarkdown = useRef<Map<string, string>>(new Map())
-  const recentWrites = useRef<Map<string, { mtimeMs: number; ts: number }>>(new Map())
+  const recentWrites = useRef<Map<string, { mtimeMs: number; ts: number; content: string | null }>>(new Map())
   const lastWriterGroupRef = useRef<Map<string, EditorGroupId>>(new Map())
   const treeRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const rootRef = useRef<string | null>(null)
@@ -265,7 +265,7 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
   const writeFileCoalesced = useCallback(async (rel: string, markdown: string, sourceGroupId?: EditorGroupId) => {
     try {
       const { mtimeMs } = await getFs().writeFile(rel, markdown)
-      recentWrites.current.set(rel, { mtimeMs, ts: Date.now() })
+      recentWrites.current.set(rel, { mtimeMs, ts: Date.now(), content: markdown })
       // Update mtimeMs on every group; refresh loadedMarkdown on every OTHER group so their
       // CodeMirror instances re-sync via Canvas's lastLoadedRef effect. The source group's
       // Canvas keeps its own state (we'd reset its cursor otherwise).
@@ -309,7 +309,7 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
     const result = await getFs().writeFile(rel, content, expectedMtimeMs)
     // Mark this mtime as "our own write" so the chokidar 'change' event that
     // follows is suppressed in the watcher subscription below.
-    recentWrites.current.set(rel, { mtimeMs: result.mtimeMs, ts: Date.now() })
+    recentWrites.current.set(rel, { mtimeMs: result.mtimeMs, ts: Date.now(), content })
     // Refresh any open tabs of this file so their CodeMirror buffers re-sync.
     setEditorGroups((prev) =>
       prev.map((g) => ({
@@ -325,7 +325,7 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
   }, [setDirty])
 
   const noteOwnDiskWrite = useCallback((rel: string, mtimeMs: number) => {
-    recentWrites.current.set(rel, { mtimeMs, ts: Date.now() })
+    recentWrites.current.set(rel, { mtimeMs, ts: Date.now(), content: null })
   }, [])
 
   const saveTab = useCallback((rel: string, markdown: string, sourceGroupId?: EditorGroupId) => {
@@ -1022,20 +1022,51 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
         }
         const recent = recentWrites.current.get(relPath)
         if (recent && Math.abs(recent.mtimeMs - mtimeMs) < 2) {
-          return // our own write
+          return // our own write (mtime fast path)
         }
         // Update mtime on pinned entries when the file changes externally.
         const isPinned = pinnedRef.current.some((p) => p.relPath === relPath)
         if (isPinned) {
           setPinned((prev) => prev.map((p) => p.relPath === relPath ? { ...p, mtimeMs } : p))
         }
-        // Open tab changed externally — surface a conflict.
         const groupsHaveIt = editorGroupsRef.current.some((g) =>
           g.openTabs.some((t) => t.kind === 'markdown' && t.relPath === relPath),
         )
-        if (groupsHaveIt) {
-          setConflict({ relPath, diskMtimeMs: mtimeMs })
-        }
+        if (!groupsHaveIt) return
+        // Second-check: the mtime fast path missed, but the disk content may
+        // still match what we last wrote. This happens on Windows when the
+        // post-writeFile stat returns a slightly different mtime than
+        // chokidar's later poll (NTFS metadata lazy-flush, AV/indexer touch,
+        // chokidar 5 backend differences). Read the file and compare content
+        // before showing the conflict popup. Done async so the synchronous
+        // event handler stays cheap; ordering doesn't matter because the
+        // user can't act on a popup that hasn't appeared yet.
+        void (async () => {
+          try {
+            const { content: diskContent, mtimeMs: statMtime } = await getFs().readFile(relPath)
+            const recordedContent = recent?.content ?? null
+            if (recordedContent !== null && diskContent === recordedContent) {
+              // Disk matches what we wrote — keep the recentWrites entry
+              // current under the new mtime so the next echo (if any) takes
+              // the fast path, and refresh open tabs' mtimeMs to match.
+              recentWrites.current.set(relPath, { mtimeMs: statMtime, ts: Date.now(), content: recordedContent })
+              setEditorGroups((prev) =>
+                prev.map((g) => ({
+                  ...g,
+                  openTabs: g.openTabs.map((t) =>
+                    isMarkdownTab(t) && t.relPath === relPath ? { ...t, mtimeMs: statMtime } : t,
+                  ),
+                })),
+              )
+              return
+            }
+            setConflict({ relPath, diskMtimeMs: mtimeMs })
+          } catch {
+            // Read failed (file vanished, permissions changed, etc.) — fall
+            // back to the conservative behaviour and surface the conflict.
+            setConflict({ relPath, diskMtimeMs: mtimeMs })
+          }
+        })()
       }
     })
     return () => { unsub() }
