@@ -1,0 +1,56 @@
+---
+interface Props {
+  title: string;
+  body: string;
+  image: string;
+  alt: string;
+  reverse?: boolean;
+}
+const { title, body, image, alt, reverse = false } = Astro.props;
+const base = import.meta.env.BASE_URL;
+---
+<article class:list={['capability', { reverse }]}>
+  <div class="text">
+    <h3>{title}</h3>
+    <p>{body}</p>
+  </div>
+  <div class="shot">
+    <img src={`${base}screenshots/${image}`} alt={alt} loading="lazy" />
+  </div>
+</article>
+
+<style>
+  .capability {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3rem;
+    align-items: center;
+    padding: 3rem 0;
+  }
+  .capability.reverse .text { order: 2; }
+  .capability.reverse .shot { order: 1; }
+  @media (max-width: 768px) {
+    .capability, .capability.reverse {
+      grid-template-columns: 1fr;
+    }
+    .capability.reverse .text { order: 1; }
+    .capability.reverse .shot { order: 2; }
+  }
+  h3 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin: 0 0 0.75rem;
+    color: var(--canv-text);
+  }
+  p {
+    margin: 0;
+    color: var(--canv-muted);
+    font-size: 1rem;
+    line-height: 1.65;
+  }
+  .shot img {
+    border-radius: 0.5rem;
+    border: 1px solid color-mix(in srgb, var(--canv-purple-500) 20%, transparent);
+    box-shadow: 0 20px 50px -15px rgba(126, 20, 255, 0.2);
+  }
+</style>

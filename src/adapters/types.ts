@@ -42,6 +42,9 @@ export interface CompleteParams {
    *  in the UI while the model composes a long tool input. */
   onToolCallStart?: (call: { id: string; name: string }) => void
   apiKey: string
+  /** Base URL for providers that talk to a user-configurable endpoint (Ollama).
+   *  Cloud adapters ignore this. */
+  baseUrl?: string
   tools?: ToolSchema[]
   /** When > 0, the adapter paces text/tool dispatches by at least this many
    *  milliseconds between calls. Wire reading still runs at full speed; only
@@ -68,5 +71,8 @@ export interface LLMAdapter {
   name: string
   id: string
   models: string[]
+  /** Optional dynamic model discovery (Ollama uses this). When present, the
+   *  Settings UI can refresh the model list from a live endpoint. */
+  listModels?: (baseUrl: string, signal?: AbortSignal) => Promise<string[]>
   complete(params: CompleteParams): Promise<CompleteResult>
 }

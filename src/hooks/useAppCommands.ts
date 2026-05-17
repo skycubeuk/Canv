@@ -68,9 +68,9 @@ export function useAppCommands(args: UseAppCommandsArgs): void {
       run: () => { ideLayout.setSidebarTab('files'); if (!ideLayout.layout.sidebar.visible) ideLayout.toggleSidebar() },
     })
     reg({
-      id: 'view.focusGitTab', label: 'View: Focus Git', group: 'View',
+      id: 'view.focusHistoryTab', label: 'View: Focus History', group: 'View',
       shortcut: 'Ctrl+Shift+G',
-      run: () => { ideLayout.setSidebarTab('git'); if (!ideLayout.layout.sidebar.visible) ideLayout.toggleSidebar() },
+      run: () => { ideLayout.setSidebarTab('history'); if (!ideLayout.layout.sidebar.visible) ideLayout.toggleSidebar() },
     })
     reg({
       id: 'view.focusRunsTab', label: 'View: Focus Runs', group: 'View',

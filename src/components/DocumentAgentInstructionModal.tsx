@@ -62,13 +62,13 @@ export function DocumentAgentInstructionModal({ agent, canRun, onSubmit, onCance
             }
           }}
           placeholder={agent.instructionPlaceholder ?? 'Instruction'}
-          className="w-full px-2 py-1.5 text-sm rounded border border-default bg-transparent focus:outline-none focus:ring-1 focus:ring-accent"
+          className="w-full px-2 py-1.5 text-sm rounded-sm border border-default bg-transparent focus:outline-hidden focus:ring-1 focus:ring-accent"
         />
         <div className="mt-3 flex justify-end gap-2">
           <button
             type="button"
             onClick={onCancel}
-            className="px-3 py-1 text-xs rounded border border-default hover:bg-hover"
+            className="px-3 py-1 text-xs rounded-sm border border-default hover:bg-hover"
           >
             Cancel
           </button>
@@ -76,7 +76,7 @@ export function DocumentAgentInstructionModal({ agent, canRun, onSubmit, onCance
             type="button"
             onClick={submit}
             disabled={!runEnabled}
-            className="btn-primary !py-1 !px-3 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+            className="btn-primary py-1! px-3! text-xs disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Run
           </button>

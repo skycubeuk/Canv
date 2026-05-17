@@ -1,4 +1,4 @@
-import { Folder, Search, GitBranch, LayoutDashboard, PanelRight, PanelBottom } from 'lucide-react'
+import { Folder, Search, History, LayoutDashboard, PanelRight, PanelBottom } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { SidebarTab, InAppDockPlacement } from '../../hooks/useIdeLayout'
 import { DocumentAgentMenu } from '../DocumentAgentMenu'
@@ -18,7 +18,7 @@ interface Props {
   bottomPlacement: InAppDockPlacement | 'popout'
   onSetBottomPlacementBottom: () => void
   onSetBottomPlacementRight: () => void
-  gitBadge?: string | null
+  historyEnabled: boolean
 }
 
 interface SectionTab {
@@ -34,13 +34,13 @@ export function TopBar(props: Props) {
     onOpenCommandPalette, profile, hasMarkdownTab, activeFileName, onRunDocAgent,
     sidebarVisible, bottomVisible, bottomPlacement,
     onSetBottomPlacementBottom, onSetBottomPlacementRight,
-    gitBadge,
+    historyEnabled,
   } = props
 
   const sectionTabs: SectionTab[] = [
     { id: 'files', label: 'Files', icon: Folder },
     { id: 'search', label: 'Search', icon: Search },
-    { id: 'git', label: 'Git', icon: GitBranch, badge: gitBadge ?? null },
+    ...(historyEnabled ? [{ id: 'history' as const, label: 'History', icon: History }] : []),
     { id: 'sites', label: 'Sites', icon: LayoutDashboard },
   ]
 
@@ -91,7 +91,7 @@ export function TopBar(props: Props) {
             >
               <t.icon aria-hidden className="w-3.5 h-3.5" />
               {hasBadge && (
-                <span className="absolute top-0 right-0 text-[9px] leading-none px-1 py-px rounded bg-elev text-muted translate-x-1/3 -translate-y-1/3">
+                <span className="absolute top-0 right-0 text-[9px] leading-none px-1 py-px rounded-sm bg-elev text-muted translate-x-1/3 -translate-y-1/3">
                   {t.badge}
                 </span>
               )}
@@ -111,7 +111,7 @@ export function TopBar(props: Props) {
       >
         <Search aria-hidden className="w-3 h-3" />
         <span className="text-left">Find files, symbols, commands…</span>
-        <span className="ml-auto text-[10px] px-1.5 py-px rounded bg-app border border-default font-mono text-subtle">⌘K</span>
+        <span className="ml-auto text-[10px] px-1.5 py-px rounded-sm bg-app border border-default font-mono text-subtle">⌘K</span>
       </button>
 
       <div className="flex-1" />

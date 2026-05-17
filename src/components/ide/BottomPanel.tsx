@@ -43,14 +43,14 @@ export function BottomPanel({ tabs, activeTab, onSelectTab, onClose, headerRight
               <t.icon aria-hidden className="w-3 h-3" />
               <span>{t.label}</span>
               {t.badge != null && (
-                <span className="text-[10px] px-1.5 rounded bg-active text-muted leading-[14px]">
+                <span className="text-[10px] px-1.5 rounded-sm bg-active text-muted leading-[14px]">
                   {t.badge}
                 </span>
               )}
               {isActive && (
                 <span
                   aria-hidden
-                  className="absolute -bottom-[5px] left-2 right-2 h-0.5 bg-accent rounded-sm"
+                  className="absolute bottom-[-5px] left-2 right-2 h-0.5 bg-accent rounded-xs"
                 />
               )}
             </button>
@@ -62,7 +62,7 @@ export function BottomPanel({ tabs, activeTab, onSelectTab, onClose, headerRight
             <button
               type="button"
               onClick={onClose}
-              className="w-7 h-7 grid place-items-center text-subtle hover:bg-hover hover:text-default rounded"
+              className="w-7 h-7 grid place-items-center text-subtle hover:bg-hover hover:text-default rounded-sm"
               title="Hide bottom panel (Ctrl+`)"
               aria-label="Hide bottom panel"
             >

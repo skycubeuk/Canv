@@ -103,9 +103,16 @@ export function useSelectionAgent(args: UseSelectionAgentArgs): UseSelectionAgen
       // adapter exposing the same model id (e.g. Bedrock + direct Anthropic
       // both listing claude-sonnet-4-6) routes unambiguously.
       const { provider, model } = modelForAgent(activeProfileId, agent.id)
-      if (!settings.apiKeys[provider]) {
+      const providerReady = provider === 'ollama'
+        ? !!settings.baseUrls?.ollama
+        : !!settings.apiKeys[provider]
+      if (!providerReady) {
         openSettingsTab()
-        showToast(`Add an ${provider === 'anthropic' ? 'Anthropic' : 'OpenAI'} API key in settings.`)
+        showToast(
+          provider === 'ollama'
+            ? 'Set the Ollama base URL in settings.'
+            : `Add an ${provider === 'anthropic' ? 'Anthropic' : 'OpenAI'} API key in settings.`,
+        )
         return
       }
       const adapter = getAdapter(provider)
@@ -164,6 +171,7 @@ export function useSelectionAgent(args: UseSelectionAgentArgs): UseSelectionAgen
           agent,
           adapter,
           apiKey: settings.apiKeys[provider],
+          baseUrl: settings.baseUrls?.[provider],
           model,
           maxTokens: settings.maxOutputTokens[provider],
           text,
@@ -307,9 +315,16 @@ export function useSelectionAgent(args: UseSelectionAgentArgs): UseSelectionAgen
         return
       }
       const { provider, model } = modelForAgent(activeProfileId, agent.id)
-      if (!settings.apiKeys[provider]) {
+      const providerReady = provider === 'ollama'
+        ? !!settings.baseUrls?.ollama
+        : !!settings.apiKeys[provider]
+      if (!providerReady) {
         openSettingsTab()
-        showToast(`Add an ${provider === 'anthropic' ? 'Anthropic' : 'OpenAI'} API key in settings.`)
+        showToast(
+          provider === 'ollama'
+            ? 'Set the Ollama base URL in settings.'
+            : `Add an ${provider === 'anthropic' ? 'Anthropic' : 'OpenAI'} API key in settings.`,
+        )
         return
       }
       const adapter = getAdapter(provider)
@@ -354,6 +369,7 @@ export function useSelectionAgent(args: UseSelectionAgentArgs): UseSelectionAgen
 
         const { text: final, truncated, tokenUsage } = await adapter.complete({
           apiKey: settings.apiKeys[provider],
+          baseUrl: settings.baseUrls?.[provider],
           model,
           system,
           messages,

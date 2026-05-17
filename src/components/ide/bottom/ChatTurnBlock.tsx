@@ -28,12 +28,12 @@ export function ChatTurnBlock({ turnIndex, userMessage, assistantMessage }: Prop
 
       <div className="mb-1">
         <div className="text-[10px] uppercase tracking-wide text-muted">user</div>
-        <pre className="whitespace-pre-wrap break-words text-default">{userMessage.content}</pre>
+        <pre className="whitespace-pre-wrap wrap-break-word text-default">{userMessage.content}</pre>
       </div>
 
       <div className="mb-1">
         <div className="text-[10px] uppercase tracking-wide text-muted">assistant</div>
-        <pre className="whitespace-pre-wrap break-words text-default">
+        <pre className="whitespace-pre-wrap wrap-break-word text-default">
           {assistantMessage.content || <em className="text-subtle">(no text)</em>}
         </pre>
       </div>

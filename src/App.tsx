@@ -18,7 +18,11 @@ import type { PaletteMode, PaletteFile } from './components/ide/CommandPalette'
 import type { Action as AgentDef } from './config/types'
 import { useModes } from './hooks/useModes'
 import { useProfilePicker } from './hooks/useProfilePicker'
-import { isElectron, flattenTree } from './lib/fs'
+import { isElectron, flattenTree, getFs } from './lib/fs'
+import { WorkspaceSetupModal } from './components/WorkspaceSetupModal'
+import { useWorkspaceSetup } from './hooks/useWorkspaceSetup'
+import { getCanvHistory } from './lib/history'
+import { RestorePreviewDialog } from './components/ide/sidebar/RestorePreviewDialog'
 import { exportBackup } from './lib/backup'
 import { useDialogs } from './lib/dialogs'
 import { useNotifications } from './hooks/useNotifications'
@@ -31,8 +35,11 @@ import { TopBar } from './components/ide/TopBar'
 import { useChatSessions } from './hooks/useChatSessions'
 import { useAppCommands } from './hooks/useAppCommands'
 import { useDockBridgeMain } from './hooks/useDockBridgeMain'
+import { useIdleAutosnapshot } from './hooks/useIdleAutosnapshot'
 import type { ChatProvider } from './components/ChatPanel'
-import { getAdapter } from './adapters'
+import { getAdapter, configuredProviders } from './adapters'
+import type { Provider } from './adapters'
+import { ollamaAdapter } from './adapters/ollama'
 
 function basename(rel: string): string {
   const i = rel.lastIndexOf('/')
@@ -58,6 +65,25 @@ export default function App() {
     return () => mq.removeEventListener('change', onChange)
   }, [settings.theme])
 
+  // Auto-refresh the Ollama model list whenever the base URL is set or changes.
+  // Silent on failure — keep the existing settings.ollamaModels so a previously
+  // successful refresh survives transient outages (server down, network blip).
+  useEffect(() => {
+    const url = settings.baseUrls?.ollama
+    if (!url) return
+    let cancelled = false
+    void (async () => {
+      try {
+        const names = await ollamaAdapter.listModels!(url)
+        if (cancelled) return
+        update({ ollamaModels: names })
+      } catch {
+        // Ollama not reachable. Keep the existing list as-is.
+      }
+    })()
+    return () => { cancelled = true }
+  }, [settings.baseUrls?.ollama, update])
+
   const [profile, setProfile] = useLocalStorage<string | null>('canv:profile', null)
   const { modes, defaultModeId } = useModes()
   const activeProfileId = profile ?? defaultModeId
@@ -66,6 +92,18 @@ export default function App() {
 
   const workspace = useWorkspace({ onToast: showToast })
   const { openSettingsTab } = workspace
+
+  const setup = useWorkspaceSetup({
+    workspaceReady: workspace.ready,
+    workspaceRoot: workspace.root,
+    remote: workspace.kind?.kind === 'remote',
+    fs: getFs(),
+    // Provide a no-op stub when canvHistory is not exposed (e.g. dock popout / web build).
+    // The hook only calls history.init when enableRA + non-remote, so the stub is unreachable
+    // in that path; this keeps the type happy.
+    history: getCanvHistory() ?? { init: async () => ({ branch: 'canv-history', headCommit: '' }) },
+    defaultModeId: defaultModeId ?? 'fiction',
+  })
 
   const fileOps = useWorkspaceFileOps({
     workspace,
@@ -92,6 +130,7 @@ export default function App() {
     profile,
     setProfile,
     workspaceReady: workspace.ready,
+    workspaceRoot: workspace.root,
     migrationOpen,
   })
 
@@ -117,8 +156,8 @@ export default function App() {
     setTimeout(() => setRevealFolderRel(null), 0)
   }, [ideLayout])
 
-  const handleOpenDiff = useCallback((rel: string, baseRef: string = 'HEAD') => {
-    workspace.openDiffTab(rel, baseRef)
+  const handleOpenDiff = useCallback((rel: string, baseRef: string = 'HEAD', baseLabel?: string) => {
+    workspace.openDiffTab(rel, baseRef, baseLabel)
   }, [workspace])
 
   const handleOutlineJump = useCallback((node: OutlineNode) => {
@@ -207,7 +246,23 @@ export default function App() {
     if (!visible) ideLayout.toggleBottom()
   }, [ideLayout])
 
-  const gitBadge = null  // TODO(0.7.1): wire to actual git diff count
+  const raEnabled = setup.config?.revisionArchaeology.enabled === true
+
+  useIdleAutosnapshot({
+    enabled: raEnabled,
+    idleMs: 10 * 60 * 1000,
+    history: raEnabled ? getCanvHistory() : null,
+  })
+
+  const [restoreTarget, setRestoreTarget] = useState<{ snapshotId: string; relPath: string } | null>(null)
+  const [fileHistoryTarget, setFileHistoryTarget] = useState<string | null>(null)
+  const [fileHistoryNonce, setFileHistoryNonce] = useState(0)
+
+  const openFileHistory = useCallback((rel: string) => {
+    setFileHistoryTarget(rel)
+    setFileHistoryNonce((n) => n + 1)
+    ideLayout.showBottomTab('fileHistory')
+  }, [ideLayout])
 
   // TODO(0.7.1): wire cursor line/col from Canvas's CodeMirror via onCursorChange prop.
   const [cursorPos] = useState<{ line: number; col: number } | null>(null)
@@ -242,6 +297,7 @@ export default function App() {
     showRetryUndoToast: notifications.showRetryUndoToast,
     dismissRetryUndo: notifications.dismissRetryUndo,
     dialogs,
+    historyClient: raEnabled ? getCanvHistory() : null,
   })
   const {
     chatMessages, chatBusy, pendingApprovals,
@@ -254,10 +310,25 @@ export default function App() {
     getSession,
   } = chatSession
 
-  const availableModels: Record<ChatProvider, string[]> = useMemo(() => ({
-    anthropic: getAdapter('anthropic').models,
-    openai: getAdapter('openai').models,
-  }), [])
+  const availableModels: Record<ChatProvider, string[]> = useMemo(() => {
+    const visible = new Set<Provider>(configuredProviders({ apiKeys: settings.apiKeys, baseUrls: settings.baseUrls, ollamaModels: settings.ollamaModels }))
+    // Preserve the active session's provider only when the chat is locked (has messages) —
+    // an empty session inherited settings.provider and shouldn't keep an unconfigured
+    // provider visible just because it's the current default.
+    if (chatMessages.length > 0) visible.add(chatProvider as Provider)
+    if (visible.size === 0) {
+      // Nothing configured and no locked chat to preserve — fall back to the full list
+      // so the picker isn't empty.
+      ;(['anthropic', 'openai', 'ollama'] as Provider[]).forEach((p) => visible.add(p))
+    }
+    const result = {} as Record<ChatProvider, string[]>
+    for (const id of visible) {
+      result[id as ChatProvider] = id === 'ollama'
+        ? settings.ollamaModels
+        : getAdapter(id).models
+    }
+    return result
+  }, [settings.apiKeys, settings.baseUrls, settings.ollamaModels, chatProvider, chatMessages.length])
 
   const handleExport = useCallback(
     (fmt: 'txt' | 'md') => {
@@ -354,6 +425,12 @@ export default function App() {
     jumpToProblem,
     settings,
     pricingOverrides: settings.pricingOverrides,
+    revisionArchaeologyEnabled: raEnabled,
+    fileHistoryTarget,
+    fileHistoryNonce,
+    onOpenFileHistory: openFileHistory,
+    onFileHistoryOpenDiff: (r) => handleOpenDiff(r.relPath, r.commitSha, r.baseLabel),
+    onFileHistoryRestore: (snapshotId, relPath) => setRestoreTarget({ snapshotId, relPath }),
   })
 
   const openRels = useMemo(() => {
@@ -376,12 +453,73 @@ export default function App() {
       ? 'saving' as const
       : 'saved' as const
 
+  const applyRunWithSnapshot = useCallback(async (run: import('./components/ResultsPanel').RunRecord, replacement: string) => {
+    const rel = workspace.activeMarkdownRel
+    const client = raEnabled ? getCanvHistory() : null
+
+    if (!client || !rel) {
+      handleApply(run, replacement)
+      return
+    }
+
+    const meta = {
+      source: 'agent_apply',
+      runId: run.id,
+      agentId: run.agentId,
+      agentLabel: run.agentLabel,
+      provider: run.provider,
+      model: run.model,
+    }
+
+    // Persist any pending edits so the before-snapshot reflects current on-disk state.
+    try { await workspace.flushAll() } catch (e) { console.warn('[apply] flush before snapshot failed', e) }
+
+    let beforeId: string | null = null
+    try {
+      const e = await client.createSnapshot({
+        reason: 'before_ai_edit',
+        summary: `Before apply · ${run.agentLabel}`,
+        files: [rel],
+        metadata: meta,
+      })
+      beforeId = e.id
+    } catch (e) {
+      console.warn('[apply] before snapshot failed', e)
+      notifications.showToast(`History snapshot failed: ${(e as Error).message}`)
+    }
+
+    // Run the existing apply path — handles decideApply, dispatch, setRuns, toast.
+    handleApply(run, replacement)
+
+    // The dispatch is in-memory. Force-save and wait so the file lands on disk before the after-snapshot.
+    const view = getActiveEditor()
+    if (view && rel) {
+      workspace.saveTab(rel, view.state.doc.toString())
+      try { await workspace.flushAll() } catch (e) { console.warn('[apply] flush after dispatch failed', e) }
+    }
+
+    if (beforeId) {
+      try {
+        await client.createSnapshot({
+          reason: 'after_ai_edit',
+          summary: `After apply · ${run.agentLabel}`,
+          files: [rel],
+          metadata: meta,
+        })
+        await client.patchSnapshotFiles(beforeId, [rel])
+      } catch (e) {
+        console.warn('[apply] after snapshot failed', e)
+        notifications.showToast(`History snapshot failed: ${(e as Error).message}`)
+      }
+    }
+  }, [workspace, raEnabled, handleApply, getActiveEditor, notifications])
+
   const bottomPanelAdapter = useMemo<BottomPanelTabsAdapter>(() => ({
     runs,
     activeRunId: activeTabId,
     selectRun: setActiveTabId,
     closeRun: handleCloseTab,
-    applyRun: handleApply,
+    applyRun: applyRunWithSnapshot,
     rerunRun: handleRerun,
     refineRun,
     chatMessages,
@@ -415,8 +553,14 @@ export default function App() {
     clearProblems: lintIssuesApi.clearWorkspaceIssues,
     jumpToProblem,
     pricingOverrides: settings.pricingOverrides,
+    fileHistoryEnabled: raEnabled,
+    fileHistoryTarget,
+    fileHistoryNonce,
+    fileHistoryHistory: raEnabled ? getCanvHistory() : null,
+    onFileHistoryOpenDiff: (r) => handleOpenDiff(r.relPath, r.commitSha, r.baseLabel),
+    onFileHistoryRestore: (r) => setRestoreTarget(r),
   }), [
-    runs, activeTabId, setActiveTabId, handleCloseTab, handleApply, handleRerun, refineRun,
+    runs, activeTabId, setActiveTabId, handleCloseTab, applyRunWithSnapshot, handleRerun, refineRun,
     chatMessages, chatBusy, chatProvider, chatModel,
     sendChat, clearChat, stopChat, retryFromAnchor, editAndRetry,
     pendingApprovals, onApprovalDecide, followLatest, setFollowLatest,
@@ -424,6 +568,7 @@ export default function App() {
     sessions, activeId, createSession, selectSession, closeSession, setActiveSessionProviderModel, availableModels,
     getSession, chatSystemPreamble,
     lintIssuesApi, jumpToProblem,
+    raEnabled, fileHistoryTarget, fileHistoryNonce, handleOpenDiff, setRestoreTarget,
   ])
 
   const bottomPanelTabs = useMemo(() => buildBottomPanelTabs(bottomPanelAdapter), [bottomPanelAdapter])
@@ -496,7 +641,7 @@ export default function App() {
         bottomPlacement={ideLayout.layout.bottom.placement}
         onSetBottomPlacementBottom={setBottomPlacementBottom}
         onSetBottomPlacementRight={setBottomPlacementRight}
-        gitBadge={gitBadge}
+        historyEnabled={raEnabled}
       />
       <WorkspaceShell
         ideLayout={ideLayout}
@@ -522,6 +667,9 @@ export default function App() {
         onDelete={fileOps.remove}
         onChangeWorkspace={fileOps.changeWorkspace}
         onOpenDiff={handleOpenDiff}
+        raEnabled={raEnabled}
+        onOpenRestore={setRestoreTarget}
+        onViewHistory={openFileHistory}
         settings={settings}
         onUpdateSettings={update}
         onExportBackup={() => {
@@ -551,6 +699,47 @@ export default function App() {
         wordCount={wordCount}
         selectionWordCount={selectionWordCount}
       />
+
+      {restoreTarget && getCanvHistory() && (
+        <RestorePreviewDialog
+          history={getCanvHistory()!}
+          snapshotId={restoreTarget.snapshotId}
+          relPath={restoreTarget.relPath}
+          onCancel={() => setRestoreTarget(null)}
+          onRestored={async (rollbackId, mtimeMs) => {
+            const rel = restoreTarget.relPath
+            // Suppress the conflict popup for our own write — must run before the
+            // chokidar 'change' event echoes back from the disk watcher.
+            workspace.noteOwnDiskWrite(rel, mtimeMs)
+            setRestoreTarget(null)
+            showToast(`Restored ${rel}. Safety snapshot: ${rollbackId}`)
+            try { await workspace.reloadTabFromDisk(rel) } catch { /* tab may not be open */ }
+          }}
+          saveDirtyBuffer={async (_relPath) => {
+            // flushAll persists all dirty buffers; it's a no-op when nothing is dirty.
+            await workspace.flushAll()
+          }}
+        />
+      )}
+
+      {setup.phase === 'needs-setup' && (
+        <WorkspaceSetupModal
+          modes={modes.map((m) => ({ id: m.id, label: m.label }))}
+          defaultProfile={defaultModeId ?? modes[0]?.id ?? 'fiction'}
+          remote={workspace.kind?.kind === 'remote' ? true : false}
+          onConfirm={async (r) => {
+            try {
+              await setup.confirm(r)
+            } catch (e) {
+              showToast(`Setup failed: ${(e as Error).message}`)
+            }
+          }}
+          onCancel={async () => {
+            setup.cancel()
+            try { await getFs().closeWorkspace() } catch { /* ignore */ }
+          }}
+        />
+      )}
 
       <FloatingToolbar
         view={activeEditor}

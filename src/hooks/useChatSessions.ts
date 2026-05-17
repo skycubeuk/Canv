@@ -13,6 +13,7 @@ import { buildChatSystemPreamble } from '../lib/buildChatSystemPreamble'
 import { getAdapter } from '../adapters'
 import { getFs } from '../lib/fs'
 import type { ToolCall } from '../adapters/types'
+import type { CanvHistory } from '../lib/history'
 
 type SettingsApi = ReturnType<typeof useSettings>
 type WorkspaceApi = ReturnType<typeof useWorkspace>
@@ -46,6 +47,7 @@ export interface UseChatSessionsArgs {
   showRetryUndoToast: (count: number) => void
   dismissRetryUndo: () => void
   dialogs: DialogsApi
+  historyClient?: CanvHistory | null
 }
 
 export interface SessionSummary {
@@ -261,7 +263,15 @@ export function useChatSessions(args: UseChatSessionsArgs): UseChatSessionsApi {
     })
   }, [])
 
-  const apiKeyMissing = !settings.apiKeys[active.provider]
+  const activeSessionApiKeyMissing = active.provider === 'ollama'
+    ? !settings.baseUrls?.ollama
+    : !settings.apiKeys[active.provider]
+  const apiKeyMissing =
+    !settings.baseUrls?.ollama &&
+    !Object.values(settings.apiKeys).some((k) => !!k)
+  const missingProviderToast = active.provider === 'ollama'
+    ? 'Set the Ollama base URL first.'
+    : 'Add an API key first.'
 
   const meterTotals = useMemo(
     () => chatTotals(active.messages, active.provider, active.model, settings.pricingOverrides),
@@ -353,8 +363,11 @@ export function useChatSessions(args: UseChatSessionsArgs): UseChatSessionsApi {
           model,
           maxTokens: args.settings.maxOutputTokens[lockedProvider],
           apiKey: args.settings.apiKeys[lockedProvider],
+          baseUrl: args.settings.baseUrls?.[lockedProvider],
           signal: rt.abort.signal,
           chunkDelayMs: args.settings.streamChunkDelayMs,
+          historyClient: args.historyClient ?? null,
+          onHistoryError: (e) => args.showToast(`History error: ${e.message}`),
         })
       } catch (e) {
         if ((e as { name?: string }).name === 'AbortError') {
@@ -370,9 +383,9 @@ export function useChatSessions(args: UseChatSessionsArgs): UseChatSessionsApi {
   )
 
   const sendChat = useCallback(async (text: string) => {
-    if (apiKeyMissing) {
+    if (activeSessionApiKeyMissing) {
       args.openSettingsTab()
-      args.showToast('Add an API key first.')
+      args.showToast(missingProviderToast)
       return
     }
     const sessionId = active.id
@@ -392,7 +405,7 @@ export function useChatSessions(args: UseChatSessionsArgs): UseChatSessionsApi {
     const next = [...active.messages, userMsg]
     patchSession(sessionId, (s) => ({ ...s, messages: next }))
     await runTurn(sessionId, next)
-  }, [active, apiKeyMissing, args, runTurn, getRuntime, patchSession])
+  }, [active, activeSessionApiKeyMissing, args, runTurn, getRuntime, patchSession, missingProviderToast])
 
   const onApprovalDecide = useCallback((callId: string, decision: ApprovalDecision) => {
     const rt = runtimeRef.current.get(active.id)
@@ -411,7 +424,7 @@ export function useChatSessions(args: UseChatSessionsArgs): UseChatSessionsApi {
   }, [active.id, bumpRuntime])
 
   const retryFromAnchor = useCallback((anchorId: string) => {
-    if (apiKeyMissing) { args.openSettingsTab(); args.showToast('Add an API key first.'); return }
+    if (activeSessionApiKeyMissing) { args.openSettingsTab(); args.showToast(missingProviderToast); return }
     const rt = getRuntime(active.id)
     if (rt.busy) return
     const { kept, discarded } = truncateForRetry(active.messages, anchorId)
@@ -419,10 +432,10 @@ export function useChatSessions(args: UseChatSessionsArgs): UseChatSessionsApi {
     patchSession(active.id, (s) => ({ ...s, messages: kept }))
     if (discarded.length > 0) args.showRetryUndoToast(discarded.length)
     void runTurn(active.id, kept)
-  }, [active, apiKeyMissing, args, runTurn, getRuntime, patchSession])
+  }, [active, activeSessionApiKeyMissing, args, runTurn, getRuntime, patchSession, missingProviderToast])
 
   const editAndRetry = useCallback((newText: string) => {
-    if (apiKeyMissing) { args.openSettingsTab(); args.showToast('Add an API key first.'); return }
+    if (activeSessionApiKeyMissing) { args.openSettingsTab(); args.showToast(missingProviderToast); return }
     const rt = getRuntime(active.id)
     if (rt.busy) return
     const { kept, discarded } = truncateForEditAndRetry(active.messages, newText)
@@ -430,7 +443,7 @@ export function useChatSessions(args: UseChatSessionsArgs): UseChatSessionsApi {
     patchSession(active.id, (s) => ({ ...s, messages: kept }))
     if (discarded.length > 0) args.showRetryUndoToast(discarded.length)
     void runTurn(active.id, kept)
-  }, [active, apiKeyMissing, args, runTurn, getRuntime, patchSession])
+  }, [active, activeSessionApiKeyMissing, args, runTurn, getRuntime, patchSession, missingProviderToast])
 
   const undoRetry = useCallback(() => {
     const rt = getRuntime(active.id)

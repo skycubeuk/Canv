@@ -1,5 +1,6 @@
 import type { SearchQuery, SearchResult } from './searchTypes'
 import type { GitStatusPayload, GitDiffPayload } from './gitTypes'
+import type { WorkspaceConfig } from './historyTypes'
 
 export type WorkspaceKind =
   | { kind: 'local'; root: string }
@@ -52,6 +53,8 @@ export interface CanvFs {
   search(query: SearchQuery): Promise<SearchResult>
   gitStatus(): Promise<GitStatusPayload & { noRepo?: boolean }>
   gitDiff(rel: string, baseRef: string): Promise<GitDiffPayload>
+  readWorkspaceConfig(): Promise<WorkspaceConfig | null>
+  writeWorkspaceConfig(cfg: WorkspaceConfig): Promise<true>
   openRemote(raw: string): Promise<{ kind: 'remote'; display: string }>
   listRecentRemotes(): Promise<RecentRemote[]>
   closeWorkspace(): Promise<void>
@@ -69,6 +72,7 @@ declare global {
         files: { file: string; absPath: string; content: string }[]
       }>
       revealFolder(): Promise<void>
+      factoryReset(): Promise<{ ok: true }>
     }
   }
 }

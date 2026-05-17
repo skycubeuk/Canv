@@ -1,0 +1,47 @@
+---
+import pkg from '../../../package.json' with { type: 'json' };
+const version = (pkg as { version: string }).version;
+const base = import.meta.env.BASE_URL;
+---
+<footer>
+  <div class="footer-inner">
+    <div class="left">
+      <a href={base}>Canv</a>
+      <span class="sep">·</span>
+      <span>v{version}</span>
+      <span class="sep">·</span>
+      <span>MIT licence</span>
+    </div>
+    <div class="right">
+      <a href={`${base}docs/`}>Docs</a>
+      <a href="https://github.com/skycubeuk/Canv">GitHub</a>
+      <a href="https://github.com/skycubeuk/Canv/issues">Report an issue</a>
+    </div>
+  </div>
+</footer>
+
+<style>
+  footer {
+    padding: 2rem 1.5rem;
+    border-top: 1px solid color-mix(in srgb, var(--canv-purple-500) 12%, transparent);
+    color: var(--canv-muted);
+    font-size: 0.9rem;
+  }
+  .footer-inner {
+    max-width: 1100px;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+  .left, .right {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+  .sep { opacity: 0.4; }
+  footer a { color: var(--canv-muted); }
+  footer a:hover { color: var(--canv-purple-500); }
+</style>

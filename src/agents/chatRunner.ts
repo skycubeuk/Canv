@@ -4,6 +4,7 @@ import type {
 import type { ChatMessage, ErrorInfo } from '../components/ChatPanel'
 import type { ToolCtx } from '../tools/types'
 import { getTool, toolSchemas } from '../tools/registry'
+import type { CanvHistory } from '../lib/history'
 
 function abortableApproval(
   ask: () => Promise<ApprovalDecision>,
@@ -54,7 +55,7 @@ export interface WritePreview {
 
 export interface RunChatTurnParams {
   adapter: LLMAdapter
-  provider: 'anthropic' | 'openai'
+  provider: 'anthropic' | 'openai' | 'ollama'
   /** Existing chat history INCLUDING the new user message. */
   history: ChatMessage[]
   /** Pre-built inventory block (workspace JSON + helper text). */
@@ -70,8 +71,31 @@ export interface RunChatTurnParams {
   model: string
   maxTokens: number
   apiKey: string
+  /** Provider-specific endpoint URL (Ollama). Cloud providers ignore this. */
+  baseUrl?: string
   signal: AbortSignal
   chunkDelayMs?: number
+  /** When provided, AI turns are bracketed with before/after snapshots. */
+  historyClient?: CanvHistory | null
+  onHistoryError?: (e: Error) => void
+}
+
+function affectedPathsForCall(call: { name: string; input: unknown }): string[] {
+  const i = call.input as Record<string, unknown> | undefined
+  if (!i) return []
+  switch (call.name) {
+    case 'create_file':
+    case 'edit_file':
+    case 'delete_file':
+    case 'create_folder':
+      return typeof i.path === 'string' ? [i.path] : []
+    case 'rename_file':
+      return [i.from, i.to].filter((p): p is string => typeof p === 'string')
+    case 'site_register':
+    case 'site_update':
+      return typeof i.folder === 'string' ? [i.folder] : []
+    default: return []
+  }
 }
 
 function classifyError(err: unknown): ErrorInfo {
@@ -128,6 +152,45 @@ async function runChatTurnInner(p: RunChatTurnParams, messages: ChatMessage[]): 
   const system = `${p.systemPreamble}\n\n${p.inventoryText}`
   let approveAll = false
 
+  const historyClient = p.historyClient ?? null
+  const aiMetadata = { provider: p.provider, model: p.model }
+  let beforeSnapshotId: string | null = null
+  const turnAffectedPaths = new Set<string>()
+
+  const ensureBeforeSnapshot = async (toolName: string) => {
+    if (!historyClient || beforeSnapshotId) return
+    try {
+      const entry = await historyClient.createSnapshot({
+        reason: 'before_ai_edit',
+        summary: 'Before AI edit',
+        files: [],
+        metadata: { toolName, ...aiMetadata },
+      })
+      beforeSnapshotId = entry.id
+    } catch (e) {
+      console.warn('[chatRunner] before_ai_edit snapshot failed', e)
+      p.onHistoryError?.(e as Error)
+    }
+  }
+
+  const flushAfterSnapshot = async () => {
+    if (!historyClient || !beforeSnapshotId) return
+    const files = Array.from(turnAffectedPaths).sort()
+    try {
+      await historyClient.createSnapshot({
+        reason: 'after_ai_edit',
+        summary: 'After AI edit',
+        files,
+        metadata: aiMetadata,
+      })
+      await historyClient.patchSnapshotFiles(beforeSnapshotId, files)
+    } catch (e) {
+      console.warn('[chatRunner] after_ai_edit snapshot failed', e)
+      p.onHistoryError?.(e as Error)
+    }
+  }
+
+  try {
   for (let round = 0; round < p.toolBudget; round++) {
     if (p.signal.aborted) return
     const assistantId = `a-${Date.now()}-${Math.random().toString(36).slice(2, 7)}-${round}`
@@ -137,7 +200,7 @@ async function runChatTurnInner(p: RunChatTurnParams, messages: ChatMessage[]): 
 
     console.debug('[chatRunner] >>> adapter.complete round', round, 'historyLen=', messages.length - 1)
     const result = await p.adapter.complete({
-      apiKey: p.apiKey, model: p.model, maxTokens: p.maxTokens,
+      apiKey: p.apiKey, baseUrl: p.baseUrl, model: p.model, maxTokens: p.maxTokens,
       system,
       messages: toAdapterMessages(messages.slice(0, -1)),
       signal: p.signal,
@@ -276,9 +339,11 @@ async function runChatTurnInner(p: RunChatTurnParams, messages: ChatMessage[]): 
           toolResults.push({ id: call.id, content: 'User denied this action', isError: true, isUserDenial: true })
           continue
         }
+        await ensureBeforeSnapshot(call.name)
         try {
           const out = await tool.handler(call.input, p.toolCtx)
           toolResults.push({ id: call.id, content: JSON.stringify(out) })
+          affectedPathsForCall(call).forEach((pp) => turnAffectedPaths.add(pp))
         } catch (e) {
           if ((e as Error).name === 'AbortError' || p.signal.aborted) {
             toolResults.push({ id: call.id, content: 'Cancelled by user', isError: true })
@@ -325,7 +390,7 @@ async function runChatTurnInner(p: RunChatTurnParams, messages: ChatMessage[]): 
   p.onUpdate(messages)
 
   const finalResult = await p.adapter.complete({
-    apiKey: p.apiKey, model: p.model, maxTokens: p.maxTokens,
+    apiKey: p.apiKey, baseUrl: p.baseUrl, model: p.model, maxTokens: p.maxTokens,
     system: `${system}\n\nYou have used your tool budget — write your final answer without further tool calls.`,
     messages: toAdapterMessages(messages.slice(0, -1)),
     signal: p.signal,
@@ -343,6 +408,9 @@ async function runChatTurnInner(p: RunChatTurnParams, messages: ChatMessage[]): 
   }
   messages[messages.length - 1] = finalMsg
   p.onUpdate(messages)
+  } finally {
+    await flushAfterSnapshot()
+  }
 }
 
 function toAdapterMessages(history: ChatMessage[]): Message[] {

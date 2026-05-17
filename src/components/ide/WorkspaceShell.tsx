@@ -6,7 +6,8 @@ import { StatusBar } from './StatusBar'
 import { DockPlacementMenu } from './DockPlacementMenu'
 import { FilesTab } from './sidebar/FilesTab'
 import { SearchTab } from './sidebar/SearchTab'
-import { GitTab } from './sidebar/GitTab'
+import { HistoryTab } from './sidebar/HistoryTab'
+import { getCanvHistory } from '../../lib/history'
 import { SitesTab } from './sidebar/SitesTab'
 import { OutlinePanel } from './sidebar/OutlinePanel'
 import { Canvas } from '../Canvas'
@@ -57,8 +58,13 @@ export interface WorkspaceShellProps {
   onRename: (oldRel: string, newRel: string) => Promise<void>
   onDelete: (rel: string) => Promise<void>
   onChangeWorkspace: () => Promise<void>
-  // Git
-  onOpenDiff: (rel: string, baseRef?: string) => void
+  // Diff
+  onOpenDiff: (rel: string, baseRef?: string, baseLabel?: string) => void
+  // Revision Archaeology
+  raEnabled: boolean
+  onOpenRestore: (r: { snapshotId: string; relPath: string }) => void
+  /** Triggers when the Files-tab context menu fires "View history" on a file. */
+  onViewHistory?: (rel: string) => void
   // Settings
   settings: Settings
   onUpdateSettings: (patch: Partial<Settings>) => void
@@ -93,6 +99,7 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
     onClickBreadcrumbFolder, revealFolderRel,
     onCreateFile, onCreateFolder, onRename, onDelete, onChangeWorkspace,
     onOpenDiff,
+    raEnabled, onOpenRestore, onViewHistory,
     settings, onUpdateSettings,
     onExportBackup,
     bottomPanelTabs,
@@ -126,7 +133,28 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
             activeTab={ideLayout.layout.sidebar.activeTab}
             onSelectTab={ideLayout.setSidebarTab}
             search={<SearchTab onJumpToMatch={onJumpToMatch} />}
-            git={<GitTab onOpenDiff={onOpenDiff} />}
+            historyEnabled={raEnabled}
+            history={raEnabled ? (
+              <HistoryTab
+                history={getCanvHistory()!}
+                onOpenDiff={(r) => {
+                  // r.baseSha (current) or r.commitSha (snapshot / fileHistory) — both are valid git OIDs on canv-history.
+                  const sha = r.kind === 'current' ? r.baseSha : r.commitSha
+                  onOpenDiff(r.relPath, sha, r.baseLabel)
+                }}
+                onCreateCheckpoint={async (summary) => {
+                  const h = getCanvHistory(); if (!h) return
+                  const changes = await h.getCurrentChanges()
+                  await h.createSnapshot({
+                    reason: 'manual',
+                    summary,
+                    files: changes.map((c) => c.relPath),
+                    metadata: {},
+                  })
+                }}
+                onRestore={onOpenRestore}
+              />
+            ) : undefined}
             sites={<SitesTab onRegenerate={setChatDraft} />}
             settings={settings}
             onUpdateSettings={onUpdateSettings}
@@ -148,6 +176,8 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
                 onDelete={onDelete}
                 onChangeWorkspace={onChangeWorkspace}
                 revealRel={revealFolderRel}
+                revisionArchaeologyEnabled={raEnabled}
+                onViewHistory={onViewHistory}
               />
             )}
             outline={outlineNode}
@@ -186,7 +216,7 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
                     )
                   }
                   if (t.kind === 'diff') {
-                    return <DiffTab relPath={t.relPath} baseRef={t.baseRef} isActive={isActive} />
+                    return <DiffTab relPath={t.relPath} baseRef={t.baseRef} baseLabel={t.baseLabel} isActive={isActive} />
                   }
                   return (
                     <Canvas

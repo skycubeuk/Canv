@@ -48,6 +48,11 @@ export interface DockState {
   activeSessionId: string
   availableModels: Record<ChatProvider, string[]>
 
+  // File history (Revision Archaeology v2 UX)
+  revisionArchaeologyEnabled: boolean
+  fileHistoryTarget: string | null
+  fileHistoryNonce: number
+
   // Problems
   problems: LintIssue[]
   lintScanState: ScanState
@@ -90,6 +95,10 @@ export type UserAction =
   | { type: 'scan-problems' }
   | { type: 'clear-problems' }
   | { type: 'jump-to-problem'; issue: LintIssue }
+  // File history
+  | { type: 'open-file-history'; relPath: string }
+  | { type: 'file-history-open-diff'; req: { kind: 'fileHistory'; relPath: string; snapshotId: string; commitSha: string; baseLabel: string } }
+  | { type: 'file-history-restore'; snapshotId: string; relPath: string }
   // Layout
   | { type: 'set-placement'; placement: 'bottom' | 'right' }
 

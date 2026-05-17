@@ -163,13 +163,13 @@ export function DocumentAgentMenu({ profile, hasMarkdownTab, activeFileName, onR
             onChange={(e) => setInstructionText(e.target.value)}
             onKeyDown={handleInstructionKey}
             placeholder={state.agent.instructionPlaceholder ?? 'Instruction'}
-            className="flex-1 px-1 py-0.5 text-xs bg-transparent focus:outline-none min-w-[160px]"
+            className="flex-1 px-1 py-0.5 text-xs bg-transparent focus:outline-hidden min-w-[160px]"
           />
           <button
             type="button"
             onClick={handleInstructionSubmit}
             disabled={!instructionText.trim()}
-            className="btn-primary !py-0.5 !px-2 text-xs disabled:opacity-50"
+            className="btn-primary py-0.5! px-2! text-xs disabled:opacity-50"
           >
             Run
           </button>

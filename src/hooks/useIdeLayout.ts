@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { wsKey } from '../lib/wsKey'
 import '../lib/dockTypes'
 
-export type SidebarTab = 'files' | 'search' | 'git' | 'sites'
-export type BottomTab = 'runs' | 'chat' | 'problems' | 'output'
+export type SidebarTab = 'files' | 'search' | 'history' | 'sites'
+export type BottomTab = 'runs' | 'chat' | 'problems' | 'output' | 'fileHistory'
 export type DockPlacement = 'bottom' | 'right' | 'popout'
 export type InAppDockPlacement = 'bottom' | 'right'
 
@@ -101,9 +101,12 @@ export interface UseIdeLayoutApi {
 export function useIdeLayout(root: string | null): UseIdeLayoutApi {
   const rootRef = useRef<string | null>(root)
 
-  const [sidebar, setSidebarState] = useState<SidebarLayout>(() =>
-    readSlice(root, SIDEBAR_KEY, DEFAULT_IDE_LAYOUT.sidebar),
-  )
+  const [sidebar, setSidebarState] = useState<SidebarLayout>(() => {
+    const s = readSlice(root, SIDEBAR_KEY, DEFAULT_IDE_LAYOUT.sidebar)
+    // Coerce stale 'git' tab (removed in RA feature) to 'files'.
+    if ((s.activeTab as string) === 'git') s.activeTab = 'files'
+    return s
+  })
   const [bottom, setBottomState] = useState<BottomLayout>(() =>
     coercePopoutForBrowser({
       ...DEFAULT_IDE_LAYOUT.bottom,
@@ -121,7 +124,9 @@ export function useIdeLayout(root: string | null): UseIdeLayoutApi {
   useEffect(() => {
     if (rootRef.current === root) return
     rootRef.current = root
-    setSidebarState(readSlice(root, SIDEBAR_KEY, DEFAULT_IDE_LAYOUT.sidebar))
+    const sRaw = readSlice(root, SIDEBAR_KEY, DEFAULT_IDE_LAYOUT.sidebar)
+    if ((sRaw.activeTab as string) === 'git') sRaw.activeTab = 'files'
+    setSidebarState(sRaw)
     setBottomState(coercePopoutForBrowser({
       ...DEFAULT_IDE_LAYOUT.bottom,
       ...readSlice(root, BOTTOM_KEY, DEFAULT_IDE_LAYOUT.bottom),

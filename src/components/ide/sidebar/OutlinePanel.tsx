@@ -46,7 +46,7 @@ export function OutlinePanel(props: OutlinePanelProps) {
       {!collapsed && (
         <div
           role="tree"
-          aria-label="Document outline"
+          aria-label="Document outline-solid"
           className="flex-1 min-h-0 overflow-y-auto py-1"
         >
           {nodes.map((n) => (

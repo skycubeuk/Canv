@@ -36,7 +36,8 @@ function baseProps() {
     onSelectTab: vi.fn(),
     files: <div data-testid="files-tab">FILES</div>,
     search: <div data-testid="search-tab">SEARCH</div>,
-    git: <div data-testid="git-tab">GIT</div>,
+    history: <div data-testid="history-tab">HISTORY</div>,
+    historyEnabled: true,
     settings: SETTINGS,
     onUpdateSettings: vi.fn(),
     workspaceName: 'test-workspace',
@@ -49,13 +50,13 @@ function baseProps() {
 }
 
 describe('LeftSidebar', () => {
-  it('renders the active tab body without splitter when outline is null', () => {
+  it('renders the active tab body without splitter when outline-solid is null', () => {
     render(<LeftSidebar {...baseProps()} outline={null} />)
     expect(screen.getByTestId('files-tab')).toBeInTheDocument()
     expect(screen.queryByTestId('outline-section')).not.toBeInTheDocument()
   })
 
-  it('renders the outline section beside the file tree when on Files tab', () => {
+  it('renders the outline-solid section beside the file tree when on Files tab', () => {
     const props = baseProps()
     render(
       <LeftSidebar
@@ -67,7 +68,7 @@ describe('LeftSidebar', () => {
     expect(screen.getByTestId('outline-section')).toBeInTheDocument()
   })
 
-  it('does not render outline when active tab is search', () => {
+  it('does not render outline-solid when active tab is search', () => {
     const props = { ...baseProps(), activeTab: 'search' as const }
     render(
       <LeftSidebar
@@ -79,8 +80,8 @@ describe('LeftSidebar', () => {
     expect(screen.getByTestId('search-tab')).toBeInTheDocument()
   })
 
-  it('does not render outline when active tab is git', () => {
-    const props = { ...baseProps(), activeTab: 'git' as const }
+  it('does not render outline-solid when active tab is history', () => {
+    const props = { ...baseProps(), activeTab: 'history' as const }
     render(
       <LeftSidebar
         {...props}
@@ -88,7 +89,7 @@ describe('LeftSidebar', () => {
       />,
     )
     expect(screen.queryByTestId('outline-section')).not.toBeInTheDocument()
-    expect(screen.getByTestId('git-tab')).toBeInTheDocument()
+    expect(screen.getByTestId('history-tab')).toBeInTheDocument()
   })
 
   it('shows search body when activeTab is search', () => {
@@ -122,7 +123,7 @@ describe('LeftSidebar', () => {
     expect(screen.getByTestId('sites-body')).toBeInTheDocument()
   })
 
-  it('preserves the file tree subtree when the outline appears', () => {
+  it('preserves the file tree subtree when the outline-solid appears', () => {
     // Regression: the outline panel spawning would unmount FileTree and
     // wipe its expanded-folders local state. Verify that a stateful child
     // mounted inside the `files` slot survives the outline transition.

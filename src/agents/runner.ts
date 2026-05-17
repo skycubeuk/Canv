@@ -10,6 +10,7 @@ export interface RunAgentParams {
   promptTemplate: string
   adapter: LLMAdapter
   apiKey: string
+  baseUrl?: string
   model: string
   maxTokens: number
   signal?: AbortSignal
@@ -58,6 +59,7 @@ export async function runAgent(params: RunAgentParams): Promise<CompleteResult &
 
   const result = await params.adapter.complete({
     apiKey: params.apiKey,
+    baseUrl: params.baseUrl,
     model: params.model,
     messages,
     signal: params.signal,

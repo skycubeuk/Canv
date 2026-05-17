@@ -1,0 +1,69 @@
+---
+import LandingLayout from '../layouts/LandingLayout.astro';
+import TopBar from '../components/TopBar.astro';
+import Hero from '../components/Hero.astro';
+import FeatureGrid from '../components/FeatureGrid.astro';
+import CapabilityCard from '../components/CapabilityCard.astro';
+import DownloadCards from '../components/DownloadCards.astro';
+import PrivacyBlock from '../components/PrivacyBlock.astro';
+import Footer from '../components/Footer.astro';
+---
+<LandingLayout
+  title="Canv — A local-first writing canvas with AI you control."
+  description="Open a folder of markdown. Pick a profile. Run agents over your prose with streaming output, inline diffs, and one-click apply. Your files, your keys, your machine."
+>
+  <TopBar />
+  <Hero />
+  <FeatureGrid />
+  <section class="closer-look" aria-label="A closer look">
+    <div class="closer-inner">
+      <h2>A closer look</h2>
+      <CapabilityCard
+        title="Run an agent over a selection"
+        body="Pick a paragraph, choose an action (rewrite, tighten, expand, translate, whatever your profile defines), and watch the AI stream a new version into a diff alongside the original."
+        image="capability-selection.png"
+        alt="A paragraph selected in the editor with the action menu open."
+      />
+      <CapabilityCard
+        title="Inline diff and one-click apply"
+        body="Agent rewrites stream into the Runs tab. Read the new version in full, expand the diff to see exactly what changed, then click Apply to drop it back into your document — or refine the prompt and run again until it lands right."
+        image="capability-diff.png"
+        alt="An inline diff highlighting added text in green and removed text in red strikethrough."
+        reverse
+      />
+      <CapabilityCard
+        title="Revision archaeology"
+        body="A private, git-backed history of your workspace runs alongside your normal git workflow without touching it. Browse, restore, or compare any past state of your folder."
+        image="capability-history.png"
+        alt="The history sidebar showing a timeline of workspace snapshots."
+      />
+      <CapabilityCard
+        title="Talk to an AI alongside your draft"
+        body="A chat panel sits beside the editor. The AI can read files, search the workspace, suggest edits, and ask for approval before changing anything on disk."
+        image="capability-chat.png"
+        alt="The chat panel beside the editor with a multi-turn conversation."
+        reverse
+      />
+    </div>
+  </section>
+  <DownloadCards />
+  <PrivacyBlock />
+  <Footer />
+</LandingLayout>
+
+<style>
+  .closer-look {
+    padding: 4rem 1.5rem;
+  }
+  .closer-inner {
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+  .closer-look h2 {
+    font-size: 2rem;
+    font-weight: 600;
+    margin: 0 0 1rem;
+    text-align: center;
+    color: var(--canv-text);
+  }
+</style>

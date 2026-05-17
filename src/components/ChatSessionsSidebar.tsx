@@ -49,7 +49,7 @@ export function ChatSessionsSidebar({ sessions, activeId, onCreate, onSelect, on
               {s.pendingApprovalCount > 0 && (
                 <span
                   data-testid={`session-approvals-${s.id}`}
-                  className="ml-1 px-1 rounded bg-accent-soft text-accent text-[10px] font-mono"
+                  className="ml-1 px-1 rounded-sm bg-accent-soft text-accent text-[10px] font-mono"
                   aria-label={`${s.pendingApprovalCount} pending approvals`}
                 >
                   {s.pendingApprovalCount}
@@ -58,7 +58,7 @@ export function ChatSessionsSidebar({ sessions, activeId, onCreate, onSelect, on
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); onClose(s.id) }}
-                className="opacity-0 group-hover:opacity-60 hover:!opacity-100 ml-1"
+                className="opacity-0 group-hover:opacity-60 hover:opacity-100! ml-1"
                 aria-label={`Close ${s.title}`}
               >
                 <X aria-hidden className="w-3 h-3" />

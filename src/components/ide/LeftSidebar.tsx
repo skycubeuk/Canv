@@ -17,7 +17,8 @@ interface Props {
   onSelectTab: (tab: SidebarTab) => void
   files: ReactNode
   search?: ReactNode
-  git?: ReactNode
+  history?: ReactNode
+  historyEnabled: boolean
   sites?: ReactNode
   settings: Settings
   onUpdateSettings: (patch: Partial<Settings>) => void
@@ -40,7 +41,7 @@ function ComingSoon({ label }: { label: string }) {
 
 export function LeftSidebar(props: Props) {
   const {
-    activeTab, files, search, git, sites, settings, onUpdateSettings,
+    activeTab, files, search, history, historyEnabled, sites, settings, onUpdateSettings,
     workspaceName,
     outline, outlineSize, onOutlineSizeChange,
     onNewFile, onNewFolder, onChangeWorkspace,
@@ -48,7 +49,7 @@ export function LeftSidebar(props: Props) {
   const tabs: SidebarTabDef[] = [
     { id: 'files', label: 'Files', body: files },
     { id: 'search', label: 'Search', body: search ?? <ComingSoon label="Search" /> },
-    { id: 'git', label: 'Git', body: git ?? <ComingSoon label="Source control" /> },
+    ...(historyEnabled ? [{ id: 'history' as const, label: 'History', body: history ?? <ComingSoon label="History" /> }] : []),
     { id: 'sites', label: 'Sites', body: sites ?? <ComingSoon label="Sites" /> },
   ]
   const active = tabs.find((t) => t.id === activeTab) ?? tabs[0]
@@ -74,7 +75,7 @@ export function LeftSidebar(props: Props) {
             <button
               type="button"
               aria-label="New file"
-              className="w-[22px] h-[22px] grid place-items-center rounded text-subtle hover:bg-hover hover:text-default"
+              className="w-[22px] h-[22px] grid place-items-center rounded-sm text-subtle hover:bg-hover hover:text-default"
               onClick={onNewFile}
             >
               <Plus aria-hidden className="w-3 h-3" />
@@ -82,7 +83,7 @@ export function LeftSidebar(props: Props) {
             <button
               type="button"
               aria-label="New folder"
-              className="w-[22px] h-[22px] grid place-items-center rounded text-subtle hover:bg-hover hover:text-default"
+              className="w-[22px] h-[22px] grid place-items-center rounded-sm text-subtle hover:bg-hover hover:text-default"
               onClick={onNewFolder}
             >
               <FolderPlus aria-hidden className="w-3 h-3" />
@@ -91,7 +92,7 @@ export function LeftSidebar(props: Props) {
               type="button"
               aria-label="Change workspace"
               title="Change workspace"
-              className="w-[22px] h-[22px] grid place-items-center rounded text-subtle hover:bg-hover hover:text-default"
+              className="w-[22px] h-[22px] grid place-items-center rounded-sm text-subtle hover:bg-hover hover:text-default"
               onClick={onChangeWorkspace}
             >
               <FolderOpen aria-hidden className="w-3 h-3" />

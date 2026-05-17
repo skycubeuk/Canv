@@ -34,7 +34,7 @@ const baseProps = {
   bottomPlacement: 'bottom' as const,
   onSetBottomPlacementBottom: vi.fn(),
   onSetBottomPlacementRight: vi.fn(),
-  gitBadge: null as string | null,
+  historyEnabled: true,
 }
 
 describe('TopBar', () => {
@@ -44,7 +44,7 @@ describe('TopBar', () => {
     expect(screen.getByText('UntitledBook')).toBeInTheDocument()
   })
 
-  it('renders Files / Search / Git tabs and highlights the active one', () => {
+  it('renders Files / Search / History tabs and highlights the active one', () => {
     render(<TopBar {...baseProps} activeSidebarTab="search" />)
     const search = screen.getByRole('button', { name: /^search$/i })
     expect(search).toHaveAttribute('aria-pressed', 'true')
@@ -53,8 +53,13 @@ describe('TopBar', () => {
   it('clicking a section tab fires onSelectSidebarTab', () => {
     const onSelectSidebarTab = vi.fn()
     render(<TopBar {...baseProps} onSelectSidebarTab={onSelectSidebarTab} />)
-    fireEvent.click(screen.getByRole('button', { name: /^git$/i }))
-    expect(onSelectSidebarTab).toHaveBeenCalledWith('git')
+    fireEvent.click(screen.getByRole('button', { name: /^history$/i }))
+    expect(onSelectSidebarTab).toHaveBeenCalledWith('history')
+  })
+
+  it('History tab is not rendered when historyEnabled is false', () => {
+    render(<TopBar {...baseProps} historyEnabled={false} />)
+    expect(screen.queryByRole('button', { name: /^history$/i })).not.toBeInTheDocument()
   })
 
   it('clicking the command-palette button fires onOpenCommandPalette', () => {
@@ -74,12 +79,6 @@ describe('TopBar', () => {
     render(<TopBar {...baseProps} hasMarkdownTab={true} />)
     const trigger = screen.getByTestId('document-agent-menu-trigger')
     expect(trigger).not.toBeDisabled()
-  })
-
-  it('shows git badge count when provided', () => {
-    render(<TopBar {...baseProps} gitBadge="3" />)
-    const git = screen.getByRole('button', { name: /^git/i })
-    expect(git).toHaveTextContent('3')
   })
 
   it('layout-toggle bottom button highlights when placement is bottom', () => {

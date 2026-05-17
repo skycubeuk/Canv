@@ -17,6 +17,8 @@ interface Props {
   onDelete: (rel: string) => void
   onChangeWorkspace: () => void
   revealRel?: string | null
+  revisionArchaeologyEnabled?: boolean
+  onViewHistory?: (rel: string) => void
 }
 
 export function FilesTab(props: Props) {
@@ -38,6 +40,8 @@ export function FilesTab(props: Props) {
       onDelete={props.onDelete}
       onChangeWorkspace={props.onChangeWorkspace}
       revealRel={props.revealRel}
+      revisionArchaeologyEnabled={props.revisionArchaeologyEnabled}
+      onViewHistory={props.onViewHistory}
     />
   )
 }

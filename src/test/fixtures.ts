@@ -138,6 +138,8 @@ export function makeMockFs(initial: Record<string, MockFile>): CanvFs {
     search: async (_q: SearchQuery): Promise<SearchResult> => ({ matches: [], truncated: false }),
     gitStatus: async () => ({ noRepo: true, branch: null, changed: [], staged: [], untracked: [] }),
     gitDiff: async () => ({ relPath: '', baseRef: '', baseText: '', currentText: '' }),
+    readWorkspaceConfig: async () => null,
+    writeWorkspaceConfig: async () => true,
     openRemote: async () => ({ kind: 'remote' as const, display: '' }),
     listRecentRemotes: async () => [],
     closeWorkspace: async () => {},

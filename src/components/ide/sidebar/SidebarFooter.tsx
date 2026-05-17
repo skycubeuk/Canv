@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import type { Settings, Provider } from '../../../hooks/useSettings'
-import { adapterList, getAdapter } from '../../../adapters'
+import { adapterList, getAdapter, configuredProviders } from '../../../adapters'
 
 interface Props {
   settings: Settings
@@ -32,7 +32,6 @@ function WorkspaceSwitcherButton({
 }) {
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement | null>(null)
-  const adapter = getAdapter(settings.provider)
   const currentModel = settings.defaultModel[settings.provider]
   const rawName = workspaceName
     ? (Math.max(workspaceName.lastIndexOf('/'), workspaceName.lastIndexOf('\\')) >= 0
@@ -84,40 +83,64 @@ function WorkspaceSwitcherButton({
         </span>
         <ChevronDown aria-hidden className="w-3 h-3 shrink-0 text-subtle" />
       </button>
-      {open && (
-        <div className="absolute left-0 right-0 bottom-full mb-1 bg-elev border border-default rounded-lg shadow-lg z-30 p-3 space-y-2">
-          <div>
-            <label htmlFor="sidebar-footer-provider" className="block text-xs uppercase tracking-wide text-subtle mb-1">Provider</label>
-            <select
-              id="sidebar-footer-provider"
-              className="input w-full"
-              value={settings.provider}
-              onChange={(e) => onUpdate({ provider: e.target.value as Provider })}
-            >
-              {adapterList.map((a) => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
-            </select>
+      {open && (() => {
+        const configuredIds = new Set<Provider>(configuredProviders(settings))
+        const visibleProviders = configuredIds.size > 0
+          ? adapterList.filter((a) => configuredIds.has(a.id as Provider))
+          : adapterList // empty-state fallback so the picker isn't empty
+        // Settings → Default provider remembers an unconfigured choice; the sidebar
+        // dropdown clamps display to a visible option so the <select> value matches
+        // a rendered <option>. settings.provider itself is never overwritten here.
+        const providerVisible = visibleProviders.some((a) => a.id === settings.provider)
+        const displayProvider: Provider = providerVisible
+          ? settings.provider
+          : ((visibleProviders[0]?.id as Provider | undefined) ?? settings.provider)
+        const displayAdapter = getAdapter(displayProvider)
+        const displayModels = displayProvider === 'ollama'
+          ? settings.ollamaModels
+          : displayAdapter.models
+        const displayModel = providerVisible
+          ? currentModel
+          : (displayModels[0] ?? currentModel)
+        return (
+          <div className="absolute left-0 right-0 bottom-full mb-1 bg-elev border border-default rounded-lg shadow-lg z-30 p-3 space-y-2">
+            <div>
+              <label htmlFor="sidebar-footer-provider" className="block text-xs uppercase tracking-wide text-subtle mb-1">Provider</label>
+              <select
+                id="sidebar-footer-provider"
+                className="input w-full"
+                value={displayProvider}
+                onChange={(e) => onUpdate({ provider: e.target.value as Provider })}
+              >
+                {visibleProviders.map((a) => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label htmlFor="sidebar-footer-model" className="block text-xs uppercase tracking-wide text-subtle mb-1">Model</label>
+              <select
+                id="sidebar-footer-model"
+                className="input w-full"
+                value={displayModel}
+                onChange={(e) =>
+                  onUpdate({
+                    defaultModel: { ...settings.defaultModel, [displayProvider]: e.target.value },
+                  })
+                }
+              >
+                {displayModels.length === 0 ? (
+                  <option disabled value="">No models — Refresh in Settings</option>
+                ) : (
+                  displayModels.map((m) => (
+                    <option key={m} value={m}>{m}</option>
+                  ))
+                )}
+              </select>
+            </div>
           </div>
-          <div>
-            <label htmlFor="sidebar-footer-model" className="block text-xs uppercase tracking-wide text-subtle mb-1">Model</label>
-            <select
-              id="sidebar-footer-model"
-              className="input w-full"
-              value={currentModel}
-              onChange={(e) =>
-                onUpdate({
-                  defaultModel: { ...settings.defaultModel, [settings.provider]: e.target.value },
-                })
-              }
-            >
-              {adapter.models.map((m) => (
-                <option key={m} value={m}>{m}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-      )}
+        )
+      })()}
     </div>
   )
 }

@@ -40,6 +40,12 @@ export interface Settings {
   theme: Theme
   streaming: boolean
   maxOutputTokens: Record<Provider, number>
+  /** Provider-specific endpoint URLs. Only Ollama uses this today. */
+  baseUrls: Partial<Record<Provider, string>>
+  /** Cached list of models fetched from a live Ollama instance via /api/tags.
+   *  Empty until the user clicks Refresh in Settings; falls back to the adapter's
+   *  static seed list when empty. */
+  ollamaModels: string[]
   chatToolBudget: number
   pricingOverrides: Record<string, ModelPricing>
   streamChunkDelayMs: StreamChunkDelayMs
@@ -57,8 +63,10 @@ const SETTINGS_KEY = 'canv:settings'
 
 const DEFAULT_SETTINGS: Settings = {
   provider: 'anthropic',
-  apiKeys: { anthropic: '', openai: '' },
-  defaultModel: { anthropic: 'claude-sonnet-4-6', openai: 'gpt-5.5' },
+  apiKeys: { anthropic: '', openai: '', ollama: '' },
+  baseUrls: { ollama: '' },
+  ollamaModels: [],
+  defaultModel: { anthropic: 'claude-sonnet-4-6', openai: 'gpt-5.5', ollama: 'llama3.1' },
   useDefaultModelForAll: true,
   perAgentModel: {},
   fontSize: 16,
@@ -66,7 +74,7 @@ const DEFAULT_SETTINGS: Settings = {
   lineWidth: 'normal',
   theme: 'system',
   streaming: true,
-  maxOutputTokens: { anthropic: 8192, openai: 8192 },
+  maxOutputTokens: { anthropic: 8192, openai: 8192, ollama: 4096 },
   chatToolBudget: 10,
   pricingOverrides: {},
   streamChunkDelayMs: 0,
@@ -117,13 +125,22 @@ export function useSettings() {
       defaultModel: { ...DEFAULT_SETTINGS.defaultModel, ...(settings?.defaultModel || {}) },
       perAgentModel: { ...DEFAULT_SETTINGS.perAgentModel, ...(settings?.perAgentModel || {}) },
       maxOutputTokens: { ...DEFAULT_SETTINGS.maxOutputTokens, ...(settings?.maxOutputTokens || {}) },
+      baseUrls: { ...DEFAULT_SETTINGS.baseUrls, ...(settings?.baseUrls || {}) },
+      ollamaModels: Array.isArray(settings?.ollamaModels) ? settings!.ollamaModels : DEFAULT_SETTINGS.ollamaModels,
       lintRules: { ...DEFAULT_SETTINGS.lintRules, ...(settings?.lintRules || {}) },
       pricingOverrides: { ...DEFAULT_SETTINGS.pricingOverrides, ...(settings?.pricingOverrides || {}) },
     }
+    // For Ollama the adapter's static `models` array is just a pre-refresh seed;
+    // once the user has hit Refresh, settings.ollamaModels is the source of
+    // truth for what's actually installed. Validate against that exclusively so
+    // a stale seed entry (e.g. 'qwen2.5') can't survive into a model send and
+    // produce an "Ollama 404: model not found" at runtime.
     for (const provider of Object.keys(m.defaultModel) as Provider[]) {
-      const available = adapters[provider]?.models ?? []
+      const available = provider === 'ollama'
+        ? m.ollamaModels
+        : (adapters[provider]?.models ?? [])
       if (!available.includes(m.defaultModel[provider])) {
-        m.defaultModel[provider] = DEFAULT_SETTINGS.defaultModel[provider]
+        m.defaultModel[provider] = available[0] ?? DEFAULT_SETTINGS.defaultModel[provider]
       }
     }
     // Clamp out-of-range streamChunkDelayMs from older builds or hand-edited storage.
@@ -161,7 +178,13 @@ export function useSettings() {
       provider: m.provider,
       model: m.defaultModel[m.provider],
     }
-    const allKnownModels = new Set(Object.values(adapters).flatMap((a) => a.models))
+    // Same "ollamaModels supersedes seed once refreshed" rule the defaultModel
+    // validator above uses, applied provider-aware so the seed of one adapter
+    // can't accidentally validate a model owned by another.
+    const modelsForProvider = (p: Provider): string[] =>
+      p === 'ollama'
+        ? m.ollamaModels
+        : (adapters[p]?.models ?? [])
     for (const modeId of Object.keys(m.perAgentModel)) {
       const inner = m.perAgentModel[modeId] as unknown as Record<string, AgentModelRef | string>
       for (const actionId of Object.keys(inner)) {
@@ -174,8 +197,10 @@ export function useSettings() {
             inner[actionId] = fallbackRef
           }
         } else if (v && typeof v === 'object' && 'provider' in v && 'model' in v) {
-          // Validate the composite still resolves to an extant model.
-          if (!allKnownModels.has(v.model)) inner[actionId] = fallbackRef
+          // Validate the composite still resolves to an extant model under its own provider.
+          if (!modelsForProvider(v.provider as Provider).includes(v.model)) {
+            inner[actionId] = fallbackRef
+          }
         } else {
           inner[actionId] = fallbackRef
         }

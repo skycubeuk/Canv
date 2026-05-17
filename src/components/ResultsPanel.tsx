@@ -175,19 +175,19 @@ export function RunView({
       )}
 
       {run.status === 'error' && (
-        <div className="px-4 py-3 m-3 bg-red-950/30 border border-red-900 rounded text-sm text-red-300">
+        <div className="px-4 py-3 m-3 bg-red-950/30 border border-red-900 rounded-sm text-sm text-red-300">
           {run.error || 'Something went wrong.'}
         </div>
       )}
 
       {run.status === 'aborted' && (
-        <div className="px-4 py-3 m-3 bg-elev border border-default rounded text-sm text-muted">
+        <div className="px-4 py-3 m-3 bg-elev border border-default rounded-sm text-sm text-muted">
           Stopped. The partial output above is what was streamed before you cancelled.
         </div>
       )}
 
       {run.truncated && run.status !== 'error' && !busy && (
-        <div className="px-4 py-3 m-3 bg-amber-950/30 border border-amber-900 rounded text-sm text-amber-200">
+        <div className="px-4 py-3 m-3 bg-amber-950/30 border border-amber-900 rounded-sm text-sm text-amber-200">
           <strong>Response was cut short.</strong> The model hit the output token
           limit before finishing. Raise <em>Max output tokens</em> in settings, or
           split the selection into smaller chunks. The result below is incomplete —
@@ -266,7 +266,7 @@ export function RunView({
               <div key={i} className="space-y-2">
                 <div>
                   <div className="text-xs uppercase tracking-wide text-muted mb-1">You</div>
-                  <div className="text-sm whitespace-pre-wrap leading-relaxed bg-elev border border-default rounded px-3 py-2">
+                  <div className="text-sm whitespace-pre-wrap leading-relaxed bg-elev border border-default rounded-sm px-3 py-2">
                     {f.user}
                   </div>
                 </div>
@@ -310,7 +310,7 @@ export function RunView({
               disabled={busy}
               minRows={2}
               maxRows={6}
-              className="flex-1 resize-none px-3 py-2 text-sm rounded-md border border-default bg-elev focus:outline-none focus:ring-2 focus:ring-accent disabled:opacity-50"
+              className="flex-1 resize-none px-3 py-2 text-sm rounded-md border border-default bg-elev focus:outline-hidden focus:ring-2 focus:ring-accent disabled:opacity-50"
             />
             <button
               type="button"
@@ -344,7 +344,7 @@ function DiffView({ original, updated }: { original: string; updated: string }) 
       <summary className="text-xs text-muted cursor-pointer hover:text-default">
         Show diff
       </summary>
-      <div className="mt-2 p-3 bg-panel rounded text-sm font-serif whitespace-pre-wrap leading-relaxed">
+      <div className="mt-2 p-3 bg-panel rounded-sm text-sm font-serif whitespace-pre-wrap leading-relaxed">
         {parts.map((p, i) => {
           if (p.added) {
             return (
@@ -378,7 +378,7 @@ const STATUS_PILL: Record<RunRecord['status'], { label: string; className: strin
 export function StatusPill({ status }: { status: RunRecord['status'] }) {
   const { label, className } = STATUS_PILL[status]
   return (
-    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded uppercase tracking-wide ${className}`}>
+    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-sm uppercase tracking-wide ${className}`}>
       {label}
     </span>
   )

@@ -154,13 +154,44 @@ describe('useChatSessions — per-session model lock', () => {
 describe('useChatSessions — active-session selectors', () => {
   beforeEach(() => { localStorage.clear() })
 
-  it('apiKeyMissing reflects the active session provider', () => {
+  it('apiKeyMissing is true only when no provider has credentials anywhere', () => {
     const args = makeArgs()
-    args.settings.apiKeys = { anthropic: '', openai: 'sk-x' }
+    args.settings.apiKeys = { anthropic: '', openai: '', ollama: '' }
+    args.settings.baseUrls = {}
     const { result } = renderHook(() => useChatSessions(args))
     expect(result.current.apiKeyMissing).toBe(true)
-    act(() => { result.current.setActiveSessionProviderModel('openai', 'gpt-4o') })
+  })
+
+  it('apiKeyMissing is false when any provider is configured, even if the active session is not', () => {
+    const args = makeArgs()
+    args.settings.apiKeys = { anthropic: '', openai: 'sk-x', ollama: '' }
+    args.settings.baseUrls = {}
+    const { result } = renderHook(() => useChatSessions(args))
     expect(result.current.apiKeyMissing).toBe(false)
+  })
+
+  it('apiKeyMissing is false when only the ollama base URL is set', () => {
+    const args = makeArgs()
+    args.settings.apiKeys = { anthropic: '', openai: '', ollama: '' }
+    args.settings.baseUrls = { ollama: 'http://localhost:11434' }
+    const { result } = renderHook(() => useChatSessions(args))
+    expect(result.current.apiKeyMissing).toBe(false)
+  })
+
+  it('sendChat short-circuits when the active session provider lacks credentials, even if another provider is configured', async () => {
+    const args = makeArgs()
+    // Global apiKeyMissing is false (openai has a key) but active session is anthropic (no key).
+    args.settings.apiKeys = { anthropic: '', openai: 'sk-x', ollama: '' }
+    args.settings.baseUrls = {}
+    const openSettingsTab = vi.fn()
+    const showToast = vi.fn()
+    args.openSettingsTab = openSettingsTab
+    args.showToast = showToast
+    const { result } = renderHook(() => useChatSessions(args))
+    expect(result.current.apiKeyMissing).toBe(false)
+    await act(async () => { await result.current.sendChat('hello') })
+    expect(openSettingsTab).toHaveBeenCalledTimes(1)
+    expect(showToast).toHaveBeenCalledWith('Add an API key first.')
   })
 
   it('meterTotals are computed from the active session messages', () => {

@@ -67,7 +67,7 @@ function splitFrontmatter(src: string): FrontmatterSplit {
     bodyStart = endOfClose
   }
   const yamlText = src.slice(4, closeIdx === -1 ? endOfClose - 4 : closeIdx)
-  let parsed: unknown = null
+  let parsed: unknown
   try {
     parsed = parseYaml(yamlText)
   } catch {

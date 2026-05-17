@@ -6,6 +6,7 @@ export interface UseProfilePickerArgs {
   profile: string | null
   setProfile: (id: string | null) => void
   workspaceReady: boolean
+  workspaceRoot: string | null
   migrationOpen: boolean
 }
 
@@ -18,7 +19,7 @@ export interface UseProfilePickerApi {
 }
 
 export function useProfilePicker(args: UseProfilePickerArgs): UseProfilePickerApi {
-  const { profile, setProfile, workspaceReady, migrationOpen } = args
+  const { profile, setProfile, workspaceReady, workspaceRoot, migrationOpen } = args
 
   const [open, setOpen] = useState(false)
   const [mode, setMode] = useState<PickerMode>('first-launch')
@@ -27,6 +28,7 @@ export function useProfilePicker(args: UseProfilePickerArgs): UseProfilePickerAp
   useEffect(() => {
     if (bootstrappedRef.current) return
     if (!workspaceReady) return
+    if (!workspaceRoot) return
     if (migrationOpen) return
     if (profile) {
       bootstrappedRef.current = true
@@ -37,7 +39,7 @@ export function useProfilePicker(args: UseProfilePickerArgs): UseProfilePickerAp
       setMode('first-launch')
       setOpen(true)
     }, 0)
-  }, [profile, workspaceReady, migrationOpen])
+  }, [profile, workspaceReady, workspaceRoot, migrationOpen])
 
   const pickProfile = useCallback((profileId: string) => {
     setProfile(profileId)

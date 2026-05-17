@@ -1,0 +1,36 @@
+// src/lib/history.ts
+import type {
+  SnapshotEntry, CreateSnapshotInput, CurrentChange,
+  SnapshotDeltaEntry, FileHistoryEntry,
+} from './historyTypes'
+
+export interface CanvHistory {
+  init(): Promise<{ branch: string; headCommit: string }>
+  createSnapshot(input: CreateSnapshotInput): Promise<SnapshotEntry>
+  listSnapshots(opts?: { includeHidden?: boolean }): Promise<SnapshotEntry[]>
+  getSnapshot(id: string): Promise<SnapshotEntry | null>
+  getSnapshotByCommit(commitSha: string): Promise<SnapshotEntry | null>
+  diffSnapshot(snapshotId: string, relPath: string): Promise<{ baseText: string; currentText: string }>
+  diffCurrent(relPath?: string): Promise<{ baseText: string; currentText: string } | CurrentChange[]>
+  getCurrentChanges(): Promise<CurrentChange[]>
+  restoreFilePreview(snapshotId: string, relPath: string): Promise<{ snapshotText: string; currentText: string }>
+  restoreFile(snapshotId: string, relPath: string): Promise<{ rollbackSnapshotId: string; mtimeMs: number }>
+  hideSnapshot(id: string): Promise<SnapshotEntry>
+  patchSnapshotFiles(id: string, files: string[]): Promise<void>
+  getTipCommit(): Promise<string | null>
+  getSnapshotDelta(snapshotId: string): Promise<SnapshotDeltaEntry[]>
+  getFileHistory(relPath: string): Promise<FileHistoryEntry[]>
+}
+
+declare global {
+  interface Window { canvHistory?: CanvHistory }
+}
+
+export function getCanvHistory(): CanvHistory | null {
+  return typeof window !== 'undefined' ? (window.canvHistory ?? null) : null
+}
+
+export type {
+  SnapshotEntry, CreateSnapshotInput, CurrentChange, SnapshotReason,
+  SnapshotDeltaEntry, FileHistoryEntry,
+} from './historyTypes'

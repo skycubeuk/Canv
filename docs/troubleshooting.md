@@ -1,97 +1,145 @@
 # Troubleshooting
 
 Most things in Canv just work. The few that catch people out are
-listed here, with what to do about them.
+usually first-launch security warnings on each OS, a missing API key,
+or another tool changing a file while Canv has it open. This page
+covers each of those, plus a few smaller things that come up.
 
-## "App can't be opened" or "publisher unknown" on first launch
+## First launch warns about the developer or publisher
 
-Canv builds aren't signed by Apple or Microsoft, so the operating
-system warns you the first time you open the app.
+Canv builds are not yet code-signed, so each operating system shows a
+warning the first time you open the app:
 
-- **macOS**: right-click the app in Applications and choose **Open**.
-  Confirm in the dialog. After this once, double-click works for
-  every future launch.
-- **Windows**: SmartScreen shows a blue panel saying the publisher
-  is unknown. Click **More info** and then **Run anyway**.
-- **Linux**: with the AppImage, run `chmod +x canv-*.AppImage` once
-  before double-clicking it. With the `.deb` or `.rpm`, install
-  through your usual package tool.
+- **macOS** — "cannot verify the developer of Canv". Right-click the
+  app and pick **Open** to bypass once; macOS remembers your choice.
+- **Windows** — SmartScreen says "publisher unknown". Click **More
+  info → Run anyway**.
+- **Linux** — no warning on AppImage (mark it executable first) or
+  the `.deb` / `.rpm` packages.
 
-These are first-launch warnings, not errors. The app itself is the
-same as the project's published release.
+There is nothing wrong with the build; this is what every unsigned
+Electron app sees on a fresh system. Signing is on the roadmap.
 
-## "No API key" warning in the status bar
+## The AI features show "API key missing"
 
-If the status bar shows an amber warning at the bottom of the screen,
-Canv hasn't been given an API key for the active provider. Click
-the warning to jump straight to the settings tab, or open settings
-yourself from the cog at the bottom-right of the status bar.
+Canv does not ship with an AI account. The selection actions, the
+document actions, and the chat all need a provider key.
 
-- Pick the provider you want to use in the **Default provider**
-  dropdown.
-- Paste your key into the field below it. Follow the provider's
-  instructions to create one if you don't have it yet.
+Open the settings tab and find the **Providers** section. Paste the
+key from your Anthropic or OpenAI account into the matching field. The
+field saves on blur — no separate save step — and the warning clears
+within a moment.
 
-Without a key, AI actions and the conversation will fail. Everything
-else (writing, file management, search, Git) keeps working.
+Keys live in your local app settings. Canv has no server that sees
+them. The app talks to `api.anthropic.com` or `api.openai.com` from
+your own machine.
 
-## A run errored, was rate-limited, or got cut off
+## A file changed on disk while I had it open
 
-The conversation panel and the runs list both show what happened,
-including the message the provider returned. The most common causes:
+When something other than Canv writes to a file you have open — a sync
+tool, a script, another editor — a prompt appears asking you what to
+do:
 
-- **Rate-limited** — you've made too many requests too quickly. The
-  retry button shows a countdown to when it's safe to try again.
-- **Network error** — your connection dropped or the provider is
-  unreachable. Wait a moment and retry.
-- **Max tokens** — the response got cut off before the model
-  finished. Open settings, raise the **Max output tokens** slider,
-  and re-run.
+- **Reload** discards what's in your editor and loads the disk
+  version.
+- **Overwrite** writes your editor's content over the disk version,
+  losing the external change.
 
-If the same call keeps failing the same way, switch the conversation
-to a different model and try once. That's usually enough to tell
-whether the problem is your network, the provider, or the request.
+Pick whichever side is the one you want to keep. If you're not sure,
+the safest thing is to reload — your previous editor content is
+recoverable from Canv's history if it is turned on.
 
-## Conflict — the file changed on disk while you were editing
+The same prompt does **not** appear when Canv itself made the change
+(an AI tool edit, a restore from history, a save you just performed).
+Those are recognised as your own writes.
 
-If something else writes to the same file (an editor, a sync tool,
-a colleague over a shared folder), Canv shows **Conflict** in the
-status bar and stops auto-saving so it doesn't trample the other
-change. To resolve it, close and re-open the file. Canv shows you
-the current contents on disk; you can paste your unsaved edits back
-in if you want them.
+## The History sidebar tab isn't there
 
-## A view didn't update after I changed the source files
+The **History** tab appears only when revision history is turned on
+for the workspace. If you said no during first-time setup and want it
+now, close the workspace folder and open it again; the setup card
+runs on a workspace with no configuration.
 
-Generated views don't track file changes automatically. The sidebar
-will show a "stale" badge on the view, but the view itself won't
-update until you ask the AI to regenerate it. Use the regenerate
-icon on the view's row, or describe the changes you'd like in the
-conversation.
+History also does not work on remote (SSH) workspaces in this release.
+The setup card disables the option in that case.
 
-## I want to start over without losing anything
+## I want to use a workspace on a remote server
 
-Export a backup first. Settings tab → **Export backup** writes
-everything to a JSON file. Once you have that, you can:
+Canv has experimental support for opening a workspace over SSH. The
+editor still runs on your local machine; the files live on the
+server, and Canv proxies reads and writes over the connection.
 
-- Switch workspace folders to a fresh one — your old folder is
-  untouched and Canv's data goes with the new workspace.
-- Or import the backup back later if you change your mind.
+From the workspace switcher, pick **Open remote workspace** and enter
+the SSH details. The connection is held open in a small pool so the
+editor stays responsive.
 
-## Where the logs are
+Limitations to be aware of in this release:
 
-If you need to file a bug, the developers will probably ask for
-logs. Logs live alongside Canv's other application data:
+- Revision history is not available for remote workspaces. The setup
+  card disables the toggle.
+- The first listing of a large remote folder can take noticeably
+  longer than a local one.
+- If the connection drops, Canv pauses writes until you reconnect from
+  the status indicator.
 
-- macOS: `~/Library/Application Support/Canv/`
-- Linux: `~/.config/Canv/` (or `$XDG_CONFIG_HOME/Canv/`)
-- Windows: `%APPDATA%\Canv\`
+If a remote workspace doesn't work for you, the underlying file
+synchronisation tools (rsync, sshfs, your file sync of choice) and a
+local Canv workspace on the synchronised folder is the supported
+fallback.
 
-Inside that folder you'll find a `logs/` subfolder.
+## The AI keeps stopping to ask permission
 
-## Profile changes I made aren't showing up
+Every time the AI wants to create, edit, rename, or delete a file in
+your workspace it asks for your approval. This is by design — the AI
+should not be able to silently modify your work.
 
-Profiles are read from a YAML file at startup. If you (or a
-developer) edited a profile file and your changes aren't visible,
-restart Canv. The settings tab has an **Open config folder** button
-to take you straight to the file.
+If a particular turn will involve a lot of file changes (a sweeping
+refactor, building a site, batch renaming), the approval card has an
+**Approve all remaining** button. It lets every subsequent file change
+in that turn through without prompting. The bypass resets at the end
+of the turn, so the next conversation starts back at "ask for each
+one".
+
+Read-only operations — listing folders, reading files, searching —
+never prompt. Site-building writes under `.canv/sites/` are
+pre-approved (see
+[Building visual views of your project](building-visual-views-of-your-project.md)).
+
+## A streaming reply has stuck
+
+If the AI's reply stops moving and the panel still shows a "running"
+state, the **Stop** control in the chat halts everything immediately —
+the streaming reply, in-flight tool calls, pending approvals. After
+stop you can retry the last message or edit-and-retry from the chat
+toolbar.
+
+## I get unexpected results when restoring a file
+
+Restore takes a safety capture (a snapshot tagged "before rollback")
+right before it overwrites the file. If a restore was wrong, open the
+**History** tab — the safety capture is at the top of the timeline
+with a **Before rollback** badge — and restore the file from that one
+to undo the undo.
+
+## I want to undo a delete from the file tree
+
+The file tree's **Delete** option sends the file to the system trash.
+That is the way back: open your OS trash and put the file back.
+
+If revision history is on, the file's last-known content is also
+inside the most recent snapshot. Right-click the (now-missing) file
+inside an open snapshot's expansion and pick **Restore** to write it
+back. The same flow works for files that were deleted before history
+was turned on — they're not recoverable from Canv in that case.
+
+## Something else feels wrong
+
+The repo's [issue tracker](https://github.com/skycubeuk/Canv/issues)
+is the right place to report a problem. Include your Canv version
+(it's at the bottom of the settings tab), the OS you're on, and what
+you were doing when the issue happened.
+
+## Up next
+
+If you've come this far in the guide and you want a reminder of what
+each page is for, the [index](README.md) lists them all.

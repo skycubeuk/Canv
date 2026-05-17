@@ -24,6 +24,10 @@ interface Props {
   onDelete: (rel: string) => void
   onChangeWorkspace: () => void
   revealRel?: string | null
+  /** When true, the right-click menu offers a "View history" entry for files. */
+  revisionArchaeologyEnabled?: boolean
+  /** Called when the user picks "View history" on a file. */
+  onViewHistory?: (rel: string) => void
 }
 
 interface MenuState {
@@ -47,7 +51,7 @@ export function FileTree(props: Props) {
     root, tree, truncated, openRels, activeRel, pinnedRels,
     onOpen, onPin, onUnpin,
     onCreateFile, onCreateFolder, onRename, onDelete, onChangeWorkspace,
-    revealRel,
+    revealRel, revisionArchaeologyEnabled, onViewHistory,
   } = props
 
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
@@ -83,7 +87,7 @@ export function FileTree(props: Props) {
     window.addEventListener('keydown', onKeyDown)
     return () => {
       window.removeEventListener('click', close)
-      window.removeEventListener('blur', close)
+      window.removeEventListener('blur-sm', close)
       window.removeEventListener('keydown', onKeyDown)
     }
   }, [menu])
@@ -149,7 +153,7 @@ export function FileTree(props: Props) {
       return (
         <div key={entry.relPath || '__root__'}>
           <div
-            className="flex items-center gap-1.5 px-1 py-[3px] text-[12.5px] cursor-pointer rounded text-muted hover:bg-hover transition-colors"
+            className="flex items-center gap-1.5 px-1 py-[3px] text-[12.5px] cursor-pointer rounded-sm text-muted hover:bg-hover transition-colors"
             style={{ paddingLeft: indent }}
             onClick={() => toggle(entry.relPath)}
             onContextMenu={(e) => handleContextMenu(e, entry)}
@@ -259,6 +263,8 @@ export function FileTree(props: Props) {
           onDelete={onDelete}
           onCreateFile={onCreateFile}
           onCreateFolder={onCreateFolder}
+          revisionArchaeologyEnabled={revisionArchaeologyEnabled}
+          onViewHistory={onViewHistory}
         />
       )}
     </aside>
@@ -275,6 +281,8 @@ function ContextMenu(props: {
   onDelete: (rel: string) => void
   onCreateFile: (parentRel: string) => void
   onCreateFolder: (parentRel: string) => void
+  revisionArchaeologyEnabled?: boolean
+  onViewHistory?: (rel: string) => void
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const dialogs = useDialogs()
@@ -347,6 +355,11 @@ function ContextMenu(props: {
       {isMd && props.isPinned && (
         <MenuItem onClick={() => { props.onUnpin(props.target.relPath); props.onClose() }}>
           Unpin from context
+        </MenuItem>
+      )}
+      {!isDir && props.revisionArchaeologyEnabled && props.onViewHistory && props.target.relPath && (
+        <MenuItem onClick={() => { props.onViewHistory?.(props.target.relPath); props.onClose() }}>
+          View history
         </MenuItem>
       )}
       {props.target.relPath && <div className="my-1 border-t border-default" />}

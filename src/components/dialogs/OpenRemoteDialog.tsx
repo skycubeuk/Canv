@@ -37,7 +37,7 @@ export default function OpenRemoteDialog({ open, recent, onConnect, onClose }: O
           value={value}
           onChange={(e) => setValue(e.target.value)}
           placeholder="user@host:/path/to/workspace"
-          className="w-full border border-default rounded px-3 py-2 mb-3 bg-elev"
+          className="w-full border border-default rounded-sm px-3 py-2 mb-3 bg-elev"
           onKeyDown={(e) => { if (e.key === 'Enter') submit() }}
         />
         {error && <div className="text-sm text-red-600 mb-3">{error}</div>}
@@ -49,7 +49,7 @@ export default function OpenRemoteDialog({ open, recent, onConnect, onClose }: O
                 <li key={r.raw}>
                   <button
                     type="button"
-                    className="text-left w-full px-2 py-1 hover:bg-hover rounded"
+                    className="text-left w-full px-2 py-1 hover:bg-hover rounded-sm"
                     onClick={() => setValue(r.raw)}
                   >
                     {r.raw}
@@ -64,7 +64,7 @@ export default function OpenRemoteDialog({ open, recent, onConnect, onClose }: O
             type="button"
             onClick={onClose}
             disabled={busy}
-            className="px-3 py-1.5 rounded border"
+            className="px-3 py-1.5 rounded-sm border"
           >
             Cancel
           </button>
@@ -72,7 +72,7 @@ export default function OpenRemoteDialog({ open, recent, onConnect, onClose }: O
             type="button"
             onClick={submit}
             disabled={busy || !value.trim()}
-            className="px-3 py-1.5 rounded bg-blue-600 text-white disabled:opacity-50"
+            className="px-3 py-1.5 rounded-sm bg-blue-600 text-white disabled:opacity-50"
           >
             {busy ? 'Connecting…' : 'Connect'}
           </button>

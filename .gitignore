@@ -32,3 +32,8 @@ docs/screenshots/.tmp/
 
 # Local milestone planning notes (never committed)
 canv-0.6.0/
+
+# Canv website (Astro project in /site)
+site/node_modules/
+site/dist/
+site/.astro/

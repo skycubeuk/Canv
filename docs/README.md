@@ -1,45 +1,55 @@
-# Canv user guide
+# The Canv user guide
 
-Welcome. This guide is for writers using Canv. It covers what you can do
-inside the app, in the order you're most likely to need it.
+Canv is a local writing workspace. You point it at a folder of markdown files
+on your own disk and it gives you an editor, a file tree, and an AI that
+knows your work. Nothing leaves your machine except the prompts you send to
+your chosen AI provider.
 
-If you're a developer, the [repo README](../README.md) covers building and
-contributing.
+If you are a developer rather than a writer, the
+[repo README](../README.md) covers building, testing, and contributing.
 
-## Pages
+## What's in the guide
 
-1. [Getting started](getting-started.md) — install, choose the kind of
-   writing you do, point Canv at a folder, and get a first AI suggestion on
-   the page.
-2. [Writing and editing text](writing-and-editing-text.md) — the canvas
-   itself: tabs, side-by-side panes, the reading view, font size, line
-   width, and the colour scheme.
+1. [Getting started](getting-started.md) — installing Canv, picking a folder
+   of writing to work on, choosing a profile, and adding an AI key so the AI
+   can help.
+2. [Writing and editing text](writing-and-editing-text.md) — the editor, the
+   formatting toolbar, switching between editing and a rendered preview,
+   jumping to a heading, working with two files side-by-side, exporting.
 3. [Finding and organising your work](finding-and-organising-your-work.md) —
-   the file tree, jumping to a file by name, searching across every file,
-   and pinning notes that the AI should always read.
-4. [Getting the AI to help with a passage](getting-the-ai-to-help.md) —
-   selecting text and asking for a rewrite, polish, brainstorm, or
-   custom edit, plus running a pass over the whole document.
-5. [Working with an AI assistant alongside your draft](working-with-an-ai-assistant.md) —
-   the chat conversation, juggling several chats at once, approving the
-   changes the AI wants to make, and watching what it costs.
-6. [Reviewing and applying AI suggestions](reviewing-and-applying-suggestions.md) —
-   coming back to past results, refining them, re-running them, and pasting
-   the rewrite back into the page.
-7. [Building visual views of your project](building-visual-views-of-your-project.md) —
-   asking the AI to build a small interactive view of your work — a timeline,
-   a chart, a board — that lives next to the manuscript.
-8. [Tracking changes and keeping things tidy](tracking-changes-and-keeping-things-tidy.md) —
-   the Git view, file-level structural checks, exports, and full backups.
+   the file tree, creating and renaming files, searching the workspace,
+   pinning a reference file so the AI always sees it, and the quick-find
+   that pops up over the editor.
+4. [Getting the AI to help](getting-the-ai-to-help.md) — running a one-off
+   rewrite or review on selected text, running an action on a whole
+   document, and switching profiles to change the AI's tone.
+5. [Working with an AI assistant](working-with-an-ai-assistant.md) — chatting
+   with an assistant alongside your draft, juggling multiple conversations,
+   approving file changes the AI wants to make, watching its plan, and
+   choosing which model each conversation uses.
+6. [Reviewing and applying suggestions](reviewing-and-applying-suggestions.md)
+   — reading an AI rewrite as it streams in, comparing it to the original
+   with an inline diff, applying or refining or dismissing it, and coming
+   back to an older run later.
+7. [Tracking changes and keeping things tidy](tracking-changes-and-keeping-things-tidy.md)
+   — Canv's private history of your workspace, checkpoints, browsing what
+   changed since any checkpoint, viewing every past version of a single
+   file, and restoring a file with a safety capture first.
+8. [Building visual views of your project](building-visual-views-of-your-project.md)
+   — asking the AI to build a small interactive site (timeline, kanban,
+   chart) inside your workspace, and serving a folder of markdown as a
+   browsable site.
 9. [Troubleshooting](troubleshooting.md) — first-launch security warnings,
-   missing API keys, where the logs live, and how to recover when something
-   goes wrong.
+   missing keys, files that change underneath you, remote workspaces, and
+   where to look when something feels stuck.
 
 ## Quick conventions
 
-- Examples in this guide use the **Fiction** profile, but everything
-  applies to the other profiles too.
-- The dark theme is the default. There's a light theme; pick whichever
-  reads best to you.
+Examples in this guide use the **Fiction** profile. The other bundled
+profiles work the same way — the difference is what the AI is tuned for
+and which actions appear on the toolbar.
 
-_This guide was generated against Canv 0.6.0._
+Canv ships in a dark theme by default. A light theme is available if you
+prefer it; see [Writing and editing text](writing-and-editing-text.md).
+
+_This guide was generated against Canv 0.6.1._
