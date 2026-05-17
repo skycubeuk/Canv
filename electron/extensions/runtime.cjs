@@ -1,5 +1,8 @@
 'use strict'
 
+const path = require('node:path')
+const { PersistentStorage } = require('./storage-file.cjs')
+
 class InMemoryStorage {
   constructor() { this._m = new Map() }
   get(k)    { return this._m.get(k) }
@@ -16,6 +19,7 @@ class ExtensionRuntime {
     this._electron = opts.electron || null
     this._extensionPreloadPath = opts.extensionPreloadPath || null
     this._openDevToolsOnSpawn = Boolean(opts.openDevToolsOnSpawn)
+    this._onCrash = opts.onCrash || null    // ← NEW
   }
 
   list() {
@@ -90,11 +94,17 @@ class ExtensionRuntime {
       },
     })
 
+    view.webContents.on('render-process-gone', (_e, details) => {
+      if (typeof this._onCrash === 'function') {
+        this._onCrash(manifest.id, details)
+      }
+    })
+
     // Register BEFORE load so protocol handler / IPC handlers can resolve the
     // webContents id to its extension during the initial entry-html fetch.
     this._byId.set(manifest.id, {
       manifest, extensionDir, webContentsId: view.webContents.id, view,
-      storage: new InMemoryStorage(),
+      storage: new PersistentStorage(path.join(extensionDir, 'storage.json')),
       subscriptions: new Set(),
     })
     this._wcIdToId.set(view.webContents.id, manifest.id)
@@ -166,10 +176,11 @@ class ExtensionRuntime {
   }
 
   // --- Test affordances. Real `spawn`/`destroy` land in Task 15. ---
-  _registerForTest({ id, manifest, extensionDir, webContentsId, view = null }) {
+  _registerForTest({ id, manifest, extensionDir, webContentsId, view = null, storageFile = null }) {
+    const storage = storageFile ? new PersistentStorage(storageFile) : new InMemoryStorage()
     this._byId.set(id, {
       manifest, extensionDir, webContentsId, view,
-      storage: new InMemoryStorage(),
+      storage,
       subscriptions: new Set(),
     })
     this._wcIdToId.set(webContentsId, id)

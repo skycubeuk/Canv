@@ -26,8 +26,24 @@ const { createEventsHandlers } = require('./extensions/handlers/events.cjs')
 const { createStorageHandlers } = require('./extensions/handlers/storage.cjs')
 const { createUiHandlers } = require('./extensions/handlers/ui.cjs')
 const { validateManifest } = require('./extensions/manifest-schema.cjs')
+const { Registry } = require('./extensions/registry.cjs')
+const { WorkspaceTrustStore } = require('./extensions/workspace-trust.cjs')
+const { hashExtensionDir } = require('./extensions/manifest-hash.cjs')
+const { shouldActivateFor } = require('./extensions/activation-events.cjs')
+const { createSettingsHandlers } = require('./extensions/handlers/settings.cjs')
 
 let extensionRuntime = null
+let trustStore = null
+let workspaceRegistry = null
+
+function onWorkspaceChangedGlobal() {
+  workspaceRegistry = (WORKSPACE && WORKSPACE.kind === 'local')
+    ? new Registry(WORKSPACE.root)
+    : null
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('canvExtensions:registryChanged')
+  }
+}
 
 const APP_ICON = path.join(__dirname, '..', 'build', 'icon.png')
 
@@ -277,6 +293,7 @@ function registerFsHandlers() {
     WORKSPACE = { kind: 'local', root }
     HISTORY = null
     startWatcher(root)
+    onWorkspaceChangedGlobal()
     return { root }
   })
 
@@ -288,6 +305,7 @@ function registerFsHandlers() {
     WORKSPACE = { kind: 'local', root }
     HISTORY = null
     startWatcher(root)
+    onWorkspaceChangedGlobal()
   })
 
   ipcMain.handle('canvFS:getWorkspace', async () => WORKSPACE?.kind === 'local' ? WORKSPACE.root : null)
@@ -637,7 +655,10 @@ function registerFsHandlers() {
     return { ok: true }
   })
 
-  ipcMain.handle('canvFS:closeWorkspace', () => closeWorkspace())
+  ipcMain.handle('canvFS:closeWorkspace', async () => {
+    await closeWorkspace()
+    onWorkspaceChangedGlobal()
+  })
 
   ipcMain.handle('canvFS:listRecentRemotes', async () => recentRemotes ? recentRemotes.list() : [])
 
@@ -684,6 +705,7 @@ function registerFsHandlers() {
     await closeWorkspace()
     WORKSPACE = { kind: 'remote', target: resolved, raw, pool, backend: rfs }
     HISTORY = null
+    onWorkspaceChangedGlobal()
     WORKSPACE.unsub = rfs.subscribe((ev) => {
       if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('canvFS:event', ev)
     })
@@ -1007,7 +1029,60 @@ function registerExtensionHandlers() {
         wc.send('canvExt:event', { type: eventType, payload })
       }
     },
+    onCrash: (id, details) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('canvExtensions:crashed', { id, reason: details?.reason ?? 'unknown' })
+      }
+    },
   })
+
+  const TRUST_FILE = path.join(app.getPath('userData'), 'Canv', 'trusted-workspaces.json')
+  trustStore = new WorkspaceTrustStore(TRUST_FILE)
+
+  async function copyExtensionTree(src, dst) {
+    await fsp.mkdir(dst, { recursive: true })
+    async function walk(s, d) {
+      const entries = await fsp.readdir(s, { withFileTypes: true })
+      for (const e of entries) {
+        if (e.name === 'settings.json' || e.name === 'log') continue
+        const sp = path.join(s, e.name)
+        const dp = path.join(d, e.name)
+        if (e.isDirectory()) { await fsp.mkdir(dp, { recursive: true }); await walk(sp, dp) }
+        else if (e.isFile()) { await fsp.copyFile(sp, dp) }
+      }
+    }
+    await walk(src, dst)
+  }
+
+  function onRegistryChanged() {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('canvExtensions:registryChanged')
+    }
+  }
+
+  async function spawnInstalled(id) {
+    if (!WORKSPACE || WORKSPACE.kind !== 'local') return { ok: false, reason: 'no-workspace' }
+    if (!workspaceRegistry) return { ok: false, reason: 'no-registry' }
+    const entry = workspaceRegistry.get(id)
+    if (!entry) return { ok: false, reason: 'not-installed' }
+    const dir = path.join(WORKSPACE.root, '.canv', 'extensions', id)
+    // Tamper detection: any spawn path (enable toggle, requestActivation,
+    // reload) re-hashes the installed dir and compares to the hash recorded
+    // at install time. Drift → revoke per-extension trust + disable + skip.
+    const currentHash = await hashExtensionDir(dir)
+    if (currentHash !== entry.manifestSha256) {
+      workspaceRegistry.setTrustedAt(id, null)
+      workspaceRegistry.setEnabled(id, false)
+      onRegistryChanged()
+      return { ok: false, reason: 'tamper-detected' }
+    }
+    const manifest = JSON.parse(await fsp.readFile(path.join(dir, 'manifest.json'), 'utf-8'))
+    await extensionRuntime.spawn({
+      extensionDir: dir, manifest, hostWindow: mainWindow,
+      bounds: { x: mainWindow.getBounds().width - 380, y: 80, width: 360, height: 600 },
+    })
+    return { ok: true }
+  }
 
   registerProtocol(electron.protocol, {
     extensionDirFor: (id) => extensionRuntime.extensionDirFor(id),
@@ -1022,6 +1097,10 @@ function registerExtensionHandlers() {
     ...createEventsHandlers({ runtime: extensionRuntime }),
     ...createStorageHandlers({ runtime: extensionRuntime }),
     ...createUiHandlers({ runtime: extensionRuntime, host }),
+    ...createSettingsHandlers({
+      runtime: extensionRuntime,
+      settingsFileFor: (id) => path.join(WORKSPACE.root, '.canv', 'extensions', id, 'settings.json'),
+    }),
   }
   for (const [channel, fn] of Object.entries(allHandlers)) {
     ipcMain.handle(channel, fn)
@@ -1065,6 +1144,201 @@ function registerExtensionHandlers() {
       extensionRuntime.dispatchEvent(type, payload)
     })
   }
+
+  // --- Production canvExtensions handlers ---
+
+  ipcMain.handle('canvExtensions:listInstalled', async () => {
+    if (!workspaceRegistry) return []
+    return workspaceRegistry.listEntries()
+  })
+
+  ipcMain.handle('canvExtensions:install', async (_e, sourceFolderAbsPath) => {
+    if (!workspaceRegistry) throw new Error('no workspace open')
+    if (!WORKSPACE || WORKSPACE.kind !== 'local') throw new Error('extensions require local workspace')
+    if (typeof sourceFolderAbsPath !== 'string' || !sourceFolderAbsPath) {
+      return { ok: false, errors: ['invalid source folder'] }
+    }
+    const srcManifestPath = path.join(sourceFolderAbsPath, 'manifest.json')
+    let raw
+    try { raw = JSON.parse(await fsp.readFile(srcManifestPath, 'utf-8')) }
+    catch (e) { return { ok: false, errors: [`manifest read/parse failed: ${e.message}`] } }
+    const v = validateManifest(raw)
+    if (!v.ok) return { ok: false, errors: v.errors }
+    const id = v.manifest.id
+    const targetDir = path.join(WORKSPACE.root, '.canv', 'extensions', id)
+    await copyExtensionTree(sourceFolderAbsPath, targetDir)
+    const hash = await hashExtensionDir(targetDir)
+    workspaceRegistry.install(v.manifest, hash)
+    onRegistryChanged()
+    return { ok: true, id }
+  })
+
+  ipcMain.handle('canvExtensions:uninstall', async (_e, id) => {
+    if (!workspaceRegistry) throw new Error('no workspace open')
+    if (extensionRuntime?.manifestFor(id)) await extensionRuntime.destroy(id)
+    workspaceRegistry.uninstall(id)
+    const dir = path.join(WORKSPACE.root, '.canv', 'extensions', id)
+    await fsp.rm(dir, { recursive: true, force: true })
+    onRegistryChanged()
+  })
+
+  ipcMain.handle('canvExtensions:setEnabled', async (_e, id, enabled) => {
+    if (!workspaceRegistry) throw new Error('no workspace open')
+    workspaceRegistry.setEnabled(id, Boolean(enabled))
+    if (!enabled && extensionRuntime?.manifestFor(id)) {
+      await extensionRuntime.destroy(id)
+    } else if (enabled) {
+      // Toggling on is an explicit "I want this running" signal — spawn now,
+      // bypassing the activation-event lazy-load (which is for installed-but-
+      // unused extensions and waits for real triggers; Phase 5 wires those).
+      // spawnInstalled re-hashes and revokes trust + flips enabled=false if
+      // the on-disk files have drifted since install (tamper detection).
+      const entry = workspaceRegistry.get(id)
+      const wsTrust = trustStore.stateFor(WORKSPACE?.root || '')
+      if (entry && entry.trustedAt != null && wsTrust === 'trusted' && !extensionRuntime.manifestFor(id)) {
+        try {
+          const r = await spawnInstalled(id)
+          if (r && !r.ok) console.warn('spawn refused on enable:', r.reason)
+        } catch (e) { console.error('spawn on enable failed:', e) }
+      }
+    }
+    onRegistryChanged()
+  })
+
+  ipcMain.handle('canvExtensions:setTrustedAt', async (_e, id, isoOrNull) => {
+    if (!workspaceRegistry) throw new Error('no workspace open')
+    workspaceRegistry.setTrustedAt(id, isoOrNull)
+    onRegistryChanged()
+  })
+
+  ipcMain.handle('canvExtensions:getWorkspaceTrust', async () => {
+    if (!WORKSPACE || WORKSPACE.kind !== 'local') return 'untrusted'
+    return trustStore.stateFor(WORKSPACE.root)
+  })
+
+  ipcMain.handle('canvExtensions:setWorkspaceTrust', async (_e, state) => {
+    if (!WORKSPACE || WORKSPACE.kind !== 'local') throw new Error('no local workspace')
+    trustStore.set(WORKSPACE.root, state)
+    if (state !== 'trusted') {
+      for (const e of extensionRuntime.list()) await extensionRuntime.destroy(e.id)
+    }
+    onRegistryChanged()
+  })
+
+  ipcMain.handle('canvExtensions:readSettings', async (_e, id) => {
+    if (!WORKSPACE || WORKSPACE.kind !== 'local') return {}
+    const file = path.join(WORKSPACE.root, '.canv', 'extensions', id, 'settings.json')
+    try { return JSON.parse(await fsp.readFile(file, 'utf-8')) }
+    catch { return {} }
+  })
+
+  ipcMain.handle('canvExtensions:writeSetting', async (_e, id, key, value) => {
+    if (!WORKSPACE || WORKSPACE.kind !== 'local') throw new Error('no local workspace')
+    if (typeof key !== 'string' || !/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(key)) throw new Error('invalid key')
+    const dir = path.join(WORKSPACE.root, '.canv', 'extensions', id)
+    const file = path.join(dir, 'settings.json')
+    let current = {}
+    try { current = JSON.parse(await fsp.readFile(file, 'utf-8')) } catch { /* default */ }
+    current[key] = value
+    await fsp.mkdir(dir, { recursive: true })
+    const tmp = file + '.tmp'
+    await fsp.writeFile(tmp, JSON.stringify(current, null, 2), 'utf-8')
+    await fsp.rename(tmp, file)
+    // Notify the running extension renderer (if any) about the change.
+    const wcId = Array.from(extensionRuntime._wcIdToId.entries()).find(([, eid]) => eid === id)?.[0]
+    if (wcId) {
+      const wc = electron.webContents.fromId(wcId)
+      if (wc && !wc.isDestroyed()) wc.send('canvExt:settings.changed', { key, value })
+    }
+  })
+
+  ipcMain.handle('canvExtensions:readManifest', async (_e, id) => {
+    if (!WORKSPACE || WORKSPACE.kind !== 'local') throw new Error('no workspace')
+    const file = path.join(WORKSPACE.root, '.canv', 'extensions', id, 'manifest.json')
+    return JSON.parse(await fsp.readFile(file, 'utf-8'))
+  })
+
+  ipcMain.handle('canvExtensions:listFiles', async (_e, id) => {
+    if (!WORKSPACE || WORKSPACE.kind !== 'local') return []
+    const root = path.join(WORKSPACE.root, '.canv', 'extensions', id)
+    const out = []
+    async function walk(dir, prefix) {
+      const entries = await fsp.readdir(dir, { withFileTypes: true })
+      for (const e of entries) {
+        const rel = prefix ? `${prefix}/${e.name}` : e.name
+        if (e.isDirectory()) await walk(path.join(dir, e.name), rel)
+        else out.push(rel)
+      }
+    }
+    try { await walk(root, '') } catch { /* return [] */ }
+    return out.sort()
+  })
+
+  ipcMain.handle('canvExtensions:readFile', async (_e, id, rel) => {
+    if (!WORKSPACE || WORKSPACE.kind !== 'local') throw new Error('no workspace')
+    if (typeof rel !== 'string' || /\.\./.test(rel)) throw new Error('invalid path')
+    const file = path.join(WORKSPACE.root, '.canv', 'extensions', id, rel)
+    const stat = await fsp.stat(file)
+    if (!stat.isFile()) throw new Error('not a file')
+    if (stat.size > 1024 * 1024) throw new Error('file too large')
+    return fsp.readFile(file, 'utf-8')
+  })
+
+  ipcMain.handle('canvExtensions:reload', async (_e, id) => {
+    if (!extensionRuntime || !workspaceRegistry) return
+    const wasRunning = !!extensionRuntime.manifestFor(id)
+    if (wasRunning) await extensionRuntime.destroy(id)
+    if (wasRunning) await spawnInstalled(id)
+  })
+
+  // Dev-only: forcefully crash a running extension's renderer process so the
+  // crash-detection wiring (render-process-gone → canvExtensions:crashed) can
+  // be smoke-tested without trying to OOM V8 from inside the sandbox.
+  if (!app.isPackaged) {
+    ipcMain.handle('canvExtensions:devCrash', async (_e, id) => {
+      const wcId = Array.from(extensionRuntime._wcIdToId.entries()).find(([, eid]) => eid === id)?.[0]
+      if (!wcId) return { ok: false, error: 'extension not running' }
+      const wc = electron.webContents.fromId(wcId)
+      if (!wc || wc.isDestroyed()) return { ok: false, error: 'webContents gone' }
+      // SIGKILL the renderer's OS process directly. This bypasses V8 (which
+      // catches ArrayBuffer-overflow as RangeError instead of crashing) and
+      // forcefullyCrashRenderer (which trips Chromium's hung-process detector
+      // on some Linux/MESA setups). Fires render-process-gone with reason=killed.
+      const pid = wc.getOSProcessId()
+      if (pid > 0) {
+        try { process.kill(pid, 'SIGKILL') } catch { /* renderer already gone */ }
+      }
+      return { ok: true, pid }
+    })
+  }
+
+  ipcMain.handle('canvExtensions:pickInstallFolder', async () => {
+    if (!mainWindow) return null
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: 'Pick extension folder to install',
+      properties: ['openDirectory'],
+    })
+    if (result.canceled || !result.filePaths[0]) return null
+    return result.filePaths[0]
+  })
+
+  ipcMain.handle('canvExtensions:requestActivation', async (_e, trigger) => {
+    if (!extensionRuntime || !workspaceRegistry) return
+    const wsTrust = trustStore.stateFor(WORKSPACE?.root || '')
+    if (wsTrust !== 'trusted') return
+    for (const entry of workspaceRegistry.listEntries()) {
+      if (!entry.enabled || entry.trustedAt == null) continue
+      if (extensionRuntime.manifestFor(entry.id)) continue
+      // Hash check happens inside spawnInstalled; we just read the manifest
+      // here to decide whether the trigger matches the extension's
+      // activationEvents.
+      const dir = path.join(WORKSPACE.root, '.canv', 'extensions', entry.id)
+      let manifest
+      try { manifest = JSON.parse(await fsp.readFile(path.join(dir, 'manifest.json'), 'utf-8')) }
+      catch { continue }
+      if (shouldActivateFor(manifest, trigger)) await spawnInstalled(entry.id)
+    }
+  })
 }
 
 function buildSearchPattern(q) {

@@ -43,6 +43,18 @@ contextBridge.exposeInMainWorld('canv', {
     delete: (key) => ipcRenderer.invoke('canvExt:storage.delete', key),
     keys:   () => ipcRenderer.invoke('canvExt:storage.keys'),
   },
+  settings: {
+    get:     (key) => ipcRenderer.invoke('canvExt:settings.get', key),
+    set:     (key, value) => ipcRenderer.invoke('canvExt:settings.set', key, value),
+    getAll:  () => ipcRenderer.invoke('canvExt:settings.getAll'),
+    onChange(handler) {
+      const listener = (_e, payload) => {
+        try { handler(payload.key, payload.value) } catch { /* swallow */ }
+      }
+      ipcRenderer.on('canvExt:settings.changed', listener)
+      return () => ipcRenderer.removeListener('canvExt:settings.changed', listener)
+    },
+  },
   ui: {
     notify:           (msg, kind) => ipcRenderer.invoke('canvExt:ui.notify', msg, kind ?? 'info'),
     confirm:          (msg) => ipcRenderer.invoke('canvExt:ui.confirm', msg),

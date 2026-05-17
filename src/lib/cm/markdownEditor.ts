@@ -6,6 +6,13 @@ import { markdown } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
 import { searchKeymap } from '@codemirror/search'
 
+export interface ActiveEditorUpdateInfo {
+  rel: string | null
+  text: string
+  selection: { from: number; to: number; text: string }
+  docChanged: boolean
+}
+
 export interface MarkdownEditorOptions {
   initialDoc: string
   onDocChange: (doc: string) => void
@@ -15,6 +22,14 @@ export interface MarkdownEditorOptions {
   onFocusChange?: (focused: boolean) => void
   /** When true, adds line numbers to the gutter. Default: false. */
   showLineNumbers?: boolean
+  /**
+   * When set, called on every doc/selection change for the active editor only.
+   * The caller is responsible for only passing this when `isActive` is true —
+   * it is wired through Canvas via the onActiveEditorUpdate prop.
+   */
+  onActiveEditorUpdate?: (info: ActiveEditorUpdateInfo) => void
+  /** Rel path of the current file — forwarded verbatim in ActiveEditorUpdateInfo. */
+  activeRel?: string | null
 }
 
 /**
@@ -31,6 +46,15 @@ export function markdownEditorExtensions(opts: MarkdownEditorOptions): Extension
     }
     if (update.focusChanged && opts.onFocusChange) {
       opts.onFocusChange(update.view.hasFocus)
+    }
+    if (opts.onActiveEditorUpdate && (update.docChanged || update.selectionSet)) {
+      const sel = update.state.selection.main
+      opts.onActiveEditorUpdate({
+        rel: opts.activeRel ?? null,
+        text: update.state.doc.toString(),
+        selection: { from: sel.from, to: sel.to, text: update.state.sliceDoc(sel.from, sel.to) },
+        docChanged: update.docChanged,
+      })
     }
   })
 

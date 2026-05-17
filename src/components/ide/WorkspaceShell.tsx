@@ -1,4 +1,5 @@
 import { IdeShell, type DockSlot } from './IdeShell'
+import type { ActiveEditorUpdateInfo } from '../../lib/cm/markdownEditor'
 import { LeftSidebar } from './LeftSidebar'
 import { EditorArea } from './EditorArea'
 import { BottomPanel, type BottomPanelTabDef } from './BottomPanel'
@@ -9,6 +10,8 @@ import { SearchTab } from './sidebar/SearchTab'
 import { HistoryTab } from './sidebar/HistoryTab'
 import { getCanvHistory } from '../../lib/history'
 import { SitesTab } from './sidebar/SitesTab'
+import { ExtensionsTab } from '../extensions/ExtensionsTab'
+import { TrustWorkspaceBanner } from '../extensions/TrustWorkspaceBanner'
 import { OutlinePanel } from './sidebar/OutlinePanel'
 import { Canvas } from '../Canvas'
 import { SettingsTab } from './tabs/SettingsTab'
@@ -44,6 +47,7 @@ export interface WorkspaceShellProps {
   onJumperDestroy: (groupId: EditorGroupId, rel: string) => void
   onEditorChange: (groupId: EditorGroupId, rel: string, markdown: string) => void
   onEditorSelectionChange: () => void
+  onActiveEditorUpdate?: (info: ActiveEditorUpdateInfo) => void
   readLiveBuffer: (groupId: EditorGroupId, rel: string) => string | undefined
   onJumpToMatch: (match: SearchMatch, q: { query: string; regex: boolean; caseSensitive: boolean }, ordinalInFile: number) => Promise<void>
   // Outline
@@ -92,7 +96,7 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
   const {
     ideLayout, workspace, openRels, pinnedRels,
     onEditorReady, onEditorDestroy, onJumperReady, onJumperDestroy,
-    onEditorChange, onEditorSelectionChange,
+    onEditorChange, onEditorSelectionChange, onActiveEditorUpdate,
     readLiveBuffer,
     onJumpToMatch,
     outlineNodes, focusedKey, onOutlineJump,
@@ -156,6 +160,7 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
               />
             ) : undefined}
             sites={<SitesTab onRegenerate={setChatDraft} />}
+            extensions={<ExtensionsTab />}
             settings={settings}
             onUpdateSettings={onUpdateSettings}
             workspaceName={workspace.root}
@@ -192,6 +197,12 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
         sidebarSize={ideLayout.layout.sidebar.size}
         editor={(
           <main className="h-full flex flex-col min-w-0 overflow-hidden bg-app">
+            <TrustWorkspaceBanner
+              onReviewInSidebar={() => {
+                ideLayout.setSidebarTab('extensions')
+                if (!ideLayout.layout.sidebar.visible) ideLayout.toggleSidebar()
+              }}
+            />
             <div className="flex-1 min-h-0">
               <EditorArea
                 workspaceRoot={workspace.root}
@@ -233,6 +244,7 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
                       onJumperReady={onJumperReady}
                       onJumperDestroy={onJumperDestroy}
                       getInitialBuffer={readLiveBuffer}
+                      onActiveEditorUpdate={onActiveEditorUpdate}
                     />
                   )
                 }}

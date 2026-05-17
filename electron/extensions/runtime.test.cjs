@@ -1,4 +1,8 @@
+const fsPath = require('node:path')
+const fsMod = require('node:fs')
+const osMod = require('node:os')
 const { ExtensionRuntime } = require('./runtime.cjs')
+const { PersistentStorage } = require('./storage-file.cjs')
 
 describe('ExtensionRuntime registry (pure)', () => {
   it('starts empty', () => {
@@ -67,5 +71,39 @@ describe('ExtensionRuntime spawn validation', () => {
       extensionDir: '/x', manifest: { id: 'a', contributions: [] },
       hostWindow: {},
     })).rejects.toThrow(/already spawned/)
+  })
+})
+
+describe('ExtensionRuntime onCrash option', () => {
+  it('stores onCrash callback when provided', () => {
+    const cb = () => {}
+    const rt = new ExtensionRuntime({ onCrash: cb })
+    expect(rt._onCrash).toBe(cb)
+  })
+  it('defaults onCrash to null when not provided', () => {
+    const rt = new ExtensionRuntime()
+    expect(rt._onCrash).toBe(null)
+  })
+})
+
+describe('ExtensionRuntime storage backend', () => {
+  it('uses InMemoryStorage by default', async () => {
+    const rt = new ExtensionRuntime()
+    rt._registerForTest({ id: 'a', manifest: { id: 'a' }, extensionDir: '/x', webContentsId: 1 })
+    const s = rt.storageFor('a')
+    await s.set('k', 1)
+    expect(await s.get('k')).toBe(1)
+  })
+  it('uses PersistentStorage when storageFile is supplied', async () => {
+    const file = fsPath.join(fsMod.mkdtempSync(fsPath.join(osMod.tmpdir(), 'canv-rs-')), 'storage.json')
+    const rt = new ExtensionRuntime()
+    rt._registerForTest({
+      id: 'a', manifest: { id: 'a' }, extensionDir: '/x', webContentsId: 1,
+      storageFile: file,
+    })
+    const s = rt.storageFor('a')
+    expect(s).toBeInstanceOf(PersistentStorage)
+    await s.set('k', 'v')
+    expect(JSON.parse(fsMod.readFileSync(file, 'utf-8'))).toEqual({ k: 'v' })
   })
 })

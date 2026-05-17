@@ -28,6 +28,7 @@ import { exportBackup } from './lib/backup'
 import { useDialogs } from './lib/dialogs'
 import { useNotifications } from './hooks/useNotifications'
 import { useEditorRegistry, editorMapKey } from './hooks/useEditorRegistry'
+import { useExtensionEventBridge } from './hooks/useExtensionEventBridge'
 import { useWorkspaceFileOps } from './hooks/useWorkspaceFileOps'
 import { useSelectionAgent } from './hooks/useSelectionAgent'
 import { applyAccent, applyTheme, resolveTheme } from './lib/accent'
@@ -112,6 +113,7 @@ export default function App() {
     showToast: notifications.showToast,
   })
 
+  const onActiveEditorUpdate = useExtensionEventBridge()
   const editorRegistry = useEditorRegistry({ workspace })
   const {
     editorsRef, jumpersRef,
@@ -655,6 +657,7 @@ export default function App() {
         onJumperDestroy={handleJumperDestroy}
         onEditorChange={handleEditorChange}
         onEditorSelectionChange={handleEditorSelectionChange}
+        onActiveEditorUpdate={onActiveEditorUpdate}
         readLiveBuffer={readLiveBuffer}
         onJumpToMatch={jumpToMatch}
         outlineNodes={outlineNodes}

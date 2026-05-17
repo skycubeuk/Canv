@@ -1,4 +1,4 @@
-import { Folder, Search, History, LayoutDashboard, PanelRight, PanelBottom } from 'lucide-react'
+import { Folder, Search, History, LayoutDashboard, Puzzle, PanelRight, PanelBottom } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { SidebarTab, InAppDockPlacement } from '../../hooks/useIdeLayout'
 import { DocumentAgentMenu } from '../DocumentAgentMenu'
@@ -42,6 +42,7 @@ export function TopBar(props: Props) {
     { id: 'search', label: 'Search', icon: Search },
     ...(historyEnabled ? [{ id: 'history' as const, label: 'History', icon: History }] : []),
     { id: 'sites', label: 'Sites', icon: LayoutDashboard },
+    { id: 'extensions', label: 'Extensions', icon: Puzzle },
   ]
 
   const displayName = workspaceName

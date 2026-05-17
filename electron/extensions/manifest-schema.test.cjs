@@ -68,4 +68,77 @@ describe('validateManifest', () => {
     const r = validateManifest(valid({ network: ['https://example.com/path'] }))
     expect(r.ok).toBe(false)
   })
+
+  describe('settings field', () => {
+    it('accepts a number setting with min/max/default', () => {
+      const r = validateManifest(valid({
+        settings: [{ key: 'target', type: 'number', default: 50000, min: 0, max: 1e7, label: 'Target' }],
+      }))
+      expect(r.ok).toBe(true)
+    })
+    it('accepts a boolean setting', () => {
+      const r = validateManifest(valid({
+        settings: [{ key: 'enabled', type: 'boolean', default: true }],
+      }))
+      expect(r.ok).toBe(true)
+    })
+    it('accepts an enum setting with options', () => {
+      const r = validateManifest(valid({
+        settings: [{ key: 'mode', type: 'enum', options: ['a', 'b', 'c'], default: 'b' }],
+      }))
+      expect(r.ok).toBe(true)
+    })
+    it('rejects enum setting without options', () => {
+      const r = validateManifest(valid({
+        settings: [{ key: 'mode', type: 'enum' }],
+      }))
+      expect(r.ok).toBe(false)
+    })
+    it('rejects duplicate setting keys', () => {
+      const r = validateManifest(valid({
+        settings: [
+          { key: 'x', type: 'number' },
+          { key: 'x', type: 'boolean' },
+        ],
+      }))
+      expect(r.ok).toBe(false)
+      expect(r.errors.join(' ')).toMatch(/duplicate/i)
+    })
+    it('rejects setting key with invalid chars', () => {
+      const r = validateManifest(valid({
+        settings: [{ key: 'has space', type: 'number' }],
+      }))
+      expect(r.ok).toBe(false)
+    })
+    it('rejects default value whose type does not match the schema', () => {
+      const r = validateManifest(valid({
+        settings: [{ key: 'x', type: 'number', default: 'oops' }],
+      }))
+      expect(r.ok).toBe(false)
+    })
+    it('rejects enum default that is not in options', () => {
+      const r = validateManifest(valid({
+        settings: [{ key: 'mode', type: 'enum', options: ['a', 'b'], default: 'c' }],
+      }))
+      expect(r.ok).toBe(false)
+    })
+  })
+
+  describe('activationEvents', () => {
+    it('accepts onStartup', () => {
+      expect(validateManifest(valid({ activationEvents: ['onStartup'] })).ok).toBe(true)
+    })
+    it('accepts onCommand:<id>', () => {
+      expect(validateManifest(valid({ activationEvents: ['onCommand:foo.bar'] })).ok).toBe(true)
+    })
+    it('accepts onPanelOpen:<location>:<panelId>', () => {
+      expect(validateManifest(valid({ activationEvents: ['onPanelOpen:right-sidebar:main'] })).ok).toBe(true)
+    })
+    it('rejects unknown activation event prefix', () => {
+      expect(validateManifest(valid({ activationEvents: ['onClick:foo'] })).ok).toBe(false)
+    })
+    it('rejects malformed onPanelOpen with wrong location', () => {
+      expect(validateManifest(valid({ activationEvents: ['onPanelOpen:weird-place:main'] })).ok).toBe(false)
+    })
+  })
 })

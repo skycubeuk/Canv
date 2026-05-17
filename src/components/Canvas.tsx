@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { EditorView } from '@codemirror/view'
-import { makeMarkdownState } from '../lib/cm/markdownEditor'
+import { makeMarkdownState, type ActiveEditorUpdateInfo } from '../lib/cm/markdownEditor'
 import { markdownToHtml } from '../lib/markdown'
 import type { LineWidth } from '../hooks/useSettings'
 import type { OpenTab, EditorGroupId } from '../types/workspace'
@@ -30,6 +30,11 @@ interface Props {
   // user's in-flight edits, while loadedMarkdown is only the disk snapshot.
   // Without this, a layout-driven remount resets the view to the disk text.
   getInitialBuffer?: (groupId: EditorGroupId, rel: string) => string | undefined
+  /**
+   * When provided and this tab isActive, fired on every doc/selection
+   * transaction. Used by the extensions bridge to replace the 400ms poll.
+   */
+  onActiveEditorUpdate?: (info: ActiveEditorUpdateInfo) => void
 }
 
 const widthClass: Record<LineWidth, string> = {
@@ -51,7 +56,7 @@ const editorTypographyTheme = EditorView.theme({
 export function Canvas({
   groupId, tab, isActive, fontSize, lineWidth, viewMode,
   onChange, onSelectionChange, onEditorReady, onEditorDestroy,
-  onJumperReady, onJumperDestroy, getInitialBuffer,
+  onJumperReady, onJumperDestroy, getInitialBuffer, onActiveEditorUpdate,
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const viewRef = useRef<EditorView | null>(null)
@@ -70,14 +75,18 @@ export function Canvas({
   // Latest callbacks via ref so the editor construction doesn't capture stale closures.
   const onChangeRef = useRef(onChange)
   const onSelectionChangeRef = useRef(onSelectionChange)
+  const onActiveEditorUpdateRef = useRef(onActiveEditorUpdate)
   // The jumper closes over the latest viewMode so a single registered function
   // routes correctly across edit↔preview toggles without re-registration.
   const viewModeRef = useRef<ViewMode>(viewMode)
+  const isActiveRef = useRef(isActive)
   useEffect(() => {
     onChangeRef.current = onChange
     onSelectionChangeRef.current = onSelectionChange
+    onActiveEditorUpdateRef.current = onActiveEditorUpdate
     viewModeRef.current = viewMode
-  }, [onChange, onSelectionChange, viewMode])
+    isActiveRef.current = isActive
+  }, [onChange, onSelectionChange, onActiveEditorUpdate, viewMode, isActive])
 
   useLayoutEffect(() => {
     const container = containerRef.current
@@ -92,6 +101,11 @@ export function Canvas({
         onChangeRef.current(groupId, tab.relPath, doc)
       },
       onSelectionChange: () => onSelectionChangeRef.current?.(groupId, tab.relPath),
+      onActiveEditorUpdate: (info) => {
+        if (!isActiveRef.current) return
+        onActiveEditorUpdateRef.current?.(info)
+      },
+      activeRel: tab.relPath,
     }, [editorTypographyTheme])
     const view = new EditorView({ state, parent: container })
     viewRef.current = view

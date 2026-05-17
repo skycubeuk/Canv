@@ -20,6 +20,7 @@ interface Props {
   history?: ReactNode
   historyEnabled: boolean
   sites?: ReactNode
+  extensions?: ReactNode
   settings: Settings
   onUpdateSettings: (patch: Partial<Settings>) => void
   workspaceName: string | null
@@ -41,7 +42,7 @@ function ComingSoon({ label }: { label: string }) {
 
 export function LeftSidebar(props: Props) {
   const {
-    activeTab, files, search, history, historyEnabled, sites, settings, onUpdateSettings,
+    activeTab, files, search, history, historyEnabled, sites, extensions, settings, onUpdateSettings,
     workspaceName,
     outline, outlineSize, onOutlineSizeChange,
     onNewFile, onNewFolder, onChangeWorkspace,
@@ -51,6 +52,7 @@ export function LeftSidebar(props: Props) {
     { id: 'search', label: 'Search', body: search ?? <ComingSoon label="Search" /> },
     ...(historyEnabled ? [{ id: 'history' as const, label: 'History', body: history ?? <ComingSoon label="History" /> }] : []),
     { id: 'sites', label: 'Sites', body: sites ?? <ComingSoon label="Sites" /> },
+    { id: 'extensions', label: 'Extensions', body: extensions ?? <ComingSoon label="Extensions" /> },
   ]
   const active = tabs.find((t) => t.id === activeTab) ?? tabs[0]
   const showFiles = activeTab === 'files'

@@ -1,3 +1,5 @@
+import type { SettingDef, ActivationEvent, MigrationStep } from './extension-settings'
+
 export type CapabilityString =
   | 'activeDoc.read'
   | 'activeDoc.write'
@@ -47,8 +49,10 @@ export interface ExtensionManifest {
   builderPrompt?: string
   capabilities: CapabilityString[]
   network?: string[]
-  activationEvents?: string[]
   contributions: Contribution[]
+  settings?: SettingDef[]
+  activationEvents?: ActivationEvent[]
+  migrations?: MigrationStep[]
 }
 
 export interface ActiveDocSnapshot {

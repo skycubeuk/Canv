@@ -145,34 +145,6 @@ export function TestExtensionOverlay({ getActiveEditor, activeMarkdownRel }: Tes
     return () => window.removeEventListener('resize', onResize)
   }, [spawned])
 
-  // Phase 1 doc-change detector: while any extension is spawned, poll the
-  // active editor every 400ms and fire activeDocChanged when the text or
-  // path changes. Phase 2 will replace this with a direct CodeMirror update
-  // listener wired into useEditorRegistry.
-  useEffect(() => {
-    if (!spawned || !window.canvExtensionsDev) return
-    const dev = window.canvExtensionsDev
-    let lastPath: string | null = activeMarkdownRelRef.current ?? null
-    let lastText = ''
-    try {
-      const v0 = getActiveEditorRef.current()
-      lastText = v0 ? v0.state.doc.toString() : ''
-    } catch { /* ignore */ }
-
-    const timer = window.setInterval(() => {
-      let view: EditorView | null = null
-      try { view = getActiveEditorRef.current() } catch { return }
-      const path = activeMarkdownRelRef.current ?? null
-      const text = view ? view.state.doc.toString() : ''
-      if (text !== lastText || path !== lastPath) {
-        lastText = text
-        lastPath = path
-        void dev.fireEvent('activeDocChanged', { path, length: text.length })
-      }
-    }, 400)
-    return () => window.clearInterval(timer)
-  }, [spawned])
-
   // Destroy on unmount if still spawned.
   const spawnedRef = useRef(spawned)
   useEffect(() => { spawnedRef.current = spawned }, [spawned])

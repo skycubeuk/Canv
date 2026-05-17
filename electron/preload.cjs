@@ -170,6 +170,35 @@ if (!isDockPopout()) {
     },
   })
 
+  contextBridge.exposeInMainWorld('canvExtensions', {
+    listInstalled:     () => ipcRenderer.invoke('canvExtensions:listInstalled'),
+    install:           (folder) => ipcRenderer.invoke('canvExtensions:install', folder),
+    uninstall:         (id) => ipcRenderer.invoke('canvExtensions:uninstall', id),
+    setEnabled:        (id, en) => ipcRenderer.invoke('canvExtensions:setEnabled', id, en),
+    setTrustedAt:      (id, iso) => ipcRenderer.invoke('canvExtensions:setTrustedAt', id, iso),
+    getWorkspaceTrust: () => ipcRenderer.invoke('canvExtensions:getWorkspaceTrust'),
+    setWorkspaceTrust: (s) => ipcRenderer.invoke('canvExtensions:setWorkspaceTrust', s),
+    readSettings:      (id) => ipcRenderer.invoke('canvExtensions:readSettings', id),
+    writeSetting:      (id, key, value) => ipcRenderer.invoke('canvExtensions:writeSetting', id, key, value),
+    readManifest:      (id) => ipcRenderer.invoke('canvExtensions:readManifest', id),
+    listFiles:         (id) => ipcRenderer.invoke('canvExtensions:listFiles', id),
+    readFile:          (id, rel) => ipcRenderer.invoke('canvExtensions:readFile', id, rel),
+    reload:            (id) => ipcRenderer.invoke('canvExtensions:reload', id),
+    pickInstallFolder: () => ipcRenderer.invoke('canvExtensions:pickInstallFolder'),
+    requestActivation: (trigger) => ipcRenderer.invoke('canvExtensions:requestActivation', trigger),
+    onChanged: (cb) => {
+      const listener = () => { try { cb() } catch { /* ignore */ } }
+      ipcRenderer.on('canvExtensions:registryChanged', listener)
+      return () => ipcRenderer.removeListener('canvExtensions:registryChanged', listener)
+    },
+    onCrashed: (cb) => {
+      const listener = (_e, payload) => { try { cb(payload) } catch { /* ignore */ } }
+      ipcRenderer.on('canvExtensions:crashed', listener)
+      return () => ipcRenderer.removeListener('canvExtensions:crashed', listener)
+    },
+    devCrash: (id) => ipcRenderer.invoke('canvExtensions:devCrash', id),
+  })
+
   contextBridge.exposeInMainWorld('canvExtensionsDev', {
     spawnTest:   (fixtureName, bounds) => ipcRenderer.invoke('canvExtDev:spawnTest', fixtureName, bounds),
     destroyTest: (id) => ipcRenderer.invoke('canvExtDev:destroyTest', id),
