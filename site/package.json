@@ -12,6 +12,7 @@
     "@astrojs/starlight": "^0.30.0",
     "@fontsource-variable/inter": "^5.1.0",
     "astro": "^5.0.0",
+    "fast-glob": "^3.3.3",
     "sharp": "^0.33.5"
   }
 }
