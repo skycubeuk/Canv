@@ -1,0 +1,48 @@
+---
+const base = import.meta.env.BASE_URL;
+---
+<header class="topbar">
+  <a class="brand" href={base} aria-label="Canv home">
+    <img src={`${base}favicon.svg`} alt="" width="32" height="32" />
+    <span>Canv</span>
+  </a>
+  <nav>
+    <a href={`${base}docs/`}>Docs</a>
+    <a href="#download">Download</a>
+    <a href="https://github.com/skycubeuk/Canv">GitHub</a>
+  </nav>
+</header>
+
+<style>
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.875rem 1.5rem;
+    background: color-mix(in srgb, var(--canv-ink) 80%, transparent);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid color-mix(in srgb, var(--canv-purple-500) 12%, transparent);
+  }
+  .brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.625rem;
+    color: var(--canv-text);
+    font-weight: 600;
+    font-size: 1.125rem;
+  }
+  .brand:hover { color: var(--canv-text); }
+  nav {
+    display: flex;
+    gap: 1.5rem;
+    font-weight: 500;
+  }
+  nav a {
+    color: var(--canv-text);
+    font-size: 0.95rem;
+  }
+  nav a:hover { color: var(--canv-purple-500); }
+</style>
