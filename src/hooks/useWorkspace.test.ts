@@ -345,7 +345,63 @@ describe('useWorkspace — watcher own-write suppression', () => {
     await act(async () => { await new Promise((r) => setTimeout(r, 1100)) })
 
     expect(watcherCb).not.toBeNull()
-    act(() => { watcherCb!({ type: 'change', relPath: 'body.md', mtimeMs: EXTERNAL_MTIME }) })
+    await act(async () => {
+      watcherCb!({ type: 'change', relPath: 'body.md', mtimeMs: EXTERNAL_MTIME })
+      await new Promise((r) => setTimeout(r, 50))
+    })
+
+    expect(hook.result.current.conflict).toEqual({ relPath: 'body.md', diskMtimeMs: EXTERNAL_MTIME })
+  })
+
+  it('suppresses the conflict when chokidar reports a drifted mtime but disk content equals what we wrote', async () => {
+    // Reproduces the Windows symptom: chokidar's stabilised stat returns a
+    // slightly different mtime than the post-writeFile stat (NTFS metadata
+    // lazy-flush / AV touch), falling outside the 2 ms fast-path tolerance.
+    // The disk bytes are still exactly what we wrote, so the second-check
+    // should suppress the popup.
+    const OWN_MTIME = 1_778_587_350_985.5952
+    const DRIFTED_MTIME = 1_778_587_350_990.1234 // ~5 ms drift
+    fsMock.readFile.mockImplementation(async () => ({ content: 'hello', mtimeMs: 1 }))
+    fsMock.writeFile.mockResolvedValue({ mtimeMs: OWN_MTIME })
+
+    const hook = await withWorkspace()
+    await act(async () => { await hook.result.current.openTab('body.md') })
+    act(() => { hook.result.current.saveTab('body.md', 'edited') })
+    await act(async () => { await new Promise((r) => setTimeout(r, 1100)) })
+    expect(fsMock.writeFile).toHaveBeenCalled()
+
+    // The disk now holds the bytes we wrote, but stat returns a drifted mtime.
+    fsMock.readFile.mockImplementation(async () => ({ content: 'edited', mtimeMs: DRIFTED_MTIME }))
+
+    expect(watcherCb).not.toBeNull()
+    await act(async () => {
+      watcherCb!({ type: 'change', relPath: 'body.md', mtimeMs: DRIFTED_MTIME })
+      await new Promise((r) => setTimeout(r, 50))
+    })
+
+    expect(hook.result.current.conflict).toBeNull()
+  })
+
+  it('still raises a conflict when content actually differs, even if recentWrites has an entry', async () => {
+    // Adversarial case for the second-check: an external program writes
+    // different bytes between our last save and the event arriving.
+    const OWN_MTIME = 4_000
+    const EXTERNAL_MTIME = 4_500
+    fsMock.readFile.mockImplementation(async () => ({ content: 'hello', mtimeMs: 1 }))
+    fsMock.writeFile.mockResolvedValue({ mtimeMs: OWN_MTIME })
+
+    const hook = await withWorkspace()
+    await act(async () => { await hook.result.current.openTab('body.md') })
+    act(() => { hook.result.current.saveTab('body.md', 'edited') })
+    await act(async () => { await new Promise((r) => setTimeout(r, 1100)) })
+
+    // External program has overwritten the file with different bytes.
+    fsMock.readFile.mockImplementation(async () => ({ content: 'something-else', mtimeMs: EXTERNAL_MTIME }))
+
+    await act(async () => {
+      watcherCb!({ type: 'change', relPath: 'body.md', mtimeMs: EXTERNAL_MTIME })
+      await new Promise((r) => setTimeout(r, 50))
+    })
 
     expect(hook.result.current.conflict).toEqual({ relPath: 'body.md', diskMtimeMs: EXTERNAL_MTIME })
   })
