@@ -1,0 +1,98 @@
+---
+const base = import.meta.env.BASE_URL;
+---
+<section class="hero">
+  <div class="hero-inner">
+    <h1>A local-first writing canvas<br />with AI you control.</h1>
+    <p class="sub">
+      Open a folder of markdown. Pick a profile. Run agents over your prose
+      with streaming output, inline diffs, and one-click apply. Your files,
+      your keys, your machine.
+    </p>
+    <div class="ctas">
+      <a class="primary" href="#download">Download</a>
+      <a class="secondary" href={`${base}docs/`}>Read the docs</a>
+    </div>
+    <div class="shot">
+      <img
+        src={`${base}screenshots/hero.png`}
+        alt="The Canv editor with an inline AI diff applied to a paragraph."
+        width="1600"
+        height="1000"
+      />
+    </div>
+  </div>
+</section>
+
+<style>
+  .hero {
+    position: relative;
+    padding: 5rem 1.5rem 4rem;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute;
+    inset: -20% 10% auto auto;
+    width: 60vw;
+    height: 60vw;
+    background: radial-gradient(closest-side, color-mix(in srgb, var(--canv-purple-500) 18%, transparent), transparent 70%);
+    filter: blur(40px);
+    pointer-events: none;
+    z-index: 0;
+  }
+  .hero-inner {
+    position: relative;
+    z-index: 1;
+    max-width: 1100px;
+    margin: 0 auto;
+    text-align: center;
+  }
+  h1 {
+    font-size: clamp(2rem, 5vw, 3.75rem);
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    margin: 0 0 1.25rem;
+    color: var(--canv-text);
+  }
+  .sub {
+    max-width: 38rem;
+    margin: 0 auto 2rem;
+    font-size: 1.125rem;
+    color: var(--canv-muted);
+  }
+  .ctas {
+    display: flex;
+    gap: 0.75rem;
+    justify-content: center;
+    margin-bottom: 3rem;
+    flex-wrap: wrap;
+  }
+  .primary, .secondary {
+    display: inline-block;
+    padding: 0.75rem 1.5rem;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    transition: background 200ms, color 200ms;
+  }
+  .primary {
+    background: var(--canv-purple-500);
+    color: white;
+  }
+  .primary:hover { background: var(--canv-purple-700); color: white; }
+  .secondary {
+    background: transparent;
+    color: var(--canv-text);
+    border: 1px solid color-mix(in srgb, var(--canv-purple-500) 30%, transparent);
+  }
+  .secondary:hover {
+    border-color: var(--canv-purple-500);
+    color: var(--canv-text);
+  }
+  .shot img {
+    border-radius: 0.75rem;
+    border: 1px solid color-mix(in srgb, var(--canv-purple-500) 25%, transparent);
+    box-shadow: 0 30px 80px -20px rgba(126, 20, 255, 0.25);
+  }
+</style>
