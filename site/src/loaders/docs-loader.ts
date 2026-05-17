@@ -19,6 +19,7 @@ export function canvDocsLoader(): Loader {
       const repoRoot = path.resolve(fileURLToPath(import.meta.url), '../../../..');
       const docsDir = path.join(repoRoot, 'docs');
       const siteRoot = fileURLToPath(config.root);
+      const baseDocsUrl = `${config.base}docs/`;
 
       const files = await fg('**/*.md', {
         cwd: docsDir,
@@ -47,13 +48,32 @@ export function canvDocsLoader(): Loader {
         // filePath must be relative to site root (not absolute).
         const relFilePath = path.relative(siteRoot, absPath).replace(/\\/g, '/');
 
-        const rendered = await renderMarkdown(body);
+        const rendered = await renderMarkdown(rewriteLinks(body, baseDocsUrl));
         store.set({ id, data, body, rendered, filePath: relFilePath });
 
         logger.info(`Loaded ${relFromDocs} as ${id} (title: "${title}")`);
       }
     },
   };
+}
+
+function rewriteLinks(md: string, baseDocsUrl: string): string {
+  const REPO_README_URL = 'https://github.com/skycubeuk/Canv/blob/main/README.md';
+  // Match markdown link syntax: ](url) and ](url "title")
+  return md.replace(/\]\(([^)\s]+?)(\s+"[^"]*")?\)/g, (_match, url: string, title = '') => {
+    if (url === '../README.md') {
+      return `](${REPO_README_URL}${title})`;
+    }
+    if (url === 'README.md' || url === './README.md') {
+      return `](${baseDocsUrl}${title})`;
+    }
+    // Bare-filename .md (no slashes, no .., optional ./) → /<base>docs/<slug>/
+    const bare = url.match(/^\.?\/?([\w-]+)\.md$/);
+    if (bare) {
+      return `](${baseDocsUrl}${bare[1]}/${title})`;
+    }
+    return `](${url}${title})`;
+  });
 }
 
 function extractTitle(raw: string, absPath: string): { title: string; body: string } {
