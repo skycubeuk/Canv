@@ -11,9 +11,6 @@ export default defineConfig({
       social: {
         github: 'https://github.com/skycubeuk/Canv',
       },
-      editLink: {
-        baseUrl: 'https://github.com/skycubeuk/Canv/edit/main/',
-      },
       sidebar: [
         {
           label: 'User guide',
