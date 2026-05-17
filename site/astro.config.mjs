@@ -14,7 +14,18 @@ export default defineConfig({
       sidebar: [
         {
           label: 'User guide',
-          autogenerate: { directory: 'docs' },
+          items: [
+            { slug: 'docs' },
+            { slug: 'docs/getting-started' },
+            { slug: 'docs/writing-and-editing-text' },
+            { slug: 'docs/finding-and-organising-your-work' },
+            { slug: 'docs/getting-the-ai-to-help' },
+            { slug: 'docs/working-with-an-ai-assistant' },
+            { slug: 'docs/reviewing-and-applying-suggestions' },
+            { slug: 'docs/tracking-changes-and-keeping-things-tidy' },
+            { slug: 'docs/building-visual-views-of-your-project' },
+            { slug: 'docs/troubleshooting' },
+          ],
         },
       ],
     }),
