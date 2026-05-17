@@ -1,3 +1,4 @@
+import { ExtensionPromptModal } from '../extensions/ExtensionPromptModal'
 import { ProfilePicker } from '../ProfilePicker'
 import { MigrationModal } from '../MigrationModal'
 import { CommandPalette, type PaletteMode, type PaletteFile } from './CommandPalette'
@@ -132,6 +133,8 @@ export function AppOverlays(props: AppOverlaysProps) {
         onRunCommand={(id) => { commands.runById(id) }}
         onOpenFile={onOpenFile}
       />
+
+      <ExtensionPromptModal />
     </>
   )
 }

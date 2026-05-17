@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import type { EditorView } from '@codemirror/view'
+import { getAdapter } from '../../adapters'
+import type { Settings } from '../../hooks/useSettings'
+import type { Mode } from '../../config/types'
 
 declare global {
   interface Window {
@@ -36,9 +39,13 @@ export interface TestExtensionOverlayProps {
   getActiveEditor: () => EditorView | null
   /** relPath of the currently active markdown file, or null. */
   activeMarkdownRel: string | null
+  /** Current app settings (provider, apiKeys, models) for canv.ai.ask fulfilment. */
+  settings: Settings
+  /** Active user profile (system prompt source) for canv.ai.ask fulfilment. */
+  activeProfile: Mode
 }
 
-export function TestExtensionOverlay({ getActiveEditor, activeMarkdownRel }: TestExtensionOverlayProps) {
+export function TestExtensionOverlay({ getActiveEditor, activeMarkdownRel, settings, activeProfile }: TestExtensionOverlayProps) {
   const [enabled, setEnabled] = useState(devFlagOn)
   const [spawned, setSpawned] = useState(false)
   const [notice, setNotice] = useState<{ msg: string; kind: string } | null>(null)
@@ -49,6 +56,12 @@ export function TestExtensionOverlay({ getActiveEditor, activeMarkdownRel }: Tes
   const activeMarkdownRelRef = useRef(activeMarkdownRel)
   useEffect(() => { getActiveEditorRef.current = getActiveEditor }, [getActiveEditor])
   useEffect(() => { activeMarkdownRelRef.current = activeMarkdownRel }, [activeMarkdownRel])
+
+  // Refs for ai.ask — same stale-closure pattern.
+  const settingsRef = useRef(settings)
+  const activeProfileRef = useRef(activeProfile)
+  useEffect(() => { settingsRef.current = settings }, [settings])
+  useEffect(() => { activeProfileRef.current = activeProfile }, [activeProfile])
 
   // Watch cross-tab changes to the dev flag (initial value comes from useState's lazy initialiser).
   useEffect(() => {
@@ -121,6 +134,39 @@ export function TestExtensionOverlay({ getActiveEditor, activeMarkdownRel }: Tes
             })
             dev.hostReply(reqId, true, null)
           }
+        } else if (method === 'ai.ask') {
+          const params = (args[0] ?? {}) as {
+            extensionId: string; prompt: string; system?: string; maxTokens?: number; profileId?: string
+          }
+          // Fire-and-resolve via async IIFE so we don't block the listener.
+          void (async () => {
+            try {
+              const s = settingsRef.current
+              const provider = s.provider
+              const apiKey = s.apiKeys[provider]
+              if (!apiKey) throw new Error(`no API key configured for provider "${provider}"`)
+              const profile = activeProfileRef.current
+              const adapter = getAdapter(provider)
+              const result = await adapter.complete({
+                model: s.defaultModel[provider],
+                apiKey,
+                baseUrl: s.baseUrls?.[provider],
+                maxTokens: params.maxTokens ?? s.maxOutputTokens[provider],
+                system: params.system ?? profile.chatSystemPrompt,
+                messages: [{ role: 'user', content: params.prompt }],
+                // tools intentionally omitted — Phase 3 extensions don't get tool use.
+              })
+              dev.hostReply(reqId, true, {
+                text: result.text,
+                usage: {
+                  in: result.tokenUsage?.input ?? 0,
+                  out: result.tokenUsage?.output ?? 0,
+                },
+              })
+            } catch (err) {
+              dev.hostReply(reqId, false, (err as Error).message)
+            }
+          })()
         } else {
           dev.hostReply(reqId, false, `unknown host method: ${method}`)
         }

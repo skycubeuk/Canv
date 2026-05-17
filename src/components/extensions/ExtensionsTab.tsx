@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { ExtensionRow } from './ExtensionRow'
 import { ExtensionSettingsForm } from './ExtensionSettingsForm'
+import { ExtensionInstallModal } from './ExtensionInstallModal'
+import type { PreviewManifest } from './ExtensionInstallModal'
 
 declare global {
   interface Window {
@@ -17,8 +19,15 @@ declare global {
       readManifest: (id: string) => Promise<{ id: string; name: string; version: string; capabilities: string[]; contributions: unknown[]; settings?: Array<{ key: string; type: string; default?: unknown; label?: string; description?: string; options?: string[]; min?: number; max?: number; step?: number }> }>
       reload: (id: string) => Promise<void>
       pickInstallFolder: () => Promise<string | null>
+      previewInstall: (folder: string) => Promise<{ ok: true; manifest: PreviewManifest } | { ok: false; errors: string[] }>
       onChanged: (cb: () => void) => () => void
       onCrashed: (cb: (payload: { id: string; reason: string }) => void) => () => void
+      onPromptRequest?: (cb: (reqId: number, req: {
+        kind: 'quickPick'; extensionId: string; items: { label: string; description?: string; value: unknown }[]; placeholder?: string
+      } | {
+        kind: 'input'; extensionId: string; prompt: string; placeholder?: string; defaultValue?: string
+      }) => void) => () => void
+      promptResolve?: (reqId: number, value: { value: unknown } | null) => void
     }
   }
 }
@@ -34,6 +43,7 @@ export function ExtensionsTab() {
   const [settings, setSettings] = useState<Record<string, Record<string, unknown>>>({})
   const [installError, setInstallError] = useState<string | null>(null)
   const [crashedIds, setCrashedIds] = useState<Set<string>>(new Set())
+  const [pendingInstall, setPendingInstall] = useState<{ folder: string; manifest: PreviewManifest } | null>(null)
 
   const refresh = useCallback(async () => {
     const dev = window.canvExtensions
@@ -95,12 +105,31 @@ export function ExtensionsTab() {
     setInstallError(null)
     const folder = await window.canvExtensions?.pickInstallFolder()
     if (!folder) return
-    const r = await window.canvExtensions?.install(folder)
-    if (r && !r.ok) setInstallError((r.errors || ['unknown error']).join('; '))
+    const preview = await window.canvExtensions?.previewInstall(folder)
+    if (!preview?.ok) {
+      setInstallError((preview?.errors || ['preview failed']).join('; '))
+      return
+    }
+    setPendingInstall({ folder, manifest: preview.manifest })
   }, [])
+
+  const onConfirmInstall = useCallback(async () => {
+    if (!pendingInstall) return
+    const r = await window.canvExtensions?.install(pendingInstall.folder)
+    if (r && !r.ok) setInstallError((r.errors || ['unknown error']).join('; '))
+    setPendingInstall(null)
+  }, [pendingInstall])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {pendingInstall && (
+        <ExtensionInstallModal
+          sourceFolder={pendingInstall.folder}
+          manifest={pendingInstall.manifest}
+          onCancel={() => setPendingInstall(null)}
+          onConfirm={() => void onConfirmInstall()}
+        />
+      )}
       <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border-color-default)', fontSize: 11, color: 'var(--text-color-muted)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span>Workspace trust: <strong style={{ color: trust === 'trusted' ? 'rgb(80 180 100)' : 'var(--text-color-default)' }}>{trust}</strong></span>

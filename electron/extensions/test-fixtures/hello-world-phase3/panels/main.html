@@ -1,0 +1,49 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Hello World Phase 3</title>
+  <style>
+    body { padding: var(--canv-space-4); font-family: var(--canv-font-sans); }
+    h1 { font-size: var(--canv-font-size-lg); margin: 0 0 var(--canv-space-3) 0; display: flex; align-items: center; gap: var(--canv-space-2); }
+    section { margin-bottom: var(--canv-space-5); }
+    section h2 { font-size: var(--canv-font-size-md); color: var(--canv-text-muted); margin: 0 0 var(--canv-space-2) 0; }
+    .row { display: flex; gap: var(--canv-space-2); margin-bottom: var(--canv-space-2); flex-wrap: wrap; }
+    pre { background: var(--canv-color-app); padding: var(--canv-space-2); border-radius: var(--canv-radius); overflow: auto; max-height: 240px; font-size: var(--canv-font-size-sm); margin: 0; white-space: pre-wrap; }
+    .err { color: rgb(255 120 120); }
+  </style>
+</head>
+<body>
+  <h1><canv-icon name="info" size="18"></canv-icon> Hello World — Phase 3 smoke</h1>
+
+  <section>
+    <h2>canv.ai.ask</h2>
+    <button class="canv-button" data-action="ai">Summarise active doc</button>
+    <pre id="ai-out">click button…</pre>
+  </section>
+
+  <section>
+    <h2>canv.net.fetch</h2>
+    <div class="row">
+      <button class="canv-button" data-action="net-good">Fetch weather (wttr.in)</button>
+      <button class="canv-button" data-action="net-github">Fetch GitHub zen (api.github.com)</button>
+      <button class="canv-button" data-action="net-bad">Fetch non-whitelisted (should fail)</button>
+    </div>
+    <pre id="net-out">click button…</pre>
+  </section>
+
+  <section>
+    <h2>canv.ui.quickPick</h2>
+    <button class="canv-button" data-action="pick">Pick a colour</button>
+    <pre id="pick-out">click button…</pre>
+  </section>
+
+  <section>
+    <h2>canv.ui.input</h2>
+    <button class="canv-button" data-action="input">Enter your name</button>
+    <pre id="input-out">click button…</pre>
+  </section>
+
+  <script src="./main.js"></script>
+</body>
+</html>

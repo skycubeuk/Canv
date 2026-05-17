@@ -55,10 +55,31 @@ contextBridge.exposeInMainWorld('canv', {
       return () => ipcRenderer.removeListener('canvExt:settings.changed', listener)
     },
   },
+  ai: {
+    ask: (prompt, opts) => ipcRenderer.invoke('canvExt:ai.ask', prompt, opts ?? {}),
+  },
   ui: {
     notify:           (msg, kind) => ipcRenderer.invoke('canvExt:ui.notify', msg, kind ?? 'info'),
     confirm:          (msg) => ipcRenderer.invoke('canvExt:ui.confirm', msg),
     copyToClipboard:  (text) => ipcRenderer.invoke('canvExt:ui.copyToClipboard', text),
+    quickPick:        (items, opts) => ipcRenderer.invoke('canvExt:ui.quickPick', items, opts ?? {}),
+    input:            (opts) => ipcRenderer.invoke('canvExt:ui.input', opts ?? {}),
+  },
+  net: {
+    fetch: async (url, init) => {
+      const r = await ipcRenderer.invoke('canvExt:net.fetch', url, init)
+      // Reshape flat IPC payload into a Response-like object so extension code
+      // can call .text() / .json() in a familiar pattern. Body was already
+      // serialised to text in the main handler.
+      return {
+        ok: r.ok,
+        status: r.status,
+        statusText: r.statusText,
+        headers: new Headers(r.headers || {}),
+        text: () => Promise.resolve(r.body),
+        json: () => Promise.resolve(JSON.parse(r.body)),
+      }
+    },
   },
   lifecycle: {
     onActivate(handler) {

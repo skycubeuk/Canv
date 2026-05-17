@@ -31,10 +31,16 @@ const { WorkspaceTrustStore } = require('./extensions/workspace-trust.cjs')
 const { hashExtensionDir } = require('./extensions/manifest-hash.cjs')
 const { shouldActivateFor } = require('./extensions/activation-events.cjs')
 const { createSettingsHandlers } = require('./extensions/handlers/settings.cjs')
+const { createAiHandlers } = require('./extensions/handlers/ai.cjs')
+const { createNetHandlers } = require('./extensions/handlers/net.cjs')
+const { createUiPromptHandlers } = require('./extensions/handlers/ui-prompt.cjs')
+const activity = require('./extensions/activity.cjs')
 
 let extensionRuntime = null
 let trustStore = null
 let workspaceRegistry = null
+const pendingPrompts = new Map()    // reqId → { resolve, reject }
+let nextPromptId = 1
 
 function onWorkspaceChangedGlobal() {
   workspaceRegistry = (WORKSPACE && WORKSPACE.kind === 'local')
@@ -954,7 +960,7 @@ function buildExtensionHost() {
     if (ok) p.resolve(payload); else p.reject(new Error(payload))
   })
 
-  function requestFromRenderer(method, args) {
+  function requestFromRenderer(method, args, timeoutMs = 5000) {
     if (!mainWindow || mainWindow.isDestroyed()) return Promise.reject(new Error('main window closed'))
     const id = nextReqId++
     return new Promise((resolve, reject) => {
@@ -965,7 +971,7 @@ function buildExtensionHost() {
           pending.delete(id)
           reject(new Error(`extension host request "${method}" timed out`))
         }
-      }, 5000)
+      }, timeoutMs)
     })
   }
 
@@ -1014,6 +1020,20 @@ function buildExtensionHost() {
       return r.response === 1
     },
     writeClipboard: (text) => electron.clipboard.writeText(text),
+
+    askAI: async (params) => {
+      const result = await requestFromRenderer('ai.ask', [params], 60 * 1000)  // 60s for AI calls
+      activity.recordAi(params.extensionId, result?.usage)
+      return result
+    },
+
+    showPrompt: (req) => new Promise((resolve, reject) => {
+      if (!mainWindow || mainWindow.isDestroyed()) return reject(new Error('main window closed'))
+      const reqId = nextPromptId++
+      pendingPrompts.set(reqId, { resolve, reject })
+      mainWindow.webContents.send('canvExtensions:promptRequest', reqId, req)
+      // No timeout — user might take their time.
+    }),
   }
 }
 
@@ -1101,10 +1121,21 @@ function registerExtensionHandlers() {
       runtime: extensionRuntime,
       settingsFileFor: (id) => path.join(WORKSPACE.root, '.canv', 'extensions', id, 'settings.json'),
     }),
+    ...createAiHandlers({ runtime: extensionRuntime, host }),
+    ...createNetHandlers({ runtime: extensionRuntime, onRequest: (id) => activity.recordNet(id) }),
+    ...createUiPromptHandlers({ runtime: extensionRuntime, host }),
   }
   for (const [channel, fn] of Object.entries(allHandlers)) {
     ipcMain.handle(channel, fn)
   }
+
+  // Prompt reply channel — renderer resolves or cancels a showPrompt() call.
+  ipcMain.on('canvExtensions:promptResolve', (_e, reqId, value) => {
+    const p = pendingPrompts.get(reqId)
+    if (!p) return
+    pendingPrompts.delete(reqId)
+    p.resolve(value)   // value is null on cancel, or { value: T } for quickPick / input
+  })
 
   // Dev-only fixture spawn handlers. Registered only in unpackaged builds so
   // a production binary cannot be told to spawn arbitrary fixture directories.
@@ -1150,6 +1181,30 @@ function registerExtensionHandlers() {
   ipcMain.handle('canvExtensions:listInstalled', async () => {
     if (!workspaceRegistry) return []
     return workspaceRegistry.listEntries()
+  })
+
+  ipcMain.handle('canvExtensions:previewInstall', async (_e, folder) => {
+    if (typeof folder !== 'string' || !folder) return { ok: false, errors: ['invalid folder'] }
+    let raw
+    try { raw = JSON.parse(await fsp.readFile(path.join(folder, 'manifest.json'), 'utf-8')) }
+    catch (e) { return { ok: false, errors: [`manifest read/parse failed: ${e.message}`] } }
+    const v = validateManifest(raw)
+    if (!v.ok) return { ok: false, errors: v.errors }
+    return {
+      ok: true,
+      manifest: {
+        id: v.manifest.id,
+        name: v.manifest.name,
+        version: v.manifest.version,
+        description: v.manifest.description,
+        author: v.manifest.author,
+        capabilities: v.manifest.capabilities,
+        network: v.manifest.network ?? [],
+        settings: v.manifest.settings ?? [],
+        builderPrompt: v.manifest.builderPrompt,
+        contributions: v.manifest.contributions,
+      },
+    }
   })
 
   ipcMain.handle('canvExtensions:install', async (_e, sourceFolderAbsPath) => {
@@ -1320,6 +1375,10 @@ function registerExtensionHandlers() {
     })
     if (result.canceled || !result.filePaths[0]) return null
     return result.filePaths[0]
+  })
+
+  ipcMain.handle('canvExtensions:readActivity', async (_e, id) => {
+    return activity.get(id)
   })
 
   ipcMain.handle('canvExtensions:requestActivation', async (_e, trigger) => {

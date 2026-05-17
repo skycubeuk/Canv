@@ -779,6 +779,8 @@ export default function App() {
       <TestExtensionOverlay
         getActiveEditor={getActiveEditor}
         activeMarkdownRel={workspace.activeMarkdownRel}
+        settings={settings}
+        activeProfile={activeProfile}
       />
     </div>
   )

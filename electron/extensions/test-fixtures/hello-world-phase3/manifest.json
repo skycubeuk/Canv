@@ -1,0 +1,29 @@
+{
+  "id": "hello-world-phase3",
+  "name": "Hello World Phase 3",
+  "version": "1.0.0",
+  "description": "Phase 3 fixture exercising ai.ask, net.fetch, ui.quickPick, ui.input",
+  "author": "canv-internal",
+  "createdAt": "2026-05-17T00:00:00Z",
+  "capabilities": [
+    "activeDoc.read",
+    "ai",
+    "net",
+    "notify",
+    "ui"
+  ],
+  "network": [
+    "wttr.in",
+    "api.github.com"
+  ],
+  "contributions": [
+    {
+      "type": "panel",
+      "id": "main",
+      "title": "Hello World Phase 3",
+      "icon": "info",
+      "location": "right-sidebar",
+      "entry": "panels/main.html"
+    }
+  ]
+}

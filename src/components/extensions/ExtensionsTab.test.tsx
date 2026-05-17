@@ -19,6 +19,10 @@ function setMockCanvExt(overrides: Partial<NonNullable<typeof window.canvExtensi
     writeSetting: vi.fn().mockResolvedValue(undefined) as never,
     install: vi.fn().mockResolvedValue({ ok: true, id: 'a' }) as never,
     pickInstallFolder: vi.fn().mockResolvedValue('/some/folder') as never,
+    previewInstall: vi.fn().mockResolvedValue({
+      ok: true,
+      manifest: { id: 'a', name: 'Alpha', version: '1.0.0', capabilities: [], network: [], contributions: [] },
+    }) as never,
     onChanged: vi.fn(() => () => {}),
     onCrashed: vi.fn(() => () => {}),
   }

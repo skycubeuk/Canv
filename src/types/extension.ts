@@ -17,6 +17,7 @@ export type CapabilityString =
   | 'ai'                      // declared for Phase 2
   | 'notify'
   | 'ui'
+  | 'net'
 
 export type ContributionType =
   | 'panel'

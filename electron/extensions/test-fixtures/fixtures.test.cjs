@@ -9,4 +9,14 @@ describe('test fixtures', () => {
     if (!r.ok) throw new Error(r.errors.join('\n'))
     expect(r.manifest.id).toBe('hello-world')
   })
+
+  it('hello-world-phase3 manifest is valid', () => {
+    const raw = JSON.parse(fs.readFileSync(path.join(__dirname, 'hello-world-phase3', 'manifest.json'), 'utf-8'))
+    const r = validateManifest(raw)
+    if (!r.ok) throw new Error(r.errors.join('\n'))
+    expect(r.manifest.id).toBe('hello-world-phase3')
+    expect(r.manifest.capabilities).toContain('ai')
+    expect(r.manifest.capabilities).toContain('net')
+    expect(r.manifest.network).toContain('wttr.in')
+  })
 })

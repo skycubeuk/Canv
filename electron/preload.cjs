@@ -185,7 +185,9 @@ if (!isDockPopout()) {
     readFile:          (id, rel) => ipcRenderer.invoke('canvExtensions:readFile', id, rel),
     reload:            (id) => ipcRenderer.invoke('canvExtensions:reload', id),
     pickInstallFolder: () => ipcRenderer.invoke('canvExtensions:pickInstallFolder'),
+    previewInstall:    (folder) => ipcRenderer.invoke('canvExtensions:previewInstall', folder),
     requestActivation: (trigger) => ipcRenderer.invoke('canvExtensions:requestActivation', trigger),
+    readActivity: (id) => ipcRenderer.invoke('canvExtensions:readActivity', id),
     onChanged: (cb) => {
       const listener = () => { try { cb() } catch { /* ignore */ } }
       ipcRenderer.on('canvExtensions:registryChanged', listener)
@@ -197,6 +199,12 @@ if (!isDockPopout()) {
       return () => ipcRenderer.removeListener('canvExtensions:crashed', listener)
     },
     devCrash: (id) => ipcRenderer.invoke('canvExtensions:devCrash', id),
+    onPromptRequest: (cb) => {
+      const listener = (_e, reqId, req) => { try { cb(reqId, req) } catch { /* ignore */ } }
+      ipcRenderer.on('canvExtensions:promptRequest', listener)
+      return () => ipcRenderer.removeListener('canvExtensions:promptRequest', listener)
+    },
+    promptResolve: (reqId, value) => ipcRenderer.send('canvExtensions:promptResolve', reqId, value),
   })
 
   contextBridge.exposeInMainWorld('canvExtensionsDev', {

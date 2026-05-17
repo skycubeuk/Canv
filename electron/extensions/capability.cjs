@@ -6,7 +6,7 @@ const ALL_CAPABILITIES = Object.freeze([
   'workspace.list', 'workspace.read', 'workspace.write',
   'selection.read', 'selection.write',
   'events.docChanged', 'events.selectionChanged', 'events.docSaved', 'events.workspaceChanged',
-  'storage', 'settings', 'ai', 'notify', 'ui',
+  'storage', 'settings', 'ai', 'notify', 'ui', 'net',
 ])
 
 const CAPABILITY_SET = new Set(ALL_CAPABILITIES)

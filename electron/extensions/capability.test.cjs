@@ -12,6 +12,10 @@ describe('isKnownCapability', () => {
     expect(isKnownCapability('')).toBe(false)
     expect(isKnownCapability(null)).toBe(false)
   })
+  it('includes "net" (Phase 3)', () => {
+    expect(isKnownCapability('net')).toBe(true)
+    expect(ALL_CAPABILITIES).toContain('net')
+  })
 })
 
 describe('requireCapability', () => {
