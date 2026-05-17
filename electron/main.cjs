@@ -17,8 +17,23 @@ const siteRegistry = require('./site-registry.cjs')
 const { maxMtimeForGlobs } = require('./glob-mtime.cjs')
 const workspaceConfig = require('./workspace-config.cjs')
 const { createHistoryService } = require('./history-service.cjs')
+const electron = require('electron')
+const { ExtensionRuntime } = require('./extensions/runtime.cjs')
+const { registerProtocol } = require('./extensions/protocol.cjs')
+const { createActiveDocHandlers } = require('./extensions/handlers/active-doc.cjs')
+const { createWorkspaceHandlers } = require('./extensions/handlers/workspace.cjs')
+const { createEventsHandlers } = require('./extensions/handlers/events.cjs')
+const { createStorageHandlers } = require('./extensions/handlers/storage.cjs')
+const { createUiHandlers } = require('./extensions/handlers/ui.cjs')
+const { validateManifest } = require('./extensions/manifest-schema.cjs')
+
+let extensionRuntime = null
 
 const APP_ICON = path.join(__dirname, '..', 'build', 'icon.png')
+
+const EXTENSIONS_TEST_FIXTURES_DIR = path.join(__dirname, 'extensions', 'test-fixtures')
+const EXTENSIONS_SHARED_DIR = path.join(__dirname, 'extensions', 'shared-assets')
+const EXTENSION_PRELOAD_PATH = path.join(__dirname, 'extensions', 'extension-preload.cjs')
 
 const DEV_URL = 'http://localhost:5173'
 
@@ -902,6 +917,156 @@ function registerDockHandlers() {
   })
 }
 
+function buildExtensionHost() {
+  // The main window's React renderer owns the editor state. We can't query it
+  // synchronously from main, so the renderer subscribes to a tiny request/reply
+  // channel; main calls `requestFromRenderer(method, args)` and resolves when
+  // the reply arrives. Phase 1 uses this only for active-doc state.
+  let nextReqId = 1
+  const pending = new Map()
+
+  ipcMain.on('canvExtHost:reply', (_e, reqId, ok, payload) => {
+    const p = pending.get(reqId)
+    if (!p) return
+    pending.delete(reqId)
+    if (ok) p.resolve(payload); else p.reject(new Error(payload))
+  })
+
+  function requestFromRenderer(method, args) {
+    if (!mainWindow || mainWindow.isDestroyed()) return Promise.reject(new Error('main window closed'))
+    const id = nextReqId++
+    return new Promise((resolve, reject) => {
+      pending.set(id, { resolve, reject })
+      mainWindow.webContents.send('canvExtHost:request', id, method, args)
+      setTimeout(() => {
+        if (pending.has(id)) {
+          pending.delete(id)
+          reject(new Error(`extension host request "${method}" timed out`))
+        }
+      }, 5000)
+    })
+  }
+
+  function workspaceRootOrLocalThrow() {
+    if (!WORKSPACE || WORKSPACE.kind !== 'local') throw new Error('no local workspace open')
+    return WORKSPACE.root
+  }
+
+  return {
+    // activeDoc
+    getActiveDocText:      () => requestFromRenderer('activeDoc.getText', []),
+    getActiveDocPath:      () => requestFromRenderer('activeDoc.getPath', []),
+    getActiveDocSelection: () => requestFromRenderer('activeDoc.getSelection', []),
+    insertAtCursor:        (text) => requestFromRenderer('activeDoc.insertAtCursor', [text]),
+    replaceSelection:      (text) => requestFromRenderer('activeDoc.replaceSelection', [text]),
+    setActiveDocText:      (text) => requestFromRenderer('activeDoc.setText', [text]),
+
+    // workspace
+    getWorkspaceRoot:  async () => workspaceRootOrLocalThrow(),
+    listWorkspace:     async (globOrDir) => {
+      const root = workspaceRootOrLocalThrow()
+      const tree = await buildTree(root, globOrDir || '', 0)
+      return tree
+    },
+    readWorkspaceText: async (rel) => {
+      const root = workspaceRootOrLocalThrow()
+      const abs = safeResolve(root, rel)
+      const stat = await fsp.stat(abs)
+      if (!stat.isFile()) throw new Error('not a file')
+      if (stat.size > MAX_READ_BYTES) throw new Error('file too large')
+      return fsp.readFile(abs, 'utf-8')
+    },
+
+    // ui
+    notifyToMainWindow: (msg, kind, extensionId) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('canvExt:notification', { message: msg, kind, extensionId })
+      }
+    },
+    showConfirmDialog: async (msg) => {
+      if (!mainWindow) return false
+      const r = await dialog.showMessageBox(mainWindow, {
+        type: 'question', buttons: ['Cancel', 'OK'], defaultId: 1, cancelId: 0,
+        message: msg,
+      })
+      return r.response === 1
+    },
+    writeClipboard: (text) => electron.clipboard.writeText(text),
+  }
+}
+
+function registerExtensionHandlers() {
+  const host = buildExtensionHost()
+  extensionRuntime = new ExtensionRuntime({
+    electron: { WebContentsView: electron.WebContentsView },
+    extensionPreloadPath: EXTENSION_PRELOAD_PATH,
+    openDevToolsOnSpawn: !app.isPackaged,
+    eventDispatcher: (webContentsId, eventType, payload) => {
+      const wc = electron.webContents.fromId(webContentsId)
+      if (wc && !wc.isDestroyed()) {
+        wc.send('canvExt:event', { type: eventType, payload })
+      }
+    },
+  })
+
+  registerProtocol(electron.protocol, {
+    extensionDirFor: (id) => extensionRuntime.extensionDirFor(id),
+    sharedDir: EXTENSIONS_SHARED_DIR,
+    manifestFor: (id) => extensionRuntime.manifestFor(id),
+  })
+
+  // Bundle all handlers and register them with ipcMain.
+  const allHandlers = {
+    ...createActiveDocHandlers({ runtime: extensionRuntime, host }),
+    ...createWorkspaceHandlers({ runtime: extensionRuntime, host }),
+    ...createEventsHandlers({ runtime: extensionRuntime }),
+    ...createStorageHandlers({ runtime: extensionRuntime }),
+    ...createUiHandlers({ runtime: extensionRuntime, host }),
+  }
+  for (const [channel, fn] of Object.entries(allHandlers)) {
+    ipcMain.handle(channel, fn)
+  }
+
+  // Dev-only fixture spawn handlers. Registered only in unpackaged builds so
+  // a production binary cannot be told to spawn arbitrary fixture directories.
+  if (!app.isPackaged) {
+    ipcMain.handle('canvExtDev:spawnTest', async (_e, fixtureName, bounds) => {
+      // path.basename strips any traversal segments — the fixture name must be
+      // a bare directory name under EXTENSIONS_TEST_FIXTURES_DIR.
+      const safeName = path.basename(String(fixtureName || ''))
+      if (!safeName || safeName === '.' || safeName === '..') {
+        throw new Error('invalid fixture name')
+      }
+      const extensionDir = path.join(EXTENSIONS_TEST_FIXTURES_DIR, safeName)
+      const manifestRaw = JSON.parse(await fsp.readFile(path.join(extensionDir, 'manifest.json'), 'utf-8'))
+      const v = validateManifest(manifestRaw)
+      if (!v.ok) throw new Error('invalid manifest: ' + v.errors.join('; '))
+      if (!mainWindow) throw new Error('no main window')
+      await extensionRuntime.spawn({
+        extensionDir, manifest: v.manifest, hostWindow: mainWindow,
+        bounds: bounds || { x: 1000, y: 80, width: 360, height: 600 },
+      })
+      return { ok: true, id: v.manifest.id }
+    })
+    ipcMain.handle('canvExtDev:destroyTest', async (_e, id) => {
+      if (!extensionRuntime) return
+      await extensionRuntime.destroy(id)
+    })
+    ipcMain.handle('canvExtDev:setBounds', async (_e, id, bounds) => {
+      if (!extensionRuntime) return
+      extensionRuntime.setBounds(id, bounds)
+    })
+    // Bridge: main-window pushes editor / workspace events through the runtime
+    // so every subscribed extension receives them. Phase 2 will wire these
+    // events into the main process directly; Phase 1 piggybacks on the
+    // renderer because that is where CodeMirror state lives.
+    ipcMain.handle('canvExtDev:fireEvent', async (_e, type, payload) => {
+      if (!extensionRuntime || typeof type !== 'string') return
+      extensionRuntime.dispatchEvent(type, payload)
+    })
+  }
+}
+
 function buildSearchPattern(q) {
   const flags = q.caseSensitive ? 'g' : 'gi'
   if (q.regex) return new RegExp(q.query, flags)
@@ -978,12 +1143,28 @@ if (screenshotTheme === 'dark' || screenshotTheme === 'light') {
   nativeTheme.themeSource = screenshotTheme
 }
 
+electron.protocol.registerSchemesAsPrivileged([
+  {
+    scheme: 'canv-extension',
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      stream: true,
+      bypassCSP: false,
+      allowServiceWorkers: false,
+      corsEnabled: true,
+    },
+  },
+])
+
 app.whenReady().then(() => {
   Menu.setApplicationMenu(null)
   recentRemotes = new RecentRemotes(path.join(app.getPath('userData'), 'recent-remotes.json'))
   registerFsHandlers()
   registerSiteHandlers()
   registerDockHandlers()
+  registerExtensionHandlers()
   createWindow()
 })
 

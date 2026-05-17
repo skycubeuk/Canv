@@ -1,0 +1,63 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Hello World</title>
+  <style>
+    body { padding: var(--canv-space-4); }
+    h1 { font-size: var(--canv-font-size-lg); margin: 0 0 var(--canv-space-3) 0; display: flex; align-items: center; gap: var(--canv-space-2); }
+    section { margin-bottom: var(--canv-space-5); }
+    section h2 { font-size: var(--canv-font-size-md); color: var(--canv-text-muted); margin: 0 0 var(--canv-space-2) 0; }
+    .row { display: flex; gap: var(--canv-space-2); margin-bottom: var(--canv-space-2); flex-wrap: wrap; }
+    pre { background: var(--canv-color-app); padding: var(--canv-space-2); border-radius: var(--canv-radius); overflow: auto; max-height: 120px; font-size: var(--canv-font-size-sm); margin: 0; }
+    .err { color: rgb(255 120 120); }
+  </style>
+</head>
+<body>
+  <h1><canv-icon name="info" size="18"></canv-icon> Hello World — Phase 1 smoke</h1>
+
+  <section>
+    <h2>Workspace</h2>
+    <pre id="ws-root">…</pre>
+    <button class="canv-button" data-action="list">List workspace</button>
+    <pre id="ws-list" hidden></pre>
+  </section>
+
+  <section>
+    <h2>Active document</h2>
+    <pre id="active-path">no doc</pre>
+    <pre id="active-text">…</pre>
+    <pre id="active-sel">…</pre>
+    <div class="row">
+      <button class="canv-button" data-action="insert">Insert "XYZ"</button>
+      <button class="canv-button" data-action="replace">Replace selection</button>
+      <button class="canv-button" data-action="settext" data-variant="accent">Replace whole doc</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Storage (in-memory, Phase 1)</h2>
+    <pre id="counter">0</pre>
+    <div class="row">
+      <button class="canv-button" data-action="inc"><canv-icon name="refresh-cw" size="14"></canv-icon> Increment</button>
+      <button class="canv-button" data-action="reset">Reset</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>UI</h2>
+    <div class="row">
+      <button class="canv-button" data-action="notify">Notify</button>
+      <button class="canv-button" data-action="confirm">Confirm dialog</button>
+      <button class="canv-button" data-action="copy"><canv-icon name="copy" size="14"></canv-icon> Copy "hello"</button>
+    </div>
+  </section>
+
+  <section>
+    <h2>Events</h2>
+    <pre id="event-log">subscribed; awaiting events…</pre>
+  </section>
+
+  <script src="./main.js"></script>
+</body>
+</html>

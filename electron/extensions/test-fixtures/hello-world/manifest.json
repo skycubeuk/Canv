@@ -1,0 +1,24 @@
+{
+  "id": "hello-world",
+  "name": "Hello World",
+  "version": "1.0.0",
+  "description": "Phase 1 test fixture — exercises every canv.* API method.",
+  "author": "canv-internal",
+  "createdAt": "2026-05-17T00:00:00Z",
+  "capabilities": [
+    "activeDoc.read", "activeDoc.write",
+    "workspace.list", "workspace.read",
+    "events.docChanged",
+    "storage", "notify", "ui"
+  ],
+  "contributions": [
+    {
+      "type": "panel",
+      "id": "main",
+      "title": "Hello World",
+      "icon": "info",
+      "location": "right-sidebar",
+      "entry": "panels/main.html"
+    }
+  ]
+}

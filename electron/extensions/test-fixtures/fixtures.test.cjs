@@ -1,0 +1,12 @@
+const path = require('node:path')
+const fs = require('node:fs')
+const { validateManifest } = require('../manifest-schema.cjs')
+
+describe('test fixtures', () => {
+  it('hello-world manifest is valid', () => {
+    const raw = JSON.parse(fs.readFileSync(path.join(__dirname, 'hello-world', 'manifest.json'), 'utf-8'))
+    const r = validateManifest(raw)
+    if (!r.ok) throw new Error(r.errors.join('\n'))
+    expect(r.manifest.id).toBe('hello-world')
+  })
+})

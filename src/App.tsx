@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { EditorView } from '@codemirror/view'
 import { FloatingToolbar } from './components/FloatingToolbar'
+import { TestExtensionOverlay } from './components/extensions/TestExtensionOverlay'
 import { MigrationModal } from './components/MigrationModal'
 import { AppOverlays } from './components/ide/AppOverlays'
 import { legacyStateExists } from './lib/legacyState'
@@ -770,6 +771,11 @@ export default function App() {
         onClosePalette={() => setPaletteOpen(false)}
         commands={commands}
         onOpenFile={(rel) => { void workspace.openTab(rel) }}
+      />
+
+      <TestExtensionOverlay
+        getActiveEditor={getActiveEditor}
+        activeMarkdownRel={workspace.activeMarkdownRel}
       />
     </div>
   )

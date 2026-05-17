@@ -170,6 +170,29 @@ if (!isDockPopout()) {
     },
   })
 
+  contextBridge.exposeInMainWorld('canvExtensionsDev', {
+    spawnTest:   (fixtureName, bounds) => ipcRenderer.invoke('canvExtDev:spawnTest', fixtureName, bounds),
+    destroyTest: (id) => ipcRenderer.invoke('canvExtDev:destroyTest', id),
+    setBounds:   (id, bounds) => ipcRenderer.invoke('canvExtDev:setBounds', id, bounds),
+    onNotification: (cb) => {
+      const listener = (_e, payload) => { try { cb(payload) } catch { /* ignore */ } }
+      ipcRenderer.on('canvExt:notification', listener)
+      return () => ipcRenderer.removeListener('canvExt:notification', listener)
+    },
+    // Main → main-window: extension host RPC. Main asks main-window for editor
+    // state (active doc text, selection, etc.). The renderer answers via
+    // `canvExtHost:reply`. Wired up in the TestExtensionOverlay (Task 18).
+    onHostRequest: (cb) => {
+      const listener = (_e, reqId, method, args) => { try { cb(reqId, method, args) } catch { /* ignore */ } }
+      ipcRenderer.on('canvExtHost:request', listener)
+      return () => ipcRenderer.removeListener('canvExtHost:request', listener)
+    },
+    hostReply: (reqId, ok, payload) => ipcRenderer.send('canvExtHost:reply', reqId, ok, payload),
+    // Main-window pushes events (e.g. activeDocChanged) into the runtime so
+    // every subscribed extension receives them.
+    fireEvent: (type, payload) => ipcRenderer.invoke('canvExtDev:fireEvent', type, payload),
+  })
+
 }
 
 // Available in both main and pop-out windows.
