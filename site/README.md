@@ -30,4 +30,4 @@ every push to `main` that touches `site/**` or `docs/**`.
 
 ## Replace the placeholder screenshots
 
-See `public/screenshots/README.md` for the capture list and conventions.
+See [`SCREENSHOTS.md`](./SCREENSHOTS.md) for the capture list and conventions.
