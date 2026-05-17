@@ -8,6 +8,7 @@ export default defineConfig({
     starlight({
       title: 'Canv',
       description: 'A local-first writing canvas with AI you control.',
+      customCss: ['./src/styles/theme.css'],
       social: {
         github: 'https://github.com/skycubeuk/Canv',
       },
