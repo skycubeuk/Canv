@@ -15,7 +15,7 @@ export function canvDocsLoader(): Loader {
   return {
     name: 'canv-docs-loader',
     load: async (ctx: LoaderContext) => {
-      const { store, parseData, logger, config } = ctx;
+      const { store, parseData, renderMarkdown, logger, config } = ctx;
       const repoRoot = path.resolve(fileURLToPath(import.meta.url), '../../../..');
       const docsDir = path.join(repoRoot, 'docs');
       const siteRoot = fileURLToPath(config.root);
@@ -47,7 +47,8 @@ export function canvDocsLoader(): Loader {
         // filePath must be relative to site root (not absolute).
         const relFilePath = path.relative(siteRoot, absPath).replace(/\\/g, '/');
 
-        store.set({ id, data, body, filePath: relFilePath });
+        const rendered = await renderMarkdown(body);
+        store.set({ id, data, body, rendered, filePath: relFilePath });
 
         logger.info(`Loaded ${relFromDocs} as ${id} (title: "${title}")`);
       }
