@@ -7,6 +7,9 @@ on:
       - 'site/**'
       - 'docs/**'
       - '.github/workflows/deploy-site.yml'
+  workflow_run:
+    workflows: ['Release']
+    types: [completed]
   workflow_dispatch:
 
 permissions:
@@ -20,6 +23,10 @@ concurrency:
 
 jobs:
   build:
+    # workflow_run fires regardless of the source workflow's outcome —
+    # only deploy when Release fully succeeded (binaries are all up).
+    # Other triggers (push, workflow_dispatch) are unaffected.
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
