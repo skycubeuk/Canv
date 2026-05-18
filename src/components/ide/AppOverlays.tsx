@@ -13,6 +13,7 @@ import type { useCommands } from '../../hooks/useCommands'
 import { editorMapKey } from '../../hooks/useEditorRegistry'
 import type { EditorView } from '@codemirror/view'
 import type React from 'react'
+import type { CommandRecord } from '../../types/extension-contributions'
 
 type WorkspaceApi = ReturnType<typeof useWorkspace>
 type ProfilePickerApi = ReturnType<typeof useProfilePicker>
@@ -46,6 +47,8 @@ export interface AppOverlaysProps {
   onClosePalette: () => void
   commands: CommandsApi
   onOpenFile: (rel: string) => void
+  extensionCommands?: CommandRecord[]
+  onInvokeExtensionCommand?: (commandId: string) => void
 }
 
 export function AppOverlays(props: AppOverlaysProps) {
@@ -55,7 +58,7 @@ export function AppOverlays(props: AppOverlaysProps) {
     fileOps, pendingDocAgent, onSubmitDocAgent, onCancelDocAgent,
     notifications, onUndoRetry,
     paletteOpen, paletteMode, paletteFiles, paletteRecents, onClosePalette,
-    commands, onOpenFile,
+    commands, onOpenFile, extensionCommands, onInvokeExtensionCommand,
   } = props
 
   return (
@@ -132,6 +135,8 @@ export function AppOverlays(props: AppOverlaysProps) {
         onClose={onClosePalette}
         onRunCommand={(id) => { commands.runById(id) }}
         onOpenFile={onOpenFile}
+        extensionCommands={extensionCommands}
+        onInvokeExtensionCommand={onInvokeExtensionCommand}
       />
 
       <ExtensionPromptModal />

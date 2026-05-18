@@ -22,19 +22,15 @@ const stubProfile: Mode = {
 
 const baseProps = {
   workspaceName: 'UntitledBook',
-  activeSidebarTab: 'files' as const,
-  onSelectSidebarTab: vi.fn(),
   onOpenCommandPalette: vi.fn(),
   profile: stubProfile,
   hasMarkdownTab: false,
   activeFileName: null as string | null,
   onRunDocAgent: vi.fn(),
-  sidebarVisible: true,
   bottomVisible: false,
   bottomPlacement: 'bottom' as const,
   onSetBottomPlacementBottom: vi.fn(),
   onSetBottomPlacementRight: vi.fn(),
-  historyEnabled: true,
 }
 
 describe('TopBar', () => {
@@ -42,24 +38,6 @@ describe('TopBar', () => {
     render(<TopBar {...baseProps} />)
     expect(screen.getByText('Canv')).toBeInTheDocument()
     expect(screen.getByText('UntitledBook')).toBeInTheDocument()
-  })
-
-  it('renders Files / Search / History tabs and highlights the active one', () => {
-    render(<TopBar {...baseProps} activeSidebarTab="search" />)
-    const search = screen.getByRole('button', { name: /^search$/i })
-    expect(search).toHaveAttribute('aria-pressed', 'true')
-  })
-
-  it('clicking a section tab fires onSelectSidebarTab', () => {
-    const onSelectSidebarTab = vi.fn()
-    render(<TopBar {...baseProps} onSelectSidebarTab={onSelectSidebarTab} />)
-    fireEvent.click(screen.getByRole('button', { name: /^history$/i }))
-    expect(onSelectSidebarTab).toHaveBeenCalledWith('history')
-  })
-
-  it('History tab is not rendered when historyEnabled is false', () => {
-    render(<TopBar {...baseProps} historyEnabled={false} />)
-    expect(screen.queryByRole('button', { name: /^history$/i })).not.toBeInTheDocument()
   })
 
   it('clicking the command-palette button fires onOpenCommandPalette', () => {

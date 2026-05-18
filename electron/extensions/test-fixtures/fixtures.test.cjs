@@ -19,4 +19,11 @@ describe('test fixtures', () => {
     expect(r.manifest.capabilities).toContain('net')
     expect(r.manifest.network).toContain('wttr.in')
   })
+
+  it('phase5a-kitchen-sink manifest is valid', () => {
+    const raw = JSON.parse(fs.readFileSync(path.join(__dirname, 'phase5a-kitchen-sink', 'manifest.json'), 'utf-8'))
+    const r = validateManifest(raw)
+    if (!r.ok) throw new Error(r.errors.join('\n'))
+    expect(r.manifest.contributions).toHaveLength(3)
+  })
 })

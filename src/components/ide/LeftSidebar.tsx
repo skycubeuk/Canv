@@ -5,6 +5,7 @@ import { Group, Panel, Separator, type Layout } from 'react-resizable-panels'
 import type { SidebarTab } from '../../hooks/useIdeLayout'
 import { SidebarFooter } from './sidebar/SidebarFooter'
 import type { Settings } from '../../hooks/useSettings'
+import { SidebarExtensionPanelSlot } from '../extensions/SidebarExtensionPanelSlot'
 
 interface SidebarTabDef {
   id: SidebarTab
@@ -54,6 +55,7 @@ export function LeftSidebar(props: Props) {
     { id: 'sites', label: 'Sites', body: sites ?? <ComingSoon label="Sites" /> },
     { id: 'extensions', label: 'Extensions', body: extensions ?? <ComingSoon label="Extensions" /> },
   ]
+  const isExtensionPanel = activeTab.startsWith('ext:')
   const active = tabs.find((t) => t.id === activeTab) ?? tabs[0]
   const showFiles = activeTab === 'files'
   const showOutline = showFiles && outline != null
@@ -103,7 +105,9 @@ export function LeftSidebar(props: Props) {
         </header>
       )}
       <div className="flex-1 min-h-0">
-        {showFiles ? (
+        {isExtensionPanel ? (
+          <SidebarExtensionPanelSlot slotId={activeTab} />
+        ) : showFiles ? (
           // Always render the Group on the Files tab so the FilesTab Panel
           // keeps the same React identity whether or not the outline is
           // present. Swapping between `{active.body}` and `<Group>...` would

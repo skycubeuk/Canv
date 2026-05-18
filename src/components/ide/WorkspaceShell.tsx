@@ -12,10 +12,14 @@ import { getCanvHistory } from '../../lib/history'
 import { SitesTab } from './sidebar/SitesTab'
 import { ExtensionsTab } from '../extensions/ExtensionsTab'
 import { TrustWorkspaceBanner } from '../extensions/TrustWorkspaceBanner'
+import { BottomExtensionPanelSlot } from '../extensions/BottomExtensionPanelSlot'
 import { OutlinePanel } from './sidebar/OutlinePanel'
 import { Canvas } from '../Canvas'
 import { SettingsTab } from './tabs/SettingsTab'
 import { DiffTab } from './tabs/DiffTab'
+import { ActivityBar, type BuiltinTab } from './ActivityBar'
+import { Folder, Search, History as HistoryIcon, LayoutDashboard, Puzzle } from 'lucide-react'
+import { useContributions } from '../../hooks/useContributions'
 import type { Mode } from '../../config/types'
 import type { UseIdeLayoutApi, BottomLayout } from '../../hooks/useIdeLayout'
 import type { WorkspaceApi } from '../../hooks/useWorkspace'
@@ -115,6 +119,26 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
     wordCount, selectionWordCount,
   } = props
 
+  const contributions = useContributions()
+
+  const builtinTabs: BuiltinTab[] = [
+    { id: 'files', label: 'Files', icon: Folder },
+    { id: 'search', label: 'Search', icon: Search },
+    ...(raEnabled ? [{ id: 'history', label: 'History', icon: HistoryIcon }] : []),
+    { id: 'sites', label: 'Sites', icon: LayoutDashboard },
+    { id: 'extensions', label: 'Extensions', icon: Puzzle },
+  ]
+
+  function onSelectSidebarTab(tabId: string) {
+    const { visible, activeTab } = ideLayout.layout.sidebar
+    if (visible && activeTab === tabId) {
+      ideLayout.toggleSidebar()
+      return
+    }
+    ideLayout.setSidebarTab(tabId)
+    if (!visible) ideLayout.toggleSidebar()
+  }
+
   function setChatDraft(prompt: string) {
     window.dispatchEvent(new CustomEvent('canv:setChatDraft', { detail: prompt }))
   }
@@ -129,8 +153,27 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
     />
   ) : null
 
+  const extensionBottomTabs: BottomPanelTabDef[] = contributions.panels
+    .filter((p) => p.location === 'bottom-dock')
+    .map((p) => ({
+      id: `ext:${p.extensionId}:${p.id}`,
+      label: p.title,
+      icon: Puzzle,
+      render: () => <BottomExtensionPanelSlot slotId={`ext:${p.extensionId}:${p.id}`} />,
+    }))
+
+  const allBottomTabs = [...bottomPanelTabs, ...extensionBottomTabs]
+
   return (
-    <div className="flex-1 min-h-0">
+    <div style={{ display: 'flex', height: '100%' }} className="flex-1 min-h-0">
+      <ActivityBar
+        builtinTabs={builtinTabs}
+        extensionPanels={contributions.panels}
+        activeTabId={ideLayout.layout.sidebar.activeTab}
+        onSelect={onSelectSidebarTab}
+        sidebarVisible={ideLayout.layout.sidebar.visible}
+      />
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
       <IdeShell
         sidebar={(
           <LeftSidebar
@@ -260,7 +303,7 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
         )}
         dock={(
           <BottomPanel
-            tabs={bottomPanelTabs}
+            tabs={allBottomTabs}
             activeTab={ideLayout.layout.bottom.activeTab}
             onSelectTab={ideLayout.setBottomTab}
             onClose={ideLayout.toggleBottom}
@@ -303,6 +346,7 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
           />
         )}
       />
+      </div>
     </div>
   )
 }

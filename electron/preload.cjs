@@ -175,7 +175,8 @@ if (!isDockPopout()) {
   })
 
   contextBridge.exposeInMainWorld('canvExtensions', {
-    listInstalled:     () => ipcRenderer.invoke('canvExtensions:listInstalled'),
+    listInstalled:         () => ipcRenderer.invoke('canvExtensions:listInstalled'),
+    readAllContributions:  () => ipcRenderer.invoke('canvExtensions:readAllContributions'),
     install:           (folder) => ipcRenderer.invoke('canvExtensions:install', folder),
     uninstall:         (id) => ipcRenderer.invoke('canvExtensions:uninstall', id),
     setEnabled:        (id, en) => ipcRenderer.invoke('canvExtensions:setEnabled', id, en),
@@ -192,6 +193,8 @@ if (!isDockPopout()) {
     previewInstall:    (folder) => ipcRenderer.invoke('canvExtensions:previewInstall', folder),
     requestActivation: (trigger) => ipcRenderer.invoke('canvExtensions:requestActivation', trigger),
     readActivity: (id) => ipcRenderer.invoke('canvExtensions:readActivity', id),
+    showPanelInSlot: (slotId, bounds) => ipcRenderer.invoke('canvExtensions:showPanelInSlot', slotId, bounds),
+    hidePanelInSlot: (slotId) => ipcRenderer.invoke('canvExtensions:hidePanelInSlot', slotId),
     onChanged: (cb) => {
       const listener = () => { try { cb() } catch { /* ignore */ } }
       ipcRenderer.on('canvExtensions:registryChanged', listener)
@@ -215,6 +218,12 @@ if (!isDockPopout()) {
       ipcRenderer.on('canvExtensions:menu', listener)
       return () => ipcRenderer.removeListener('canvExtensions:menu', listener)
     },
+    onStatusBarChanged: (cb) => {
+      const listener = (_e, payload) => { try { cb(payload) } catch { /* ignore */ } }
+      ipcRenderer.on('canvExtensions:statusBarChanged', listener)
+      return () => ipcRenderer.removeListener('canvExtensions:statusBarChanged', listener)
+    },
+    invokeCommand: (commandId, args) => ipcRenderer.invoke('canvExtensions:invokeCommand', commandId, args),
   })
 
   contextBridge.exposeInMainWorld('canvExtensionsDev', {

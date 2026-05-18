@@ -9,7 +9,7 @@ function validPayload(overrides = {}) {
       capabilities: ['activeDoc.read'],
       contributions: [{
         type: 'panel', id: 'main', title: 'Hello',
-        icon: 'info', location: 'right-sidebar', entry: 'panels/main.html',
+        icon: 'info', location: 'left-sidebar', entry: 'panels/main.html',
       }],
     },
     files: {

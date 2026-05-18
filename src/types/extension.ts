@@ -1,4 +1,4 @@
-import type { SettingDef, ActivationEvent, MigrationStep } from './extension-settings'
+import type { SettingDef, ActivationEvent, MigrationStep, ContributionV5, PanelContribution } from './extension-settings'
 
 export type CapabilityString =
   | 'activeDoc.read'
@@ -28,17 +28,8 @@ export type ContributionType =
   | 'menu'
   | 'statusBar'
 
-export interface PanelContribution {
-  type: 'panel'
-  id: string
-  title: string
-  icon: string
-  location: 'right-sidebar' | 'left-sidebar' | 'bottom-dock'
-  entry: string
-}
-
-export type Contribution = PanelContribution
-// Other contribution types are added in Phase 4; Phase 1 only validates `panel`.
+export type Contribution = ContributionV5
+export type { PanelContribution }  // re-export for backward compatibility
 
 export interface ExtensionManifest {
   id: string

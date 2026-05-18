@@ -22,6 +22,16 @@ interface Props {
 
 const ELEVATED_CAPS = new Set(['workspace.write', 'activeDoc.write', 'ai', 'net'])
 
+function summariseContributions(contribs: unknown[]): string {
+  const counts: Record<string, number> = {}
+  for (const c of contribs as Array<{ type?: string }>) {
+    if (c && typeof c.type === 'string') counts[c.type] = (counts[c.type] || 0) + 1
+  }
+  return Object.entries(counts)
+    .map(([t, n]) => `${n} ${t}${n > 1 ? 's' : ''}`)
+    .join(' · ')
+}
+
 export function ExtensionInstallModal({ sourceFolder, manifest, onCancel, onConfirm }: Props) {
   return (
     <div role="dialog" aria-modal="true"
@@ -51,6 +61,14 @@ export function ExtensionInstallModal({ sourceFolder, manifest, onCancel, onConf
             : <ul style={chipListStyle}>
                 {manifest.network.map((o) => <li key={o} style={netChipStyle}>{o}</li>)}
               </ul>}
+        </Section>
+
+        <Section title="Adds to Canv">
+          <div style={{ fontSize: 11, color: 'var(--text-color-muted)' }}>
+            {manifest.contributions.length === 0
+              ? 'No UI contributions'
+              : summariseContributions(manifest.contributions)}
+          </div>
         </Section>
 
         {manifest.builderPrompt && (

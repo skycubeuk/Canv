@@ -64,6 +64,7 @@ contextBridge.exposeInMainWorld('canv', {
     copyToClipboard:  (text) => ipcRenderer.invoke('canvExt:ui.copyToClipboard', text),
     quickPick:        (items, opts) => ipcRenderer.invoke('canvExt:ui.quickPick', items, opts ?? {}),
     input:            (opts) => ipcRenderer.invoke('canvExt:ui.input', opts ?? {}),
+    setStatusBarItem: (id, partial) => ipcRenderer.invoke('canvExt:ui.setStatusBarItem', id, partial),
   },
   net: {
     fetch: async (url, init) => {
@@ -91,6 +92,13 @@ contextBridge.exposeInMainWorld('canv', {
       const listener = (_e, ctx) => { try { handler(ctx) } catch { /* swallow */ } }
       ipcRenderer.on('canvExt:lifecycle.unload', listener)
       return () => ipcRenderer.removeListener('canvExt:lifecycle.unload', listener)
+    },
+  },
+  commands: {
+    onInvoke(cb) {
+      const listener = (_e, payload) => { try { cb(payload.commandId, payload.args) } catch { /* ignore */ } }
+      ipcRenderer.on('canvExt:commands.invoke', listener)
+      return () => ipcRenderer.removeListener('canvExt:commands.invoke', listener)
     },
   },
 })

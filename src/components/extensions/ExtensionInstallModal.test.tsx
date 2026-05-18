@@ -46,6 +46,21 @@ describe('ExtensionInstallModal', () => {
     expect(screen.getByText(/count words by chapter/)).toBeTruthy()
   })
 
+  it('shows contribution summary', () => {
+    const m = { ...MANIFEST, contributions: [
+      { type: 'panel' }, { type: 'panel' }, { type: 'command' },
+    ] }
+    render(<ExtensionInstallModal sourceFolder="/x" manifest={m}
+      onCancel={() => {}} onConfirm={() => {}} />)
+    expect(screen.getByText(/2 panels · 1 command/)).toBeTruthy()
+  })
+
+  it('shows "No UI contributions" when manifest.contributions is empty', () => {
+    render(<ExtensionInstallModal sourceFolder="/x" manifest={MANIFEST}
+      onCancel={() => {}} onConfirm={() => {}} />)
+    expect(screen.getByText('No UI contributions')).toBeTruthy()
+  })
+
   it('renders source folder path', () => {
     render(<ExtensionInstallModal sourceFolder="/path/to/ext" manifest={MANIFEST}
       onCancel={() => {}} onConfirm={() => {}} />)

@@ -19,6 +19,14 @@ beforeEach(() => {
     reload: vi.fn() as never,
     pickInstallFolder: vi.fn() as never,
     previewInstall: vi.fn() as never,
+    readAllContributions: vi.fn().mockResolvedValue({
+      panels: [],
+      fileHandlers: [],
+      commands: [],
+      menus: [],
+      statusBarItems: [],
+      languages: [],
+    }) as never,
     onCrashed: vi.fn(() => () => {}),
   }
 })

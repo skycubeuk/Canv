@@ -1,6 +1,8 @@
 import { MessageSquare, Settings } from 'lucide-react'
 import type { Mode } from '../../config/types'
 import type { WorkspaceKind } from '../../lib/fs'
+import { useContributions } from '../../hooks/useContributions'
+import { StatusBarItem } from './StatusBarItem'
 
 interface Props {
   saveState: 'saved' | 'saving' | 'conflict'
@@ -36,6 +38,13 @@ export function StatusBar(props: Props) {
     cursorLine, cursorCol, branch, diffStats,
     chatVisible, onToggleChat, onOpenSettings, meterTokens, meterCostUsd,
   } = props
+
+  const contributions = useContributions()
+
+  const onCommandInvoke = (commandId: string) => { void window.canvExtensions?.invokeCommand?.(commandId) }
+
+  const leftItems = contributions.statusBarItems.filter((s) => s.alignment === 'left').sort((a, b) => b.priority - a.priority)
+  const rightItems = contributions.statusBarItems.filter((s) => s.alignment === 'right').sort((a, b) => b.priority - a.priority)
 
   const wordsLabel = selectionWordCount != null
     ? `selection: ${selectionWordCount.toLocaleString()} words`
@@ -110,7 +119,22 @@ export function StatusBar(props: Props) {
         </>
       )}
 
+      {leftItems.map((item) => (
+        <StatusBarItem
+          key={`${item.extensionId}-${item.id}`}
+          text={item.text} icon={item.icon} tooltip={item.tooltip}
+          command={item.command} onCommandInvoke={onCommandInvoke}
+        />
+      ))}
+
       <div className="ml-auto flex items-center gap-3">
+        {rightItems.map((item) => (
+          <StatusBarItem
+            key={`${item.extensionId}-${item.id}`}
+            text={item.text} icon={item.icon} tooltip={item.tooltip}
+            command={item.command} onCommandInvoke={onCommandInvoke}
+          />
+        ))}
         {(cursorLine != null && cursorCol != null) && (
           <>
             <span>Ln {cursorLine}, Col {cursorCol}</span>

@@ -29,6 +29,8 @@ import { useDialogs } from './lib/dialogs'
 import { useNotifications } from './hooks/useNotifications'
 import { useEditorRegistry, editorMapKey } from './hooks/useEditorRegistry'
 import { useExtensionEventBridge } from './hooks/useExtensionEventBridge'
+import { useContributions } from './hooks/useContributions'
+import { useExtensionKeybindings } from './hooks/useExtensionKeybindings'
 import { useWorkspaceFileOps } from './hooks/useWorkspaceFileOps'
 import { useSelectionAgent } from './hooks/useSelectionAgent'
 import { applyAccent, applyTheme, resolveTheme } from './lib/accent'
@@ -138,6 +140,8 @@ export default function App() {
   })
 
   const commands = useCommands()
+  const contributions = useContributions()
+  useExtensionKeybindings(contributions.commands)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [paletteMode, setPaletteMode] = useState<PaletteMode>('commands')
   const [recentFiles, setRecentFiles] = useState<string[]>([])
@@ -635,27 +639,15 @@ export default function App() {
       )}
       <TopBar
         workspaceName={workspace.root}
-        activeSidebarTab={ideLayout.layout.sidebar.activeTab}
-        onSelectSidebarTab={(tab) => {
-          const { visible, activeTab } = ideLayout.layout.sidebar
-          if (visible && activeTab === tab) {
-            ideLayout.toggleSidebar()
-            return
-          }
-          ideLayout.setSidebarTab(tab)
-          if (!visible) ideLayout.toggleSidebar()
-        }}
         onOpenCommandPalette={() => { setPaletteMode('commands'); setPaletteOpen(true) }}
         profile={activeProfile}
         hasMarkdownTab={workspace.activeMarkdownRel != null}
         activeFileName={workspace.activeMarkdownRel ? basename(workspace.activeMarkdownRel) : null}
         onRunDocAgent={(agent, instruction) => handleAgentOnDocument(workspace.activeGroupId, agent, instruction)}
-        sidebarVisible={ideLayout.layout.sidebar.visible}
         bottomVisible={ideLayout.layout.bottom.visible}
         bottomPlacement={ideLayout.layout.bottom.placement}
         onSetBottomPlacementBottom={setBottomPlacementBottom}
         onSetBottomPlacementRight={setBottomPlacementRight}
-        historyEnabled={raEnabled}
       />
       <WorkspaceShell
         ideLayout={ideLayout}
@@ -785,6 +777,8 @@ export default function App() {
         onClosePalette={() => setPaletteOpen(false)}
         commands={commands}
         onOpenFile={(rel) => { void workspace.openTab(rel) }}
+        extensionCommands={contributions.commands}
+        onInvokeExtensionCommand={(id) => { void window.canvExtensions?.invokeCommand?.(id) }}
       />
 
       <TestExtensionOverlay

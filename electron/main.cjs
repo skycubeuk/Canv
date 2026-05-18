@@ -34,7 +34,9 @@ const { createSettingsHandlers } = require('./extensions/handlers/settings.cjs')
 const { createAiHandlers } = require('./extensions/handlers/ai.cjs')
 const { createNetHandlers } = require('./extensions/handlers/net.cjs')
 const { createUiPromptHandlers } = require('./extensions/handlers/ui-prompt.cjs')
+const { createStatusBarHandlers } = require('./extensions/handlers/statusBar.cjs')
 const activity = require('./extensions/activity.cjs')
+const { buildAllContributions, EMPTY: EMPTY_CONTRIBS } = require('./extensions/contributions.cjs')
 const { createSession, listSessions, loadSession, writeIteration, appendHistory, deleteSession, pruneOldSessions } = require('./extensions/builder/scratch.cjs')
 const { parsePayload } = require('./extensions/builder/parse-payload.cjs')
 
@@ -67,6 +69,7 @@ let extensionRuntime = null
 let trustStore = null
 let workspaceRegistry = null
 const pendingPrompts = new Map()    // reqId → { resolve, reject }
+const statusBarOverrides = new Map() // key: '<extensionId>:<itemId>' → { text?, icon?, tooltip? }
 let nextPromptId = 1
 
 function onWorkspaceChangedGlobal() {
@@ -1227,6 +1230,19 @@ function buildExtensionHost() {
       mainWindow.webContents.send('canvExtensions:promptRequest', reqId, req)
       // No timeout — user might take their time.
     }),
+
+    onStatusBarItemUpdated: (itemId, payload) => {
+      const key = `${payload.extensionId}:${itemId}`
+      const existing = statusBarOverrides.get(key) || {}
+      const next = { ...existing }
+      if ('text' in payload) next.text = payload.text
+      if ('icon' in payload) next.icon = payload.icon
+      if ('tooltip' in payload) next.tooltip = payload.tooltip
+      statusBarOverrides.set(key, next)
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('canvExtensions:statusBarChanged', { extensionId: payload.extensionId, itemId, ...next })
+      }
+    },
   }
 }
 
@@ -1273,7 +1289,7 @@ function registerExtensionHandlers() {
     }
   }
 
-  async function spawnInstalled(id) {
+  async function spawnInstalled(id, opts = {}) {
     if (!WORKSPACE || WORKSPACE.kind !== 'local') return { ok: false, reason: 'no-workspace' }
     if (!workspaceRegistry) return { ok: false, reason: 'no-registry' }
     const entry = workspaceRegistry.get(id)
@@ -1290,9 +1306,12 @@ function registerExtensionHandlers() {
       return { ok: false, reason: 'tamper-detected' }
     }
     const manifest = JSON.parse(await fsp.readFile(path.join(dir, 'manifest.json'), 'utf-8'))
+    // Phase 5: panels are mounted into UI slots. Without explicit bounds, spawn
+    // hidden (zero-rect). The slot's ResizeObserver reports real bounds the
+    // moment the user opens the panel's tab; floating corner placement is gone.
+    const bounds = opts.bounds ?? { x: 0, y: 0, width: 0, height: 0 }
     await extensionRuntime.spawn({
-      extensionDir: dir, manifest, hostWindow: mainWindow,
-      bounds: { x: mainWindow.getBounds().width - 380, y: 80, width: 360, height: 600 },
+      extensionDir: dir, manifest, hostWindow: mainWindow, bounds,
     })
     return { ok: true }
   }
@@ -1317,6 +1336,7 @@ function registerExtensionHandlers() {
     ...createAiHandlers({ runtime: extensionRuntime, host }),
     ...createNetHandlers({ runtime: extensionRuntime, onRequest: (id) => activity.recordNet(id) }),
     ...createUiPromptHandlers({ runtime: extensionRuntime, host }),
+    ...createStatusBarHandlers({ runtime: extensionRuntime, host }),
   }
   for (const [channel, fn] of Object.entries(allHandlers)) {
     ipcMain.handle(channel, fn)
@@ -1374,6 +1394,20 @@ function registerExtensionHandlers() {
   ipcMain.handle('canvExtensions:listInstalled', async () => {
     if (!workspaceRegistry) return []
     return workspaceRegistry.listEntries()
+  })
+
+  ipcMain.handle('canvExtensions:readAllContributions', async () => {
+    if (!workspaceRegistry || !WORKSPACE || WORKSPACE.kind !== 'local') return EMPTY_CONTRIBS
+    const wsTrust = trustStore.stateFor(WORKSPACE.root)
+    if (wsTrust !== 'trusted') return EMPTY_CONTRIBS
+    const dir = path.join(WORKSPACE.root, '.canv', 'extensions')
+    const all = buildAllContributions(dir, workspaceRegistry.listEntries())
+    // Overlay live status-bar overrides.
+    const statusBarItems = all.statusBarItems.map((item) => {
+      const o = statusBarOverrides.get(`${item.extensionId}:${item.id}`)
+      return o ? { ...item, ...(o.text != null ? { text: o.text } : {}), ...(o.icon != null ? { icon: o.icon } : {}), ...(o.tooltip != null ? { tooltip: o.tooltip } : {}) } : item
+    })
+    return { ...all, statusBarItems }
   })
 
   ipcMain.handle('canvExtensions:previewInstall', async (_e, folder) => {
@@ -1591,6 +1625,53 @@ function registerExtensionHandlers() {
       if (shouldActivateFor(manifest, trigger)) await spawnInstalled(entry.id)
     }
   })
+
+  ipcMain.handle('canvExtensions:showPanelInSlot', async (_e, slotId, bounds) => {
+    if (!extensionRuntime || !workspaceRegistry) return { ok: false, error: 'no runtime' }
+    const m = /^ext:([^:]+):([^:]+)$/.exec(slotId)
+    if (!m) return { ok: false, error: 'malformed slotId' }
+    const [, extensionId] = m
+    if (extensionRuntime.manifestFor(extensionId)) {
+      extensionRuntime.setBounds(extensionId, bounds)
+      return { ok: true }
+    }
+    return await spawnInstalled(extensionId, { bounds })
+  })
+
+  ipcMain.handle('canvExtensions:hidePanelInSlot', async (_e, slotId) => {
+    const m = /^ext:([^:]+):([^:]+)$/.exec(slotId)
+    if (!m) return
+    const [, extensionId] = m
+    if (extensionRuntime?.manifestFor(extensionId)) {
+      extensionRuntime.setBounds(extensionId, { x: 0, y: 0, width: 0, height: 0 })
+    }
+  })
+
+  ipcMain.handle('canvExtensions:invokeCommand', async (_e, commandId, args) => {
+    if (!extensionRuntime || !workspaceRegistry || !WORKSPACE || WORKSPACE.kind !== 'local') return { ok: false, error: 'no workspace' }
+    const wsTrust = trustStore.stateFor(WORKSPACE.root)
+    if (wsTrust !== 'trusted') return { ok: false, error: 'workspace not trusted' }
+    const dir = path.join(WORKSPACE.root, '.canv', 'extensions')
+    for (const entry of workspaceRegistry.listEntries()) {
+      if (!entry.enabled || entry.trustedAt == null) continue
+      let manifest
+      try { manifest = JSON.parse(await fsp.readFile(path.join(dir, entry.id, 'manifest.json'), 'utf-8')) }
+      catch { continue }
+      const cmd = (manifest.contributions || []).find((c) => c && c.type === 'command' && c.id === commandId)
+      if (cmd) {
+        if (!extensionRuntime.manifestFor(entry.id)) {
+          await spawnInstalled(entry.id)
+        }
+        const wcId = Array.from(extensionRuntime._wcIdToId.entries()).find(([, eid]) => eid === entry.id)?.[0]
+        if (wcId) {
+          const wc = electron.webContents.fromId(wcId)
+          if (wc && !wc.isDestroyed()) wc.send('canvExt:commands.invoke', { commandId, args })
+        }
+        return { ok: true }
+      }
+    }
+    return { ok: false, error: 'command not found' }
+  })
 }
 
 function buildSearchPattern(q) {
@@ -1685,31 +1766,18 @@ electron.protocol.registerSchemesAsPrivileged([
 ])
 
 app.whenReady().then(() => {
-  Menu.setApplicationMenu(Menu.buildFromTemplate([
-    ...(process.platform === 'darwin' ? [{ role: 'appMenu' }] : []),
-    { role: 'fileMenu' },
-    { role: 'editMenu' },
-    { role: 'viewMenu' },
-    {
-      label: 'Extensions',
-      submenu: [
-        {
-          label: 'Build New…',
-          click: () => openBuilderWindow({}),
-        },
-        {
-          label: 'Manage…',
-          click: () => {
-            if (mainWindow && !mainWindow.isDestroyed()) {
-              mainWindow.focus()
-              mainWindow.webContents.send('canvExtensions:menu', { action: 'openManageTab' })
-            }
-          },
-        },
-      ],
-    },
-    { role: 'windowMenu' },
-  ]))
+  // No top-level application menu: Build New / Manage are reachable from the
+  // Extensions tab in the activity bar. On macOS we still want the standard
+  // app menu (Quit, Hide, etc.) without an Extensions submenu.
+  Menu.setApplicationMenu(
+    process.platform === 'darwin'
+      ? Menu.buildFromTemplate([
+          { role: 'appMenu' },
+          { role: 'editMenu' },
+          { role: 'windowMenu' },
+        ])
+      : null,
+  )
   recentRemotes = new RecentRemotes(path.join(app.getPath('userData'), 'recent-remotes.json'))
   registerFsHandlers()
   registerSiteHandlers()

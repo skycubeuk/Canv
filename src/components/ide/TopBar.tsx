@@ -1,49 +1,27 @@
-import { Folder, Search, History, LayoutDashboard, Puzzle, PanelRight, PanelBottom } from 'lucide-react'
-import type { LucideIcon } from 'lucide-react'
-import type { SidebarTab, InAppDockPlacement } from '../../hooks/useIdeLayout'
+import { Search, PanelRight, PanelBottom } from 'lucide-react'
+import type { InAppDockPlacement } from '../../hooks/useIdeLayout'
 import { DocumentAgentMenu } from '../DocumentAgentMenu'
 import type { Action, Mode } from '../../config/types'
 
 interface Props {
   workspaceName: string | null
-  activeSidebarTab: SidebarTab
-  onSelectSidebarTab: (tab: SidebarTab) => void
   onOpenCommandPalette: () => void
   profile: Mode
   hasMarkdownTab: boolean
   activeFileName: string | null
   onRunDocAgent: (agent: Action, instruction?: string) => void
-  sidebarVisible: boolean
   bottomVisible: boolean
   bottomPlacement: InAppDockPlacement | 'popout'
   onSetBottomPlacementBottom: () => void
   onSetBottomPlacementRight: () => void
-  historyEnabled: boolean
-}
-
-interface SectionTab {
-  id: SidebarTab
-  label: string
-  icon: LucideIcon
-  badge?: string | null
 }
 
 export function TopBar(props: Props) {
   const {
-    workspaceName, activeSidebarTab, onSelectSidebarTab,
-    onOpenCommandPalette, profile, hasMarkdownTab, activeFileName, onRunDocAgent,
-    sidebarVisible, bottomVisible, bottomPlacement,
+    workspaceName, onOpenCommandPalette, profile, hasMarkdownTab, activeFileName, onRunDocAgent,
+    bottomVisible, bottomPlacement,
     onSetBottomPlacementBottom, onSetBottomPlacementRight,
-    historyEnabled,
   } = props
-
-  const sectionTabs: SectionTab[] = [
-    { id: 'files', label: 'Files', icon: Folder },
-    { id: 'search', label: 'Search', icon: Search },
-    ...(historyEnabled ? [{ id: 'history' as const, label: 'History', icon: History }] : []),
-    { id: 'sites', label: 'Sites', icon: LayoutDashboard },
-    { id: 'extensions', label: 'Extensions', icon: Puzzle },
-  ]
 
   const displayName = workspaceName
     ? (workspaceName.split(/[\\/]/).filter(Boolean).pop() ?? workspaceName)
@@ -73,34 +51,6 @@ export function TopBar(props: Props) {
         </span>
       </div>
 
-      {/* Section nav */}
-      <div className="flex items-center gap-0.5 ml-1.5">
-        {sectionTabs.map((t) => {
-          const isActive = t.id === activeSidebarTab && sidebarVisible
-          const hasBadge = t.badge != null && t.badge !== ''
-          return (
-            <button
-              key={t.id}
-              type="button"
-              aria-label={t.label}
-              aria-pressed={isActive}
-              title={t.label}
-              onClick={() => onSelectSidebarTab(t.id)}
-              className={`relative w-7 h-7 grid place-items-center rounded-md ${
-                isActive ? 'bg-active text-default' : 'text-muted hover:bg-hover'
-              }`}
-            >
-              <t.icon aria-hidden className="w-3.5 h-3.5" />
-              {hasBadge && (
-                <span className="absolute top-0 right-0 text-[9px] leading-none px-1 py-px rounded-sm bg-elev text-muted translate-x-1/3 -translate-y-1/3">
-                  {t.badge}
-                </span>
-              )}
-            </button>
-          )
-        })}
-      </div>
-
       <div className="flex-1" />
 
       {/* Command palette button */}
@@ -128,7 +78,7 @@ export function TopBar(props: Props) {
       <span aria-hidden className="w-px h-[18px] bg-[rgb(var(--border-default))] mx-1" />
 
       {/* Dock placement toggles. Sidebar visibility is driven by the
-          Files/Search/Git tabs (re-clicking the active tab collapses). */}
+          activity bar (re-clicking the active tab collapses). */}
       <button
         type="button"
         aria-label="Panel right (dock to right)"

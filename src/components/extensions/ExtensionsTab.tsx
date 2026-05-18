@@ -3,6 +3,7 @@ import { ExtensionRow } from './ExtensionRow'
 import { ExtensionSettingsForm } from './ExtensionSettingsForm'
 import { ExtensionInstallModal } from './ExtensionInstallModal'
 import type { PreviewManifest } from './ExtensionInstallModal'
+import type { AllContributions } from '../../types/extension-contributions'
 
 declare global {
   interface Window {
@@ -20,6 +21,7 @@ declare global {
       reload: (id: string) => Promise<void>
       pickInstallFolder: () => Promise<string | null>
       previewInstall: (folder: string) => Promise<{ ok: true; manifest: PreviewManifest } | { ok: false; errors: string[] }>
+      readAllContributions: () => Promise<AllContributions>
       onChanged: (cb: () => void) => () => void
       onCrashed: (cb: (payload: { id: string; reason: string }) => void) => () => void
       onPromptRequest?: (cb: (reqId: number, req: {
@@ -29,7 +31,11 @@ declare global {
       }) => void) => () => void
       promptResolve?: (reqId: number, value: { value: unknown } | null) => void
       onMenu?: (cb: (msg: { action: string }) => void) => () => void
+      onStatusBarChanged?: (cb: (p: unknown) => void) => () => void
       openBuilder?: (opts: { editExtension?: string }) => Promise<void>
+      showPanelInSlot?: (slotId: string, bounds: { x: number; y: number; width: number; height: number }) => Promise<{ ok: boolean; error?: string }>
+      hidePanelInSlot?: (slotId: string) => Promise<void>
+      invokeCommand?: (commandId: string, args?: unknown) => Promise<{ ok: boolean; error?: string }>
     }
   }
 }
@@ -219,9 +225,14 @@ export function ExtensionsTab() {
           })}
         </ul>
       )}
-      <div style={{ padding: 12, borderTop: '1px solid var(--border-color-default)' }}>
+      <div style={{ padding: 12, borderTop: '1px solid var(--border-color-default)', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <button type="button" onClick={() => void onInstall()} style={primaryBtn}>Install from folder…</button>
-        {installError && <div style={{ marginTop: 8, color: 'rgb(255 120 120)', fontSize: 11 }}>{installError}</div>}
+        <button
+          type="button"
+          onClick={() => void window.canvExtensions?.openBuilder?.({})}
+          style={secondaryBtn}
+        >Build new…</button>
+        {installError && <div style={{ marginTop: 8, color: 'rgb(255 120 120)', fontSize: 11, flexBasis: '100%' }}>{installError}</div>}
       </div>
     </div>
   )

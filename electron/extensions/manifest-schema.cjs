@@ -15,17 +15,69 @@ const safeRelPath = z.string().refine((p) => {
   return true
 }, { message: 'entry must be a relative path that does not escape the extension directory' })
 
+const COMMAND_ID_RE = /^[a-z][a-z0-9]*(?:\.[a-z][a-z0-9]*)*$/
+const FILE_EXT_RE = /^\.[a-z0-9]+$/
+const KEYBINDING_RE = /^(?:(?:Ctrl|Cmd|CmdOrCtrl|Alt|Shift|Meta)\+)+[A-Za-z0-9]+(?:\s+(?:(?:Ctrl|Cmd|CmdOrCtrl|Alt|Shift|Meta)\+)*[A-Za-z0-9]+)?$/
+const WHEN_RE = /^(?:fileExt:\.[a-z0-9]+|isDir|isFile)$/
+
 const PanelContribution = z.object({
   type: z.literal('panel'),
   id: z.string().regex(ID_RE),
   title: z.string().min(1).max(80),
   icon: z.string().min(1).max(40),
-  location: z.enum(['right-sidebar', 'left-sidebar', 'bottom-dock']),
+  location: z.enum(['left-sidebar', 'bottom-dock']),
   entry: safeRelPath,
 })
 
-// Phase 1 only knows about `panel`. Other contribution types validated in Phase 4.
-const Contribution = PanelContribution
+const FileHandlerContribution = z.object({
+  type: z.literal('fileHandler'),
+  id: z.string().regex(ID_RE),
+  extensions: z.array(z.string().regex(FILE_EXT_RE)).min(1),
+  mode: z.enum(['viewer', 'editor']),
+  entry: safeRelPath,
+})
+
+const CommandContribution = z.object({
+  type: z.literal('command'),
+  id: z.string().regex(COMMAND_ID_RE),
+  title: z.string().min(1).max(120),
+  entry: safeRelPath,
+  keybinding: z.string().regex(KEYBINDING_RE).optional(),
+})
+
+const MenuContribution = z.object({
+  type: z.literal('menu'),
+  menu: z.literal('fileTree.context'),
+  command: z.string().regex(COMMAND_ID_RE),
+  title: z.string().min(1).max(120).optional(),
+  when: z.string().regex(WHEN_RE).optional(),
+})
+
+const StatusBarContribution = z.object({
+  type: z.literal('statusBar'),
+  id: z.string().regex(ID_RE),
+  alignment: z.enum(['left', 'right']),
+  priority: z.number().int().min(1).max(99),
+  text: z.string().max(200).optional(),
+  icon: z.string().max(40).optional(),
+  tooltip: z.string().max(200).optional(),
+  command: z.string().regex(COMMAND_ID_RE).optional(),
+})
+
+const LanguageContribution = z.object({
+  type: z.literal('language'),
+  extensions: z.array(z.string().regex(FILE_EXT_RE)).min(1),
+  entry: safeRelPath,
+})
+
+const Contribution = z.discriminatedUnion('type', [
+  PanelContribution,
+  FileHandlerContribution,
+  CommandContribution,
+  MenuContribution,
+  StatusBarContribution,
+  LanguageContribution,
+])
 
 const Capability = z.string().refine((c) => ALL_CAPABILITIES.includes(c), {
   message: (ctx) => `unknown capability: ${ctx.input}`,
@@ -61,7 +113,7 @@ const SettingDef = z.discriminatedUnion('type', [
 const ActivationEvent = z.string().refine((s) => {
   if (s === 'onStartup') return true
   if (/^onCommand:[a-zA-Z0-9._-]+$/.test(s)) return true
-  if (/^onPanelOpen:(right-sidebar|left-sidebar|bottom-dock):[a-zA-Z0-9._-]+$/.test(s)) return true
+  if (/^onPanelOpen:(left-sidebar|bottom-dock):[a-zA-Z0-9._-]+$/.test(s)) return true
   return false
 }, { message: 'unknown activation event' })
 

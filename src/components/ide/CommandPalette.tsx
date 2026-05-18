@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { fuzzySort } from '../../lib/fuzzy'
 import type { Command } from '../../hooks/useCommands'
+import type { CommandRecord } from '../../types/extension-contributions'
 
 export type PaletteMode = 'commands' | 'files'
 
@@ -18,14 +19,16 @@ interface Props {
   onClose: () => void
   onRunCommand: (id: string) => void
   onOpenFile: (rel: string) => void
+  extensionCommands?: CommandRecord[]
+  onInvokeExtensionCommand?: (commandId: string) => void
 }
 
 interface Row {
-  kind: 'command' | 'file' | 'recent'
+  kind: 'command' | 'file' | 'recent' | 'extensionCommand'
   label: string
   detail: string
   shortcut?: string
-  payload: { command?: Command; file?: PaletteFile }
+  payload: { command?: Command; file?: PaletteFile; extensionCommand?: CommandRecord }
 }
 
 function rowsForCommands(commands: Command[], q: string): Row[] {
@@ -36,6 +39,17 @@ function rowsForCommands(commands: Command[], q: string): Row[] {
     detail: c.group ?? '',
     shortcut: c.shortcut,
     payload: { command: c },
+  }))
+}
+
+function rowsForExtensionCommands(cmds: CommandRecord[], q: string): Row[] {
+  const ranked = fuzzySort(q, cmds, (c) => c.title)
+  return ranked.map(({ item: c }) => ({
+    kind: 'extensionCommand' as const,
+    label: c.title,
+    detail: c.extensionName,
+    shortcut: c.keybinding,
+    payload: { extensionCommand: c },
   }))
 }
 
@@ -65,7 +79,7 @@ export function CommandPalette(props: Props) {
 }
 
 function PalettePanel(props: Props) {
-  const { mode, commands, files, recentFiles, onClose, onRunCommand, onOpenFile } = props
+  const { mode, commands, files, recentFiles, onClose, onRunCommand, onOpenFile, extensionCommands, onInvokeExtensionCommand } = props
   const [query, setQuery] = useState('')
   const [highlight, setHighlight] = useState(0)
   // Autofocus the input on first paint without an effect: the ref callback fires
@@ -79,14 +93,24 @@ function PalettePanel(props: Props) {
   }
 
   const rows = useMemo<Row[]>(() => {
-    return mode === 'commands' ? rowsForCommands(commands, query) : rowsForFiles(files, query, recentFiles)
-  }, [mode, query, commands, files, recentFiles])
+    if (mode === 'commands') {
+      const native = rowsForCommands(commands, query)
+      const ext = extensionCommands ? rowsForExtensionCommands(extensionCommands, query) : []
+      return [...native, ...ext]
+    }
+    return rowsForFiles(files, query, recentFiles)
+  }, [mode, query, commands, files, recentFiles, extensionCommands])
 
   function activate(index: number) {
     const row = rows[index]
     if (!row) return
     if (row.payload.command) {
       onRunCommand(row.payload.command.id)
+      onClose()
+      return
+    }
+    if (row.payload.extensionCommand) {
+      onInvokeExtensionCommand?.(row.payload.extensionCommand.id)
       onClose()
       return
     }

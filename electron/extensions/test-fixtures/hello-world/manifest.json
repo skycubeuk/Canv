@@ -17,7 +17,7 @@
       "id": "main",
       "title": "Hello World",
       "icon": "info",
-      "location": "right-sidebar",
+      "location": "left-sidebar",
       "entry": "panels/main.html"
     }
   ]

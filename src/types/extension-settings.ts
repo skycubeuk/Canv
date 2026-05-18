@@ -38,3 +38,66 @@ export interface TrustedWorkspacesFile {
   version: 1
   workspaces: Record<string, { state: TrustState; updatedAt: string }>  // absolute workspace path → state
 }
+
+// Phase 5 contribution types
+export type PanelLocation = 'left-sidebar' | 'bottom-dock'
+export type FileHandlerMode = 'viewer' | 'editor'
+export type StatusBarAlignment = 'left' | 'right'
+
+export interface PanelContribution {
+  type: 'panel'
+  id: string
+  title: string
+  icon: string
+  location: PanelLocation
+  entry: string
+}
+
+export interface FileHandlerContribution {
+  type: 'fileHandler'
+  id: string
+  extensions: string[]
+  mode: FileHandlerMode
+  entry: string
+}
+
+export interface CommandContribution {
+  type: 'command'
+  id: string
+  title: string
+  entry: string
+  keybinding?: string
+}
+
+export interface MenuContribution {
+  type: 'menu'
+  menu: 'fileTree.context'
+  command: string
+  title?: string
+  when?: string
+}
+
+export interface StatusBarContribution {
+  type: 'statusBar'
+  id: string
+  alignment: StatusBarAlignment
+  priority: number
+  text?: string
+  icon?: string
+  tooltip?: string
+  command?: string
+}
+
+export interface LanguageContribution {
+  type: 'language'
+  extensions: string[]
+  entry: string
+}
+
+export type ContributionV5 =
+  | PanelContribution
+  | FileHandlerContribution
+  | CommandContribution
+  | MenuContribution
+  | StatusBarContribution
+  | LanguageContribution

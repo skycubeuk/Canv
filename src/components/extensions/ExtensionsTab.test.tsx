@@ -23,6 +23,14 @@ function setMockCanvExt(overrides: Partial<NonNullable<typeof window.canvExtensi
       ok: true,
       manifest: { id: 'a', name: 'Alpha', version: '1.0.0', capabilities: [], network: [], contributions: [] },
     }) as never,
+    readAllContributions: vi.fn().mockResolvedValue({
+      panels: [],
+      fileHandlers: [],
+      commands: [],
+      menus: [],
+      statusBarItems: [],
+      languages: [],
+    }) as never,
     onChanged: vi.fn(() => () => {}),
     onCrashed: vi.fn(() => () => {}),
   }
