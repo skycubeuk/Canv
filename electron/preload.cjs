@@ -8,6 +8,10 @@ function isDockPopout() {
   }
 }
 
+function isBuilderWindow() {
+  try { return new URLSearchParams(location.search).get('mode') === 'builder' } catch { return false }
+}
+
 // ---------- Screenshot harness: seed localStorage before React runs ----------
 // main.cjs passes CANV_SCREENSHOT_* values via additionalArguments, which
 // appear in process.argv even in sandboxed preloads. We write them into
@@ -205,6 +209,12 @@ if (!isDockPopout()) {
       return () => ipcRenderer.removeListener('canvExtensions:promptRequest', listener)
     },
     promptResolve: (reqId, value) => ipcRenderer.send('canvExtensions:promptResolve', reqId, value),
+    openBuilder: (opts) => ipcRenderer.invoke('canvExtBuilder:openWindow', opts ?? {}),
+    onMenu: (cb) => {
+      const listener = (_e, msg) => { try { cb(msg) } catch { /* ignore */ } }
+      ipcRenderer.on('canvExtensions:menu', listener)
+      return () => ipcRenderer.removeListener('canvExtensions:menu', listener)
+    },
   })
 
   contextBridge.exposeInMainWorld('canvExtensionsDev', {
@@ -230,6 +240,20 @@ if (!isDockPopout()) {
     fireEvent: (type, payload) => ipcRenderer.invoke('canvExtDev:fireEvent', type, payload),
   })
 
+}
+
+if (isBuilderWindow()) {
+  contextBridge.exposeInMainWorld('extensionBuilderAPI', {
+    closeWindow:    () => ipcRenderer.invoke('canvExtBuilder:closeWindow'),
+    listSessions:   () => ipcRenderer.invoke('canvExtBuilder:listSessions'),
+    openSession:    (id, opts) => ipcRenderer.invoke('canvExtBuilder:openSession', id, opts ?? {}),
+    appendHistory:  (sessionId, message) => ipcRenderer.invoke('canvExtBuilder:appendHistory', sessionId, message),
+    applyPayload:   (sessionId, rawAiResponse) => ipcRenderer.invoke('canvExtBuilder:applyPayload', sessionId, rawAiResponse),
+    deleteSession:  (sessionId) => ipcRenderer.invoke('canvExtBuilder:deleteSession', sessionId),
+    spawnPreview:   (sessionId, bounds) => ipcRenderer.invoke('canvExtBuilder:spawnPreview', sessionId, bounds),
+    destroyPreview: (sessionId) => ipcRenderer.invoke('canvExtBuilder:destroyPreview', sessionId),
+    setPreviewBounds: (sessionId, bounds) => ipcRenderer.invoke('canvExtBuilder:setPreviewBounds', sessionId, bounds),
+  })
 }
 
 // Available in both main and pop-out windows.

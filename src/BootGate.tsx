@@ -4,15 +4,22 @@ import { ErrorScreen } from './config/errorScreen'
 import { DialogProvider } from './lib/dialogs'
 import { ContextMenuProvider } from './lib/contextMenu'
 import { DockPopoutBoot } from './components/ide/DockPopoutBoot'
+import { BuilderBoot } from './components/builder/BuilderBoot'
 
-function isPopoutMode(): boolean {
-  if (typeof window === 'undefined') return false
+function readMode(): 'dock' | 'builder' | 'main' {
+  if (typeof window === 'undefined') return 'main'
   const params = new URLSearchParams(window.location.search)
-  return params.get('mode') === 'dock'
+  const m = params.get('mode')
+  if (m === 'dock') return 'dock'
+  if (m === 'builder') return 'builder'
+  return 'main'
 }
 
 export function BootGate() {
-  return isPopoutMode() ? <DockPopoutBoot /> : <MainBoot />
+  const mode = readMode()
+  if (mode === 'dock') return <DockPopoutBoot />
+  if (mode === 'builder') return <BuilderBoot />
+  return <MainBoot />
 }
 
 function MainBoot() {

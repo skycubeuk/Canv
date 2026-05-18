@@ -28,6 +28,8 @@ declare global {
         kind: 'input'; extensionId: string; prompt: string; placeholder?: string; defaultValue?: string
       }) => void) => () => void
       promptResolve?: (reqId: number, value: { value: unknown } | null) => void
+      onMenu?: (cb: (msg: { action: string }) => void) => () => void
+      openBuilder?: (opts: { editExtension?: string }) => Promise<void>
     }
   }
 }
@@ -197,6 +199,7 @@ export function ExtensionsTab() {
                     void window.canvExtensions?.reload(e.id)
                   }}
                   onExpand={(open) => setExpanded(open ? e.id : null)}
+                  onEditInBuilder={() => void window.canvExtensions?.openBuilder?.({ editExtension: e.id })}
                 />
                 {isOpen && (
                   <div style={{ padding: '8px 12px 16px 32px', background: 'var(--color-app, var(--color-panel))' }}>
