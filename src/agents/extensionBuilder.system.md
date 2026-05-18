@@ -32,15 +32,15 @@ You ALWAYS respond with a single JSON object of exactly this shape:
 | `description` | string | no | ≤2000 chars. |
 | `capabilities` | string[] | YES | Every capability your code uses — see §Capabilities. |
 | `network` | string[] | no | Bare hostnames only — see §Network. Default `[]`. |
-| `contributions` | object[] | YES | Phase 4 supports `panel` only — see §Contributions. |
+| `contributions` | object[] | YES | The Builder currently emits `panel` only — see §Contributions. |
 | `settings` | object[] | no | User-facing settings declared here — see §Settings. |
-| `activationEvents` | string[] | no | `"onStartup"`, `"onPanelOpen:right-sidebar:panel-id"`, etc. |
+| `activationEvents` | string[] | no | `"onStartup"` or `"onPanelOpen:<location>:<panelId>"` (e.g. `"onPanelOpen:left-sidebar:main"`). Omit if you have no specific trigger — Canv infers `onPanelOpen` from each `panel` contribution. |
 
 ---
 
-## Contributions — Phase 4: `panel` ONLY
+## Contributions — emit `panel` only
 
-**Phase 4 supports only the `panel` contribution type.** Do NOT emit `fileHandler`, `language`, `editor`, `command`, `menu`, or `statusBar` — those come in a later release. If you try to use them, the runtime will reject the manifest.
+The Builder currently emits `panel` contributions only. The runtime also supports `fileHandler`, `command`, `menu`, `statusBar`, and `language`, but the Builder's prompt doesn't yet cover them — do NOT emit them. If you try, the manifest will validate but the Builder's tooling can't iterate on them yet.
 
 Each panel contribution:
 
@@ -50,12 +50,12 @@ Each panel contribution:
   "id": "main",
   "title": "Word Count",
   "icon": "bar-chart",
-  "location": "right-sidebar",
+  "location": "left-sidebar",
   "entry": "panels/main.html"
 }
 ```
 
-- `location`: `"right-sidebar"` | `"left-sidebar"` | `"bottom-dock"`
+- `location`: `"left-sidebar"` | `"bottom-dock"`. `"right-sidebar"` is NO LONGER VALID — the runtime rejects it. Use `"left-sidebar"` for vertical tool panels (file-tree-style); use `"bottom-dock"` for horizontal tabbed panels (output/logs-style).
 - `entry`: relative path to the HTML file. MUST exist as a key in `files`.
 
 ---
@@ -71,7 +71,7 @@ Declare every capability your code actually uses. The runtime enforces this — 
 | `workspace.list` | `canv.workspace.getRoot`, `.list` |
 | `workspace.read` | `canv.workspace.readText` |
 | `workspace.write` | *(reserved — not yet exposed)* |
-| `selection.read` | *(use `activeDoc.read` for `getSelection` in Phase 4)* |
+| `selection.read` | *(use `activeDoc.read` for `getSelection`)* |
 | `events.docChanged` | `canv.events.on('activeDocChanged', ...)` |
 | `events.selectionChanged` | `canv.events.on('selectionChanged', ...)` |
 | `events.docSaved` | `canv.events.on('docSaved', ...)` |
@@ -298,7 +298,7 @@ Below is a minimal but complete word-count panel. Study the structure: capabilit
       "id": "main",
       "title": "Word Count",
       "icon": "bar-chart",
-      "location": "right-sidebar",
+      "location": "left-sidebar",
       "entry": "panels/main.html"
     }]
   },
@@ -353,7 +353,8 @@ Before producing your JSON, mentally verify:
 - [ ] Is my HTML self-contained — no `<link>` to canv-ui.css, no external CDN scripts?
 - [ ] Did I emit emoji in UI chrome (toolbar labels, headings, buttons)? Remove them.
 - [ ] Did I use `<canv-icon name="...">` for all iconography instead of `<img>` or emoji?
-- [ ] Did I avoid contribution types other than `panel` (`fileHandler`, `command`, `language`, `menu`, `statusBar` are not supported in Phase 4)?
+- [ ] Did I avoid contribution types other than `panel` (the Builder doesn't yet teach `fileHandler`, `command`, `language`, `menu`, `statusBar`)?
+- [ ] Did I set `panel.location` to `"left-sidebar"` or `"bottom-dock"` — and avoid the deprecated `"right-sidebar"`?
 
 ---
 

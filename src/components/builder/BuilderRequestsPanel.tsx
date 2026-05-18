@@ -9,11 +9,13 @@ interface ManifestSummary {
 interface Props {
   manifestSummary: ManifestSummary | null
   errors: string[]
+  onFixWithAi?: () => void
+  fixDisabled?: boolean
 }
 
 const ELEVATED_CAPS = new Set(['workspace.write', 'activeDoc.write', 'ai', 'net'])
 
-export function BuilderRequestsPanel({ manifestSummary, errors }: Props) {
+export function BuilderRequestsPanel({ manifestSummary, errors, onFixWithAi, fixDisabled }: Props) {
   return (
     <div style={{ borderTop: '1px solid var(--border-color-default)', padding: 12 }}>
       <div style={sectionHeader}>Capabilities</div>
@@ -48,6 +50,28 @@ export function BuilderRequestsPanel({ manifestSummary, errors }: Props) {
           <ul style={{ listStyle: 'disc', margin: 0, paddingLeft: 20, fontSize: 11, color: 'rgb(255 120 120)' }}>
             {errors.map((e, i) => <li key={i}>{e}</li>)}
           </ul>
+          {onFixWithAi && (
+            <button
+              type="button"
+              onClick={onFixWithAi}
+              disabled={fixDisabled}
+              style={{
+                marginTop: 8,
+                background: fixDisabled ? 'var(--color-elev)' : 'rgb(99 102 241)',
+                color: fixDisabled ? 'var(--text-color-muted)' : 'white',
+                border: 'none',
+                borderRadius: 4,
+                padding: '6px 12px',
+                cursor: fixDisabled ? 'not-allowed' : 'pointer',
+                font: 'inherit',
+                fontSize: 11,
+                opacity: fixDisabled ? 0.6 : 1,
+              }}
+              title="Send these errors back to the AI and ask it to regenerate"
+            >
+              Ask AI to fix these
+            </button>
+          )}
         </>
       )}
     </div>

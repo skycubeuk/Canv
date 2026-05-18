@@ -963,6 +963,28 @@ function registerBuilderWindowHandlers() {
     if (builderWindow && !builderWindow.isDestroyed()) builderWindow.destroy()
     builderWindow = null
   })
+  ipcMain.handle('canvExtBuilder:exportTranscript', async (event, payload) => {
+    const { defaultName, content } = payload || {}
+    if (typeof content !== 'string' || !content) {
+      return { ok: false, error: 'empty transcript' }
+    }
+    const win = electron.BrowserWindow.fromWebContents(event.sender) ?? builderWindow ?? mainWindow
+    const result = await electron.dialog.showSaveDialog(win, {
+      title: 'Export Builder Transcript',
+      defaultPath: defaultName || 'canv-builder-transcript.md',
+      filters: [
+        { name: 'Markdown', extensions: ['md'] },
+        { name: 'All Files', extensions: ['*'] },
+      ],
+    })
+    if (result.canceled || !result.filePath) return { ok: false, canceled: true }
+    try {
+      await fsp.writeFile(result.filePath, content, 'utf-8')
+      return { ok: true, path: result.filePath }
+    } catch (e) {
+      return { ok: false, error: (e && e.message) || String(e) }
+    }
+  })
 }
 
 function loadAndAttachDir(id) {

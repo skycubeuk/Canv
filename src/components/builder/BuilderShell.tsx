@@ -8,6 +8,7 @@ import type { PreviewManifest } from '../extensions/ExtensionInstallModal'
 import { BuilderChat } from './BuilderChat'
 import { BuilderRequestsPanel } from './BuilderRequestsPanel'
 import { BuilderPreviewSlot } from './BuilderPreviewSlot'
+import { buildTranscriptMarkdown } from './buildTranscript'
 import systemPromptRaw from '../../agents/extensionBuilder.system.md?raw'
 
 interface ChatMessage {
@@ -174,6 +175,37 @@ export function BuilderShell({ sessionId, onClose }: Props) {
     onClose()
   }, [pendingInstall, session, sessionId, onClose])
 
+  const onFixWithAi = useCallback(() => {
+    if (errors.length === 0 || pending) return
+    const list = errors.map((e) => `- ${e}`).join('\n')
+    const msg = `The payload you just produced failed validation:\n\n${list}\n\nRegenerate the entire payload (manifest + files) with these errors fixed. Bump the patch version. Output ONLY the JSON object.`
+    void onSend(msg)
+  }, [errors, pending, onSend])
+
+  const [exportError, setExportError] = useState<string | null>(null)
+  const onExportTranscript = useCallback(async () => {
+    setExportError(null)
+    if (!session) return
+    const provider = settings.provider
+    const model = settings.defaultModel[provider]
+    const md = buildTranscriptMarkdown({
+      sessionId: session.id,
+      sessionDir: session.dir,
+      provider,
+      model,
+      systemPrompt: systemPromptRaw,
+      history,
+      errors,
+      manifest: manifestSummary,
+    })
+    const safeId = session.id.replace(/[^a-z0-9_-]/gi, '').slice(0, 12) || 'session'
+    const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+    const defaultName = `canv-builder-${safeId}-${ts}.md`
+    const r = await window.extensionBuilderAPI?.exportTranscript({ defaultName, content: md })
+    if (!r) { setExportError('export API not available'); return }
+    if (!r.ok && !r.canceled) setExportError(r.error || 'export failed')
+  }, [session, settings, history, errors, manifestSummary])
+
   const onDiscard = useCallback(async () => {
     if (!confirm('Discard this session? All progress will be lost.')) return
     await window.extensionBuilderAPI?.destroyPreview(sessionId)
@@ -213,8 +245,21 @@ export function BuilderShell({ sessionId, onClose }: Props) {
           pending={pending}
           onSend={(text) => { void onSend(text) }}
         />
-        <BuilderRequestsPanel manifestSummary={manifestSummary} errors={errors} />
+        <BuilderRequestsPanel
+          manifestSummary={manifestSummary}
+          errors={errors}
+          onFixWithAi={onFixWithAi}
+          fixDisabled={pending}
+        />
         <div style={footerStyle}>
+          <button
+            type="button"
+            onClick={() => { void onExportTranscript() }}
+            style={secondaryBtn}
+            title="Save a Markdown transcript of this session (chat, system prompt, errors, files)"
+          >
+            Export…
+          </button>
           <button type="button" onClick={() => { void onDiscard() }} style={secondaryBtn}>
             Discard
           </button>
@@ -235,6 +280,7 @@ export function BuilderShell({ sessionId, onClose }: Props) {
           </button>
         </div>
         {installError && <div style={errorStyle}>{installError}</div>}
+        {exportError && <div style={errorStyle}>Export: {exportError}</div>}
       </div>
       <BuilderPreviewSlot
         sessionId={sessionId}

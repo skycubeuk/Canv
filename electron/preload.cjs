@@ -262,6 +262,7 @@ if (isBuilderWindow()) {
     spawnPreview:   (sessionId, bounds) => ipcRenderer.invoke('canvExtBuilder:spawnPreview', sessionId, bounds),
     destroyPreview: (sessionId) => ipcRenderer.invoke('canvExtBuilder:destroyPreview', sessionId),
     setPreviewBounds: (sessionId, bounds) => ipcRenderer.invoke('canvExtBuilder:setPreviewBounds', sessionId, bounds),
+    exportTranscript: (payload) => ipcRenderer.invoke('canvExtBuilder:exportTranscript', payload),
   })
 }
 

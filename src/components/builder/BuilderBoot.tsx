@@ -16,6 +16,8 @@ declare global {
       spawnPreview: (sessionId: string, bounds: { x: number; y: number; width: number; height: number }) => Promise<{ ok: true; previewId: string }>
       destroyPreview: (sessionId: string) => Promise<void>
       setPreviewBounds: (sessionId: string, bounds: { x: number; y: number; width: number; height: number }) => Promise<void>
+      exportTranscript: (payload: { defaultName?: string; content: string }) =>
+        Promise<{ ok: true; path: string } | { ok: false; canceled?: boolean; error?: string }>
     }
   }
 }
