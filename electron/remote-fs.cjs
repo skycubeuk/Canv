@@ -1,6 +1,7 @@
 const path = require('node:path/posix')
 const { randomBytes } = require('node:crypto')
 const { createParser } = require('./inotify-parser.cjs')
+const { MAX_OPEN_BYTES } = require('./services/fs-limits.cjs')
 
 const SKIP_DIRS = new Set(['node_modules', '.git', '.svn', '.hg', '.DS_Store'])
 const PUBLIC_EXTS = new Set(['.md', '.markdown'])
@@ -10,7 +11,6 @@ const SITE_EXTS = new Set([
   '.md', '.csv', '.tsv', '.yaml', '.yml',
   '.png', '.jpg', '.jpeg', '.gif', '.webp', '.ico',
 ])
-const MAX_READ_BYTES = 2 * 1024 * 1024
 const MAX_LIST_ENTRIES = 5000
 const MAX_DEPTH = 8
 const SEARCH_MAX_MATCHES = 1000
@@ -183,7 +183,7 @@ class RemoteFs {
     const abs = safeResolve(this.root, rel)
     const sftp = await this.pool.getSftp()
     const stat = await pProm(sftp, 'stat', abs)
-    if (stat.size > MAX_READ_BYTES) throw new Error('file too large')
+    if (stat.size > MAX_OPEN_BYTES) throw new Error('file too large')
     if (!isAllowedExt(rel, abs)) throw new Error('binary or unsupported file type')
     const buf = await new Promise((res, rej) => {
       const chunks = []

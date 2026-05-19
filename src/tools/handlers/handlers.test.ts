@@ -33,8 +33,8 @@ describe('read_file', () => {
     expect(out).toEqual({ content: 'hello', mtimeMs: 42 })
   })
 
-  it('rejects files larger than 1 MB', async () => {
-    const fs = makeMockFs({ 'big.md': { content: 'x', mtimeMs: 1, size: 1024 * 1024 + 1, binary: false } })
+  it('rejects files larger than 10 MB', async () => {
+    const fs = makeMockFs({ 'big.md': { content: 'x', mtimeMs: 1, size: 10 * 1024 * 1024 + 1, binary: false } })
     await expect(readFileTool.handler({ path: 'big.md' }, makeCtx({ fs }))).rejects.toThrow(/too large/i)
   })
 
