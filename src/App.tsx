@@ -51,6 +51,7 @@ import { Contributions } from './contributions'
 // if the side-effect imports lived next to the registry definition.
 import './contributions/theme.contribution'
 import './contributions/ollama.contribution'
+import './contributions/quota-error.contribution'
 
 function basename(rel: string): string {
   const i = rel.lastIndexOf('/')
@@ -176,14 +177,6 @@ function AppInner() {
     view.focus()
   // eslint-disable-next-line react-hooks/exhaustive-deps -- editorsRef and jumpersRef are stable refs; omitting them is correct
   }, [workspace.activeGroupId, workspace.activeMarkdownRel])
-
-  // Surface localStorage QuotaExceededError as a toast.
-  useEffect(() => {
-    const handler = () =>
-      showToast('Storage full — export your runs/chat or trim them')
-    window.addEventListener('canv:quota-error', handler)
-    return () => window.removeEventListener('canv:quota-error', handler)
-  }, [showToast])
 
   // Track recent files for the palette file-open mode.
   useEffect(() => {
