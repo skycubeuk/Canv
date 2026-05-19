@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { listDirTool } from './listDir'
 import { readFileTool } from './readFile'
 import { makeMockFs, makeCtx } from '../../test/fixtures'
+import { MAX_OPEN_BYTES } from '../../lib/fs-limits'
 
 describe('list_dir', () => {
   it('returns immediate children with kind/size', async () => {
@@ -33,8 +34,8 @@ describe('read_file', () => {
     expect(out).toEqual({ content: 'hello', mtimeMs: 42 })
   })
 
-  it('rejects files larger than 10 MB', async () => {
-    const fs = makeMockFs({ 'big.md': { content: 'x', mtimeMs: 1, size: 10 * 1024 * 1024 + 1, binary: false } })
+  it('rejects files larger than the limit', async () => {
+    const fs = makeMockFs({ 'big.md': { content: 'x', mtimeMs: 1, size: MAX_OPEN_BYTES + 1, binary: false } })
     await expect(readFileTool.handler({ path: 'big.md' }, makeCtx({ fs }))).rejects.toThrow(/too large/i)
   })
 

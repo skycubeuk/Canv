@@ -267,7 +267,7 @@ contextBridge.exposeInMainWorld('canvHistory', {
   getFileHistory: (rel) => ipcRenderer.invoke('canvHistory:getFileHistory', rel),
 })
 
-contextBridge.exposeInMainWorld('canv', {
+contextBridge.exposeInMainWorld('canvHost', {
   limits: { maxOpenBytes: MAX_OPEN_BYTES },
 })
 
