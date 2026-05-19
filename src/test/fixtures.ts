@@ -106,7 +106,14 @@ export function makeMockFs(initial: Record<string, MockFile>): CanvFs {
     readFile: async (rel): Promise<ReadResult> => {
       const f = files.get(rel)
       if (!f) throw new Error(`ENOENT: ${rel}`)
-      return { content: f.content, mtimeMs: f.mtimeMs }
+      return {
+        ok: true,
+        content: f.content,
+        mtimeMs: f.mtimeMs,
+        eol: 'lf',
+        bom: false,
+        size: f.size,
+      }
     },
     writeFile: async (rel, content, expectedMtimeMs): Promise<WriteResult> => {
       const f = files.get(rel)

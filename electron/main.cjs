@@ -370,24 +370,62 @@ function registerFsHandlers() {
   })
 
   ipcMain.handle('canvFS:readFile', async (_e, rel) => {
-    if (isRemote()) return WORKSPACE.backend.readFile(rel)
+    if (isRemote()) {
+      const { content, mtimeMs } = await WORKSPACE.backend.readFile(rel)
+      return {
+        ok: true,
+        content,
+        mtimeMs,
+        eol: 'lf',
+        bom: false,
+        size: Buffer.byteLength(content, 'utf8'),
+      }
+    }
     const root = requireWorkspace()
     const abs = safeResolve(root, rel)
     const stat = await fsp.stat(abs)
     if (!stat.isFile()) throw new Error('not a file')
-    if (stat.size > MAX_OPEN_BYTES) throw new Error('file too large')
+    if (stat.size > MAX_OPEN_BYTES) {
+      return { ok: false, error: 'too-large', size: stat.size, mtimeMs: stat.mtimeMs }
+    }
     if (!isAllowedExt(rel, abs)) throw new Error('binary or unsupported file type')
-    const content = await fsp.readFile(abs, 'utf8')
-    return { content, mtimeMs: stat.mtimeMs }
+
+    let buf = await fsp.readFile(abs)
+    let bom = false
+    if (buf.length >= 3 && buf[0] === 0xEF && buf[1] === 0xBB && buf[2] === 0xBF) {
+      bom = true
+      buf = buf.subarray(3)
+    }
+
+    let content
+    try {
+      content = new TextDecoder('utf-8', { fatal: true }).decode(buf)
+    } catch {
+      return { ok: false, error: 'not-utf8', size: stat.size, mtimeMs: stat.mtimeMs }
+    }
+
+    const scan = content.length > 65536 ? content.slice(0, 65536) : content
+    const eol = scan.includes('\r\n') ? 'crlf' : 'lf'
+    const normalised = eol === 'crlf' ? content.replace(/\r\n/g, '\n') : content
+
+    return { ok: true, content: normalised, mtimeMs: stat.mtimeMs, eol, bom, size: stat.size }
   })
 
-  ipcMain.handle('canvFS:writeFile', async (_e, rel, content, expectedMtimeMs) => {
+  ipcMain.handle('canvFS:writeFile', async (_e, rel, content, expectedMtimeMs, opts) => {
     if (isRemote()) return WORKSPACE.backend.writeFile(rel, content, expectedMtimeMs)
     const root = requireWorkspace()
     const abs = safeResolve(root, rel)
     if (!isAllowedExt(rel, abs)) throw new Error('unsupported file type')
     if (typeof content !== 'string') throw new Error('invalid content')
-    if (Buffer.byteLength(content, 'utf8') > MAX_OPEN_BYTES) throw new Error('content too large')
+
+    const wantEol = opts && opts.eol === 'crlf' ? 'crlf' : 'lf'
+    const wantBom = !!(opts && opts.bom)
+
+    const out = wantEol === 'crlf' ? content.replace(/\n/g, '\r\n') : content
+    let buffer = Buffer.from(out, 'utf8')
+    if (wantBom) buffer = Buffer.concat([Buffer.from([0xEF, 0xBB, 0xBF]), buffer])
+    if (buffer.byteLength > MAX_OPEN_BYTES) throw new Error('content too large')
+
     if (typeof expectedMtimeMs === 'number') {
       const stat = await fsp.stat(abs).catch(() => null)
       if (stat && Math.abs(stat.mtimeMs - expectedMtimeMs) > 1) {
@@ -397,7 +435,7 @@ function registerFsHandlers() {
       }
     }
     await fsp.mkdir(path.dirname(abs), { recursive: true })
-    await fsp.writeFile(abs, content, 'utf8')
+    await fsp.writeFile(abs, buffer)
     const stat = await fsp.stat(abs)
     return { mtimeMs: stat.mtimeMs }
   })

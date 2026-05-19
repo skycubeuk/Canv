@@ -1,7 +1,7 @@
 import type { Tool, ToolCtx } from '../types'
 import type { DirNode } from '../../lib/fs'
 import { validateToolPath } from '../paths'
-import { findEntry } from '../../lib/fs'
+import { findEntry, readFileContent } from '../../lib/fs'
 import { parseMarkdownMeta, type OptionalField } from './markdown_meta'
 
 const MAX_PATHS = 200
@@ -133,9 +133,13 @@ async function processOne(
   try {
     if (ctx.activeDocPath === rel) {
       const live = ctx.getEditorContent(rel)
-      body = live ?? (await ctx.fs.readFile(rel)).content
+      if (live !== null) {
+        body = live
+      } else {
+        body = await readFileContent(ctx.fs, rel)
+      }
     } else {
-      body = (await ctx.fs.readFile(rel)).content
+      body = await readFileContent(ctx.fs, rel)
     }
   } catch {
     return { ...base, error: 'read_failed' }

@@ -110,13 +110,13 @@ describe('create_file', () => {
     const fs = makeMockFs({})
     const out = await createFileTool.handler({ path: 'notes/hello.md', content: 'hi' }, makeCtx({ fs }))
     expect(out).toMatchObject({ path: 'notes/hello.md' })
-    expect(await fs.readFile('notes/hello.md')).toEqual({ content: 'hi', mtimeMs: 1 })
+    expect(await fs.readFile('notes/hello.md')).toMatchObject({ ok: true, content: 'hi', mtimeMs: 1 })
   })
 
   it('creates an empty file when content omitted', async () => {
     const fs = makeMockFs({})
     await createFileTool.handler({ path: 'a.md' }, makeCtx({ fs }))
-    expect(await fs.readFile('a.md')).toEqual({ content: '', mtimeMs: 1 })
+    expect(await fs.readFile('a.md')).toMatchObject({ ok: true, content: '', mtimeMs: 1 })
   })
 
   it('rejects invalid path', async () => {
@@ -174,7 +174,7 @@ describe('rename_file', () => {
   it('renames a file', async () => {
     const fs = makeMockFs({ 'a.md': { content: 'hi', mtimeMs: 1, size: 2, binary: false } })
     await renameFileTool.handler({ from: 'a.md', to: 'b.md' }, makeCtx({ fs }))
-    expect(await fs.readFile('b.md')).toEqual({ content: 'hi', mtimeMs: 1 })
+    expect(await fs.readFile('b.md')).toMatchObject({ ok: true, content: 'hi', mtimeMs: 1 })
   })
 
   it('rejects when target exists', async () => {

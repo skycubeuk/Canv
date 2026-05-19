@@ -36,6 +36,7 @@ export const readFileTool: Tool<Input, Output> = {
       if (live !== null) return { content: live, mtimeMs: entry.mtimeMs }
     }
     const r = await ctx.fs.readFile(v.rel)
+    if (!r.ok) throw new Error(`readFile failed: ${r.error}`)
     return { content: r.content, mtimeMs: r.mtimeMs }
   },
 }

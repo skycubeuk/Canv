@@ -247,9 +247,9 @@ describe('chatRunner — approve-rest', () => {
     })
 
     expect(calls).toEqual(['c1']) // only the first prompted; c2 and c3 auto-approved
-    expect((await fs.readFile('a.md')).content).toBe('a')
-    expect((await fs.readFile('b.md')).content).toBe('b')
-    expect((await fs.readFile('c.md')).content).toBe('c')
+    expect(await fs.readFile('a.md')).toMatchObject({ ok: true, content: 'a' })
+    expect(await fs.readFile('b.md')).toMatchObject({ ok: true, content: 'b' })
+    expect(await fs.readFile('c.md')).toMatchObject({ ok: true, content: 'c' })
   })
 })
 

@@ -3,7 +3,7 @@ import { tabKey, isMarkdownTab, isSettingsTab, isDiffTab, parseDiffKey, parseTab
 
 describe('tabKey', () => {
   it('returns the rel path for markdown tabs', () => {
-    expect(tabKey({ kind: 'markdown', relPath: 'notes/x.md', loadedMarkdown: '', mtimeMs: 0 })).toBe('notes/x.md')
+    expect(tabKey({ kind: 'markdown', relPath: 'notes/x.md', loadedMarkdown: '', mtimeMs: 0, eol: 'lf', bom: false })).toBe('notes/x.md')
   })
 
   it('returns the constant settings key for settings tabs', () => {
@@ -12,7 +12,7 @@ describe('tabKey', () => {
   })
 
   it('isMarkdownTab and isSettingsTab discriminate', () => {
-    const m = { kind: 'markdown' as const, relPath: 'a.md', loadedMarkdown: '', mtimeMs: 0 }
+    const m = { kind: 'markdown' as const, relPath: 'a.md', loadedMarkdown: '', mtimeMs: 0, eol: 'lf' as const, bom: false }
     const s = { kind: 'settings' as const }
     expect(isMarkdownTab(m)).toBe(true)
     expect(isMarkdownTab(s)).toBe(false)
@@ -26,7 +26,7 @@ describe('tabKey', () => {
 })
 
 describe('isDiffTab', () => {
-  const m = { kind: 'markdown' as const, relPath: 'a.md', loadedMarkdown: '', mtimeMs: 0 }
+  const m = { kind: 'markdown' as const, relPath: 'a.md', loadedMarkdown: '', mtimeMs: 0, eol: 'lf' as const, bom: false }
   const s = { kind: 'settings' as const }
   const d = { kind: 'diff' as const, relPath: 'a.md', baseRef: 'HEAD' }
 

@@ -10,7 +10,7 @@ import { decideApply } from '../lib/applyDecision'
 import { useLocalStorage } from './useLocalStorage'
 import type { useSettings } from './useSettings'
 import type { useWorkspace } from './useWorkspace'
-import { getFs } from '../lib/fs'
+import { getFs, readFileContent } from '../lib/fs'
 import type { BottomTab } from './useIdeLayout'
 
 type SettingsApi = ReturnType<typeof useSettings>
@@ -83,8 +83,8 @@ export function useSelectionAgent(args: UseSelectionAgentArgs): UseSelectionAgen
     for (const p of pins) {
       if (p.relPath === activeRel) continue
       try {
-        const r = await getFs().readFile(p.relPath)
-        out.push(r.content)
+        const content = await readFileContent(getFs(), p.relPath)
+        out.push(content)
       } catch {
         // Skip missing pinned files silently.
       }

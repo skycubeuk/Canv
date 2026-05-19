@@ -26,7 +26,7 @@ beforeEach(() => {
   ;(window as unknown as { canvFS: typeof fsMock }).canvFS = fsMock
   localStorage.clear()
   fsMock.readFile.mockReset()
-  fsMock.readFile.mockImplementation(async (rel: string) => ({ content: `# ${rel}`, mtimeMs: 1 }))
+  fsMock.readFile.mockImplementation(async (rel: string) => ({ ok: true, content: `# ${rel}`, mtimeMs: 1, eol: 'lf', bom: false, size: 0 }))
 })
 
 import { renderHook, act } from '@testing-library/react'
@@ -184,7 +184,7 @@ describe('useWorkspace — split groups', () => {
 describe('useWorkspace — pin context', () => {
   it('upgrades old string[] persisted pinned format to {relPath, mtimeMs}', async () => {
     localStorage.setItem(wsKey('/ws/test', 'pinned'), JSON.stringify(['foo.md']))
-    fsMock.readFile.mockImplementation(async (rel: string) => ({ content: `# ${rel}`, mtimeMs: 7 }))
+    fsMock.readFile.mockImplementation(async (rel: string) => ({ ok: true, content: `# ${rel}`, mtimeMs: 7, eol: 'lf', bom: false, size: 0 }))
     const hook = await withWorkspace()
     const pinned = hook.result.current.pinned
     expect(pinned).toHaveLength(1)
@@ -193,7 +193,7 @@ describe('useWorkspace — pin context', () => {
   })
 
   it('pin records {relPath, mtimeMs} and persists', async () => {
-    fsMock.readFile.mockImplementation(async (rel: string) => ({ content: `BODY ${rel}`, mtimeMs: 9 }))
+    fsMock.readFile.mockImplementation(async (rel: string) => ({ ok: true, content: `BODY ${rel}`, mtimeMs: 9, eol: 'lf', bom: false, size: 0 }))
     const hook = await withWorkspace()
     await act(async () => { await hook.result.current.pin('a.md') })
     const entry = hook.result.current.pinned.find((p) => p.relPath === 'a.md')!
@@ -203,7 +203,7 @@ describe('useWorkspace — pin context', () => {
   })
 
   it('pin is idempotent — pinning twice leaves one entry', async () => {
-    fsMock.readFile.mockImplementation(async (rel: string) => ({ content: `# ${rel}`, mtimeMs: 1 }))
+    fsMock.readFile.mockImplementation(async (rel: string) => ({ ok: true, content: `# ${rel}`, mtimeMs: 1, eol: 'lf', bom: false, size: 0 }))
     const hook = await withWorkspace()
     await act(async () => { await hook.result.current.pin('b.md') })
     await act(async () => { await hook.result.current.pin('b.md') })
@@ -211,7 +211,7 @@ describe('useWorkspace — pin context', () => {
   })
 
   it('unpin removes the entry', async () => {
-    fsMock.readFile.mockImplementation(async () => ({ content: 'BODY', mtimeMs: 1 }))
+    fsMock.readFile.mockImplementation(async () => ({ ok: true, content: 'BODY', mtimeMs: 1, eol: 'lf', bom: false, size: 0 }))
     const hook = await withWorkspace()
     await act(async () => { await hook.result.current.pin('d.md') })
     await act(async () => { await hook.result.current.unpin('d.md') })
@@ -219,7 +219,7 @@ describe('useWorkspace — pin context', () => {
   })
 
   it('persists pin as {rel} shape and restores on remount', async () => {
-    fsMock.readFile.mockImplementation(async () => ({ content: 'BODY', mtimeMs: 1 }))
+    fsMock.readFile.mockImplementation(async () => ({ ok: true, content: 'BODY', mtimeMs: 1, eol: 'lf', bom: false, size: 0 }))
     const hook = await withWorkspace()
     await act(async () => { await hook.result.current.pin('e.md') })
     const raw = localStorage.getItem(wsKey('/ws/test', 'pinned'))
@@ -236,7 +236,7 @@ describe('useWorkspace — pin context', () => {
 
   it('upgrades legacy {rel, mode} shape from localStorage', async () => {
     localStorage.setItem(wsKey('/ws/test', 'pinned'), JSON.stringify([{ rel: 'foo.md', mode: 'full' }]))
-    fsMock.readFile.mockImplementation(async (rel: string) => ({ content: `# ${rel}`, mtimeMs: 5 }))
+    fsMock.readFile.mockImplementation(async (rel: string) => ({ ok: true, content: `# ${rel}`, mtimeMs: 5, eol: 'lf', bom: false, size: 0 }))
     const hook = await withWorkspace()
     const pinned = hook.result.current.pinned
     expect(pinned).toHaveLength(1)
@@ -275,7 +275,7 @@ describe('useWorkspace — markdown content fidelity', () => {
 
   for (const { name, content } of FIXTURES) {
     it(`opens "${name}" via openTab without modifying loadedMarkdown`, async () => {
-      fsMock.readFile.mockImplementation(async () => ({ content, mtimeMs: 1 }))
+      fsMock.readFile.mockImplementation(async () => ({ ok: true, content, mtimeMs: 1, eol: 'lf', bom: false, size: 0 }))
       const hook = await withWorkspace()
       await act(async () => { await hook.result.current.openTab(`${name}.md`) })
       const tab = hook.result.current.editorGroups[0].openTabs.find(
@@ -287,7 +287,7 @@ describe('useWorkspace — markdown content fidelity', () => {
   }
 
   it('saving an unedited file does not call writeFile (writeFile is only invoked on dirty save)', async () => {
-    fsMock.readFile.mockImplementation(async () => ({ content: 'unchanged\n', mtimeMs: 1 }))
+    fsMock.readFile.mockImplementation(async () => ({ ok: true, content: 'unchanged\n', mtimeMs: 1, eol: 'lf', bom: false, size: 0 }))
     fsMock.writeFile.mockClear()
     const hook = await withWorkspace()
     await act(async () => { await hook.result.current.openTab('clean.md') })
@@ -313,7 +313,7 @@ describe('useWorkspace — watcher own-write suppression', () => {
 
   it('suppresses our own write echo even when chokidar reports it long after the write resolved', async () => {
     const OWN_MTIME = 1_778_587_350_985.5952
-    fsMock.readFile.mockImplementation(async () => ({ content: 'hello', mtimeMs: 1 }))
+    fsMock.readFile.mockImplementation(async () => ({ ok: true, content: 'hello', mtimeMs: 1, eol: 'lf', bom: false, size: 0 }))
     fsMock.writeFile.mockResolvedValue({ mtimeMs: OWN_MTIME })
 
     const hook = await withWorkspace()
@@ -336,7 +336,7 @@ describe('useWorkspace — watcher own-write suppression', () => {
   it('still raises a conflict when an external write produces a different mtime', async () => {
     const OWN_MTIME = 2_000
     const EXTERNAL_MTIME = 2_500
-    fsMock.readFile.mockImplementation(async () => ({ content: 'hello', mtimeMs: 1 }))
+    fsMock.readFile.mockImplementation(async () => ({ ok: true, content: 'hello', mtimeMs: 1, eol: 'lf', bom: false, size: 0 }))
     fsMock.writeFile.mockResolvedValue({ mtimeMs: OWN_MTIME })
 
     const hook = await withWorkspace()
@@ -361,7 +361,7 @@ describe('useWorkspace — watcher own-write suppression', () => {
     // should suppress the popup.
     const OWN_MTIME = 1_778_587_350_985.5952
     const DRIFTED_MTIME = 1_778_587_350_990.1234 // ~5 ms drift
-    fsMock.readFile.mockImplementation(async () => ({ content: 'hello', mtimeMs: 1 }))
+    fsMock.readFile.mockImplementation(async () => ({ ok: true, content: 'hello', mtimeMs: 1, eol: 'lf', bom: false, size: 0 }))
     fsMock.writeFile.mockResolvedValue({ mtimeMs: OWN_MTIME })
 
     const hook = await withWorkspace()
@@ -371,7 +371,7 @@ describe('useWorkspace — watcher own-write suppression', () => {
     expect(fsMock.writeFile).toHaveBeenCalled()
 
     // The disk now holds the bytes we wrote, but stat returns a drifted mtime.
-    fsMock.readFile.mockImplementation(async () => ({ content: 'edited', mtimeMs: DRIFTED_MTIME }))
+    fsMock.readFile.mockImplementation(async () => ({ ok: true, content: 'edited', mtimeMs: DRIFTED_MTIME, eol: 'lf', bom: false, size: 0 }))
 
     expect(watcherCb).not.toBeNull()
     await act(async () => {
@@ -387,7 +387,7 @@ describe('useWorkspace — watcher own-write suppression', () => {
     // different bytes between our last save and the event arriving.
     const OWN_MTIME = 4_000
     const EXTERNAL_MTIME = 4_500
-    fsMock.readFile.mockImplementation(async () => ({ content: 'hello', mtimeMs: 1 }))
+    fsMock.readFile.mockImplementation(async () => ({ ok: true, content: 'hello', mtimeMs: 1, eol: 'lf', bom: false, size: 0 }))
     fsMock.writeFile.mockResolvedValue({ mtimeMs: OWN_MTIME })
 
     const hook = await withWorkspace()
@@ -396,7 +396,7 @@ describe('useWorkspace — watcher own-write suppression', () => {
     await act(async () => { await new Promise((r) => setTimeout(r, 1100)) })
 
     // External program has overwritten the file with different bytes.
-    fsMock.readFile.mockImplementation(async () => ({ content: 'something-else', mtimeMs: EXTERNAL_MTIME }))
+    fsMock.readFile.mockImplementation(async () => ({ ok: true, content: 'something-else', mtimeMs: EXTERNAL_MTIME, eol: 'lf', bom: false, size: 0 }))
 
     await act(async () => {
       watcherCb!({ type: 'change', relPath: 'body.md', mtimeMs: EXTERNAL_MTIME })
@@ -408,7 +408,7 @@ describe('useWorkspace — watcher own-write suppression', () => {
 
   it('noteOwnDiskWrite seeds recentWrites so the watcher does not raise a conflict', async () => {
     const RESTORE_MTIME = 3_000
-    fsMock.readFile.mockImplementation(async () => ({ content: 'original', mtimeMs: 1 }))
+    fsMock.readFile.mockImplementation(async () => ({ ok: true, content: 'original', mtimeMs: 1, eol: 'lf', bom: false, size: 0 }))
 
     const hook = await withWorkspace()
     await act(async () => { await hook.result.current.openTab('body.md') })

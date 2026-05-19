@@ -4,6 +4,7 @@ import type {
 import type { ChatMessage, ErrorInfo } from '../components/ChatPanel'
 import type { ToolCtx } from '../tools/types'
 import { getTool, toolSchemas } from '../tools/registry'
+import { readFileContent } from '../lib/fs'
 import type { CanvHistory } from '../lib/history'
 
 function abortableApproval(
@@ -459,8 +460,7 @@ async function buildWritePreview(call: ToolCall, ctx: ToolCtx): Promise<WritePre
         if (ctx.activeDocPath === path) {
           before = ctx.getEditorContent(path) ?? ''
         } else {
-          const r = await ctx.fs.readFile(path)
-          before = r.content
+          before = await readFileContent(ctx.fs, path)
         }
       } catch { before = '' }
       return { kind: 'edit', path, diff: { before, after: newContent } }

@@ -266,7 +266,19 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
 
   const writeFileCoalesced = useCallback(async (rel: string, markdown: string, sourceGroupId?: EditorGroupId) => {
     try {
-      const { mtimeMs } = await getFs().writeFile(rel, markdown)
+      // Thread the file's EOL + BOM from the tab record so save round-trips
+      // losslessly. Default to (lf, no-bom) if no markdown tab is open for rel.
+      let eol: 'lf' | 'crlf' = 'lf'
+      let bom = false
+      for (const g of editorGroupsRef.current) {
+        const t = g.openTabs.find((x) => isMarkdownTab(x) && x.relPath === rel)
+        if (t && t.kind === 'markdown') {
+          eol = t.eol
+          bom = t.bom
+          break
+        }
+      }
+      const { mtimeMs } = await getFs().writeFile(rel, markdown, undefined, { eol, bom })
       recentWrites.current.set(rel, { mtimeMs, ts: Date.now(), content: markdown })
       // Update mtimeMs on every group; refresh loadedMarkdown on every OTHER group so their
       // CodeMirror instances re-sync via Canvas's lastLoadedRef effect. The source group's
@@ -308,7 +320,18 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
     pendingMarkdown.current.delete(rel)
     lastWriterGroupRef.current.delete(rel)
 
-    const result = await getFs().writeFile(rel, content, expectedMtimeMs)
+    // Thread the file's EOL + BOM from the tab record if it's open.
+    let eol: 'lf' | 'crlf' = 'lf'
+    let bom = false
+    for (const g of editorGroupsRef.current) {
+      const t = g.openTabs.find((x) => isMarkdownTab(x) && x.relPath === rel)
+      if (t && t.kind === 'markdown') {
+        eol = t.eol
+        bom = t.bom
+        break
+      }
+    }
+    const result = await getFs().writeFile(rel, content, expectedMtimeMs, { eol, bom })
     // Mark this mtime as "our own write" so the chokidar 'change' event that
     // follows is suppressed in the watcher subscription below.
     recentWrites.current.set(rel, { mtimeMs: result.mtimeMs, ts: Date.now(), content })
@@ -382,17 +405,31 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
       setActiveGroupIdState(targetGroup)
       return
     }
-    let content: string
-    let mtimeMs: number
+    let r
     try {
-      const r = await getFs().readFile(rel)
-      content = r.content
-      mtimeMs = r.mtimeMs
+      r = await getFs().readFile(rel)
     } catch (err) {
       if (onToast) onToast(`Couldn't open ${rel}: ${err instanceof Error ? err.message : String(err)}`)
       return
     }
-    const tab: OpenTab = { kind: 'markdown', relPath: rel, loadedMarkdown: content, mtimeMs }
+    if (!r.ok) {
+      const name = rel.split('/').pop() || rel
+      if (r.error === 'too-large') {
+        const mb = (r.size / (1024 * 1024)).toFixed(1)
+        if (onToast) onToast(`${name} is too large to open (${mb} MB).`)
+      } else {
+        if (onToast) onToast(`${name} is not UTF-8 encoded. Opening would lose data.`)
+      }
+      return
+    }
+    const tab: OpenTab = {
+      kind: 'markdown',
+      relPath: rel,
+      loadedMarkdown: r.content,
+      mtimeMs: r.mtimeMs,
+      eol: r.eol,
+      bom: r.bom,
+    }
     setEditorGroups((prev) => {
       const next = withGroupUpdate(prev, targetGroup, (g) => ({
         ...g,
@@ -686,12 +723,14 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
     const groups = editorGroupsRef.current
     if (!groups.some((g) => g.openTabs.some((t) => t.kind === 'markdown' && t.relPath === rel))) return
     try {
-      const { content, mtimeMs } = await getFs().readFile(rel)
+      const r = await getFs().readFile(rel)
+      if (!r.ok) return
+      const { content, mtimeMs, eol, bom } = r
       setEditorGroups((prev) =>
         prev.map((g) => ({
           ...g,
           openTabs: g.openTabs.map((t) =>
-            t.kind === 'markdown' && t.relPath === rel ? { ...t, loadedMarkdown: content, mtimeMs } : t,
+            t.kind === 'markdown' && t.relPath === rel ? { ...t, loadedMarkdown: content, mtimeMs, eol, bom } : t,
           ),
         })),
       )
@@ -714,7 +753,7 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
     let mtimeMs = 0
     try {
       const stat = await getFs().readFile(rel)
-      mtimeMs = stat.mtimeMs
+      if (stat.ok) mtimeMs = stat.mtimeMs
     } catch {
       // file may have just been deleted
     }
@@ -825,6 +864,7 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
     const savedGroups = readJson<PersistedGroups | null>(wsKey(rt, 'groups'), null)
     let restoredGroups: EditorGroupState[]
     let restoredActiveGroupId: EditorGroupId
+    const droppedTabs: { rel: string; reason: 'not-utf8' | 'too-large' }[] = []
 
     if (savedGroups && savedGroups.version === 1) {
       restoredGroups = []
@@ -870,8 +910,19 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
           }
           const rel = stored.startsWith('markdown:') ? stored.slice('markdown:'.length) : stored
           try {
-            const { content, mtimeMs } = await getFs().readFile(rel)
-            tabs.push({ kind: 'markdown', relPath: rel, loadedMarkdown: content, mtimeMs })
+            const r = await getFs().readFile(rel)
+            if (!r.ok) {
+              droppedTabs.push({ rel, reason: r.error })
+              continue
+            }
+            tabs.push({
+              kind: 'markdown',
+              relPath: rel,
+              loadedMarkdown: r.content,
+              mtimeMs: r.mtimeMs,
+              eol: r.eol,
+              bom: r.bom,
+            })
           } catch {
             // file deleted externally — skip
           }
@@ -934,8 +985,19 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
         }
         const rel = stored.startsWith('markdown:') ? stored.slice('markdown:'.length) : stored
         try {
-          const { content, mtimeMs } = await getFs().readFile(rel)
-          tabs.push({ kind: 'markdown', relPath: rel, loadedMarkdown: content, mtimeMs })
+          const r = await getFs().readFile(rel)
+          if (!r.ok) {
+            droppedTabs.push({ rel, reason: r.error })
+            continue
+          }
+          tabs.push({
+            kind: 'markdown',
+            relPath: rel,
+            loadedMarkdown: r.content,
+            mtimeMs: r.mtimeMs,
+            eol: r.eol,
+            bom: r.bom,
+          })
         } catch {
           // file deleted externally — skip
         }
@@ -958,6 +1020,7 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
       const rel = typeof p === 'string' ? p : p.rel
       try {
         const file = await getFs().readFile(rel)
+        if (!file.ok) continue
         restoredPinned.push({ relPath: rel, mtimeMs: file.mtimeMs })
       } catch {
         // skip missing
@@ -970,7 +1033,12 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
     // Canonicalise persisted state (especially after a backward-compat migration).
     persistGroups(rt, restoredGroups, restoredActiveGroupId)
     persistPinnedRels(rt, restoredPinned)
-  }, [persistGroups, persistPinnedRels])
+
+    if (droppedTabs.length > 0 && onToast) {
+      const lines = droppedTabs.map((d) => `${d.rel} (${d.reason})`).join('; ')
+      onToast(`${droppedTabs.length} file(s) couldn't be reopened: ${lines}`)
+    }
+  }, [persistGroups, persistPinnedRels, onToast])
 
   const pickWorkspace = useCallback(async () => {
     if (!available) return false
@@ -1105,7 +1173,12 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
         // user can't act on a popup that hasn't appeared yet.
         void (async () => {
           try {
-            const { content: diskContent, mtimeMs: statMtime } = await getFs().readFile(relPath)
+            const r = await getFs().readFile(relPath)
+            if (!r.ok) {
+              setConflict({ relPath, diskMtimeMs: mtimeMs })
+              return
+            }
+            const { content: diskContent, mtimeMs: statMtime } = r
             const recordedContent = recent?.content ?? null
             if (recordedContent !== null && diskContent === recordedContent) {
               // Disk matches what we wrote — keep the recentWrites entry
