@@ -54,13 +54,11 @@ describe('DisposableStore', () => {
   })
 
   it('throws and immediately disposes the entry on add() after dispose()', () => {
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     const store = new DisposableStore()
     store.dispose()
     const lateFn = vi.fn()
     expect(() => store.add(toDisposable(lateFn))).toThrowError(/after dispose/)
     expect(lateFn).toHaveBeenCalledTimes(1)
-    consoleError.mockRestore()
   })
 
   it('add() returns the disposable it was given', () => {

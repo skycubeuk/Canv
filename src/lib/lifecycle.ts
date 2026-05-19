@@ -2,6 +2,11 @@
  * Minimal lifecycle utility for Phase 2 contributions. Formalises the existing
  * `subscribe(...) => () => void` pattern used throughout the codebase. Adopt
  * incrementally — `toDisposable(fn)` adapts existing cleanup callbacks.
+ *
+ * Idempotency split: `toDisposable` is intentionally NOT idempotent — it calls
+ * its wrapped function every time `.dispose()` is invoked. Idempotency lives
+ * in `DisposableStore.dispose()`. This keeps the adapter trivial and reserves
+ * the bookkeeping cost for the place that actually needs it.
  */
 
 export interface Disposable {
@@ -27,12 +32,13 @@ export class DisposableStore implements Disposable {
     return d
   }
 
-  /** Idempotent. Individual disposer errors are logged but never rethrown,
-   *  so one broken disposer can't strand the rest of the chain. */
+  /** Idempotent. Children are disposed in **registration order** (the order
+   *  `add()` was called). Individual disposer errors are logged but never
+   *  rethrown, so one broken disposer can't strand the rest of the chain. */
   dispose(): void {
     if (this.disposed) return
     this.disposed = true
-    const items = this.disposables.splice(0, this.disposables.length)
+    const items = this.disposables.splice(0)
     for (const d of items) {
       try {
         d.dispose()
