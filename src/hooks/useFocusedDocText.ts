@@ -1,33 +1,43 @@
 import { useEffect, useState } from 'react'
 
 export interface LiveDocsChannel {
-  publish: (key: string, text: string) => void
+  publish: (key: string, text?: string) => void
   read: (key: string) => string | undefined
   /** Drop any stored text for `key`. Used when the underlying file's disk
    *  snapshot moves on (reload, external write, tool write) — the channel
    *  entry is no longer a safe seed for a fresh editor. */
   clear: (key: string) => void
   subscribe: (listener: (key: string) => void) => () => void
+  /** Register a pull-on-demand getter. Replaces the previous getter.
+   *  Pass `null` to unregister (e.g. on unmount). */
+  setGetter: (getter: ((key: string) => string | undefined) | null) => void
 }
 
 export function createLiveDocsChannel(): LiveDocsChannel {
-  const map = new Map<string, string>()
+  // Track which keys have live edits so `clear` can remain a no-op when a
+  // key was never published (avoids spurious subscriber notifications).
+  const liveKeys = new Set<string>()
   const listeners = new Set<(key: string) => void>()
+  let getter: ((key: string) => string | undefined) | null = null
   return {
-    publish(key, text) {
-      map.set(key, text)
+    publish(key, _text?) {
+      liveKeys.add(key)
       for (const l of listeners) l(key)
     },
     read(key) {
-      return map.get(key)
+      if (!liveKeys.has(key)) return undefined
+      return getter ? getter(key) : undefined
     },
     clear(key) {
-      if (!map.delete(key)) return
+      if (!liveKeys.delete(key)) return
       for (const l of listeners) l(key)
     },
     subscribe(l) {
       listeners.add(l)
       return () => { listeners.delete(l) }
+    },
+    setGetter(g) {
+      getter = g
     },
   }
 }
