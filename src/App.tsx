@@ -454,9 +454,11 @@ export default function App() {
 
   const saveState = workspace.conflict
     ? 'conflict' as const
-    : workspace.dirtySet.size > 0
+    : workspace.writingSet.size > 0
       ? 'saving' as const
-      : 'saved' as const
+      : workspace.dirtySet.size > 0
+        ? 'unsaved' as const
+        : 'saved' as const
 
   const applyRunWithSnapshot = useCallback(async (run: import('./components/ResultsPanel').RunRecord, replacement: string) => {
     const rel = workspace.activeMarkdownRel

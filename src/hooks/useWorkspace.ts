@@ -96,6 +96,10 @@ export interface WorkspaceApi {
   /** Union of every tab key across every group — used for sidebar "open" indication. */
   allOpenKeys: Set<string>
   dirtySet: Set<string>
+  /** Files for which a debounced write is currently in flight on disk.
+   * Distinct from `dirtySet`, which is true the moment the user types.
+   * UIs that display a "Saving…" indicator should key on this, not dirtySet. */
+  writingSet: Set<string>
   pinned: PinnedEntry[]
   pickWorkspace: () => Promise<boolean>
   openRemote: (raw: string) => Promise<boolean>
@@ -192,7 +196,19 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
   const [activeGroupId, setActiveGroupIdState] = useState<EditorGroupId>('g1')
   const [pinned, setPinned] = useState<PinnedEntry[]>([])
   const [dirtySet, setDirtySet] = useState<Set<string>>(new Set())
+  const [writingSet, setWritingSet] = useState<Set<string>>(new Set())
   const [conflict, setConflict] = useState<ConflictNotice | null>(null)
+
+  const setWriting = useCallback((rel: string, writing: boolean) => {
+    setWritingSet((prev) => {
+      const has = prev.has(rel)
+      if (writing ? has : !has) return prev
+      const next = new Set(prev)
+      if (writing) next.add(rel)
+      else next.delete(rel)
+      return next
+    })
+  }, [])
   // No-op when running outside Electron — start in a "ready" state so the
   // boot effect doesn't have to flip it from inside the effect body.
   const [ready, setReady] = useState(() => !isElectron())
@@ -283,6 +299,7 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
   }, [])
 
   const writeFileCoalesced = useCallback(async (rel: string, markdown: string, sourceGroupId?: EditorGroupId) => {
+    setWriting(rel, true)
     try {
       const { eol, bom } = getTabEolBom(rel)
       const { mtimeMs } = await getFs().writeFile(rel, markdown, undefined, { eol, bom })
@@ -308,8 +325,10 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
       } else if (onToast) {
         onToast(`Failed to save ${rel}: ${err instanceof Error ? err.message : String(err)}`)
       }
+    } finally {
+      setWriting(rel, false)
     }
-  }, [setDirty, onToast, getTabEolBom])
+  }, [setDirty, setWriting, onToast, getTabEolBom])
 
   const writeFileFromTool = useCallback(async (
     rel: string,
@@ -1275,6 +1294,7 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
     activeMarkdownRel,
     allOpenKeys,
     dirtySet,
+    writingSet,
     pinned,
     pickWorkspace,
     openRemote,
@@ -1306,5 +1326,5 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
     reloadTabFromDisk,
     remoteStatus,
     reconnect,
-  }), [ready, available, root, kind, tree, treeTruncated, editorGroups, activeGroupId, activeTabKey, activeMarkdownRel, allOpenKeys, dirtySet, pinned, pickWorkspace, openRemote, closeWorkspace, openTab, closeTab, setActiveTab, openSettingsTab, openDiffTab, openExtensionTab, closeTabByKey, setActiveTabByKey, splitRight, moveTab, setActiveGroupId, saveTab, writeFileFromTool, noteOwnDiskWrite, flushAll, pin, unpin, createFile, createFolder, renameOp, remove, refreshTree, conflict, resolveConflict, reloadTabFromDisk, remoteStatus, reconnect])
+  }), [ready, available, root, kind, tree, treeTruncated, editorGroups, activeGroupId, activeTabKey, activeMarkdownRel, allOpenKeys, dirtySet, writingSet, pinned, pickWorkspace, openRemote, closeWorkspace, openTab, closeTab, setActiveTab, openSettingsTab, openDiffTab, openExtensionTab, closeTabByKey, setActiveTabByKey, splitRight, moveTab, setActiveGroupId, saveTab, writeFileFromTool, noteOwnDiskWrite, flushAll, pin, unpin, createFile, createFolder, renameOp, remove, refreshTree, conflict, resolveConflict, reloadTabFromDisk, remoteStatus, reconnect])
 }

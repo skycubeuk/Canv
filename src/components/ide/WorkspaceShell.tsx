@@ -82,7 +82,7 @@ export interface WorkspaceShellProps {
   // Bottom panel
   bottomPanelTabs: BottomPanelTabDef[]
   // Status bar
-  saveState: 'saved' | 'saving' | 'conflict'
+  saveState: 'saved' | 'unsaved' | 'saving' | 'conflict'
   activeProfile: Mode
   onClickProfile: () => void
   apiKeyMissing: boolean
