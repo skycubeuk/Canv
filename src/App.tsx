@@ -43,6 +43,7 @@ import type { ChatProvider } from './components/ChatPanel'
 import { getAdapter, configuredProviders } from './adapters'
 import type { Provider } from './adapters'
 import { ollamaAdapter } from './adapters/ollama'
+import { ServicesProvider } from './services'
 
 function basename(rel: string): string {
   const i = rel.lastIndexOf('/')
@@ -50,6 +51,17 @@ function basename(rel: string): string {
 }
 
 export default function App() {
+  // ServicesProvider currently sits dormant — AppInner still calls every
+  // hook directly. Consumers migrate to useService() one at a time in
+  // later tasks; this commit just mounts the provider so they can.
+  return (
+    <ServicesProvider>
+      <AppInner />
+    </ServicesProvider>
+  )
+}
+
+function AppInner() {
   const dialogs = useDialogs()
   const notifications = useNotifications()
   const { showToast } = notifications
