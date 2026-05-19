@@ -12,7 +12,6 @@ import { useWorkspace } from './hooks/useWorkspace'
 import { useLocalStorage } from './hooks/useLocalStorage'
 import { useIdeLayout } from './hooks/useIdeLayout'
 import type { OutlineNode } from './lib/outline'
-import { useEditorStats } from './hooks/useEditorStats'
 import { useCommands } from './hooks/useCommands'
 import type { PaletteMode, PaletteFile } from './components/ide/CommandPalette'
 import type { Action as AgentDef } from './config/types'
@@ -243,9 +242,6 @@ function AppInner() {
     ideLayout.showBottomTab('fileHistory')
   }, [ideLayout])
 
-  // TODO(0.7.1): wire cursor line/col from Canvas's CodeMirror via onCursorChange prop.
-  const [cursorPos] = useState<{ line: number; col: number } | null>(null)
-
   const selectionAgent = useSelectionAgent({
     settings,
     modelForAgent,
@@ -281,7 +277,7 @@ function AppInner() {
   const {
     chatMessages, chatBusy, pendingApprovals,
     followLatest, setFollowLatest,
-    apiKeyMissing, chatProvider, chatModel, meterTotals,
+    chatProvider, chatModel,
     sendChat, retryFromAnchor, editAndRetry, undoRetry,
     stopChat, clearChat,
     onApprovalDecide,
@@ -309,8 +305,6 @@ function AppInner() {
     return result
   }, [settings.apiKeys, settings.baseUrls, settings.ollamaModels, chatProvider, chatMessages.length])
 
-  const activeEditor = editorRegistry.getActiveEditor()
-  const { wordCount, selectionWordCount } = useEditorStats(activeEditor)
 
   // Bridge events from commands.contribution → App-local UI state.
   // The palette open/close flags and pendingDocAgent stay in AppInner;
@@ -402,14 +396,6 @@ function AppInner() {
     () => new Set(workspace.pinned.map((p) => p.relPath)),
     [workspace.pinned],
   )
-
-  const saveState = workspace.conflict
-    ? 'conflict' as const
-    : workspace.writingSet.size > 0
-      ? 'saving' as const
-      : workspace.dirtySet.size > 0
-        ? 'unsaved' as const
-        : 'saved' as const
 
   const applyRunWithSnapshot = useCallback(async (run: import('./components/ResultsPanel').RunRecord, replacement: string) => {
     const rel = workspace.activeMarkdownRel
@@ -623,27 +609,6 @@ function AppInner() {
           exportBackup()
         }}
         bottomPanelTabs={bottomPanelTabs}
-        saveState={saveState}
-        activeProfile={activeProfile}
-        onClickProfile={profilePicker.openSwitcher}
-        apiKeyMissing={apiKeyMissing}
-        onClickApiKeyWarning={() => openSettingsTab()}
-        cursorLine={cursorPos?.line ?? null}
-        cursorCol={cursorPos?.col ?? null}
-        onOpenSettings={() => openSettingsTab()}
-        onToggleChat={() => {
-          const { visible, activeTab } = ideLayout.layout.bottom
-          if (visible && activeTab === 'chat') {
-            ideLayout.toggleBottom()
-          } else {
-            if (!visible) ideLayout.toggleBottom()
-            ideLayout.showBottomTab('chat')
-          }
-        }}
-        meterTokens={meterTotals.tokens || null}
-        meterCostUsd={meterTotals.costUsd || null}
-        wordCount={wordCount}
-        selectionWordCount={selectionWordCount}
       />
 
       {restoreTarget && getCanvHistory() && (

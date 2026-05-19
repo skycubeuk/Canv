@@ -1,29 +1,7 @@
 import { MessageSquare, Settings } from 'lucide-react'
-import type { Mode } from '../../config/types'
-import type { WorkspaceKind } from '../../lib/fs'
 import { useContributions } from '../../hooks/useContributions'
+import { useService } from '../../services/useService'
 import { StatusBarItem } from './StatusBarItem'
-
-interface Props {
-  saveState: 'saved' | 'unsaved' | 'saving' | 'conflict'
-  profile: Mode
-  workspaceName: string | null
-  kind: WorkspaceKind | null
-  wordCount: number
-  selectionWordCount: number | null
-  onClickProfile: () => void
-  apiKeyMissing: boolean
-  onClickApiKeyWarning: () => void
-  cursorLine: number | null
-  cursorCol: number | null
-  branch: string | null
-  diffStats: { added: number; removed: number } | null
-  chatVisible: boolean
-  onToggleChat: () => void
-  onOpenSettings: () => void
-  meterTokens: number | null
-  meterCostUsd: number | null
-}
 
 function basenameOrNull(p: string | null): string {
   if (!p) return ''
@@ -31,13 +9,47 @@ function basenameOrNull(p: string | null): string {
   return i >= 0 ? p.slice(i + 1) : p
 }
 
-export function StatusBar(props: Props) {
-  const {
-    saveState, profile, workspaceName, kind, wordCount, selectionWordCount,
-    onClickProfile, apiKeyMissing, onClickApiKeyWarning,
-    cursorLine, cursorCol, branch, diffStats,
-    chatVisible, onToggleChat, onOpenSettings, meterTokens, meterCostUsd,
-  } = props
+export function StatusBar() {
+  const workspace = useService('workspace')
+  const modesSvc = useService('modes')
+  const chatSessions = useService('chatSessions')
+  const editorStats = useService('editorStats')
+  const ideLayout = useService('ideLayout')
+  const profilePicker = useService('profilePicker')
+
+  const saveState: 'saved' | 'unsaved' | 'saving' | 'conflict' = workspace.conflict
+    ? 'conflict'
+    : workspace.writingSet.size > 0
+      ? 'saving'
+      : workspace.dirtySet.size > 0
+        ? 'unsaved'
+        : 'saved'
+
+  const activeProfileId = modesSvc.profile ?? modesSvc.defaultModeId
+  const profile =
+    modesSvc.modes.find((m) => m.id === activeProfileId) ??
+    modesSvc.modes.find((m) => m.id === modesSvc.defaultModeId)!
+
+  const workspaceName = workspace.root
+  const kind = workspace.kind
+  const { wordCount, selectionWordCount } = editorStats
+  const { apiKeyMissing, meterTotals } = chatSessions
+  const meterTokens = meterTotals.tokens || null
+  const meterCostUsd = meterTotals.costUsd || null
+
+  const onClickProfile = profilePicker.openSwitcher
+  const onClickApiKeyWarning = () => workspace.openSettingsTab()
+  const onOpenSettings = () => workspace.openSettingsTab()
+  const chatVisible = ideLayout.layout.bottom.visible && ideLayout.layout.bottom.activeTab === 'chat'
+  const onToggleChat = () => {
+    const { visible, activeTab } = ideLayout.layout.bottom
+    if (visible && activeTab === 'chat') {
+      ideLayout.toggleBottom()
+    } else {
+      if (!visible) ideLayout.toggleBottom()
+      ideLayout.showBottomTab('chat')
+    }
+  }
 
   const contributions = useContributions()
 
@@ -114,16 +126,6 @@ export function StatusBar(props: Props) {
         )
       )}
 
-      {branch && (
-        <>
-          <span aria-hidden className="w-px h-3 bg-[rgb(var(--border-default))]" />
-          <span className="text-muted">{branch}</span>
-          {diffStats && (
-            <span className="text-subtle">+{diffStats.added} −{diffStats.removed}</span>
-          )}
-        </>
-      )}
-
       {leftItems.map((item) => (
         <StatusBarItem
           key={`${item.extensionId}-${item.id}`}
@@ -140,12 +142,6 @@ export function StatusBar(props: Props) {
             command={item.command} onCommandInvoke={onCommandInvoke}
           />
         ))}
-        {(cursorLine != null && cursorCol != null) && (
-          <>
-            <span>Ln {cursorLine}, Col {cursorCol}</span>
-            <span aria-hidden className="w-px h-3 bg-[rgb(var(--border-default))]" />
-          </>
-        )}
         <span>{wordsLabel}</span>
         <span aria-hidden className="w-px h-3 bg-[rgb(var(--border-default))]" />
         <span>{Math.max(1, Math.ceil(wordCount / 220))} min read</span>

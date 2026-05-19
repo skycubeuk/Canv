@@ -22,7 +22,6 @@ import { Folder, Search, History as HistoryIcon, LayoutDashboard, Puzzle } from 
 import { useContributions } from '../../hooks/useContributions'
 import { useFileHandlerRouting } from '../../hooks/useFileHandlerRouting'
 import { ExtensionEditorTab } from '../extensions/ExtensionEditorTab'
-import type { Mode } from '../../config/types'
 import type { UseIdeLayoutApi, BottomLayout } from '../../hooks/useIdeLayout'
 import type { WorkspaceApi } from '../../hooks/useWorkspace'
 import type { Settings } from '../../hooks/useSettings'
@@ -81,20 +80,7 @@ export interface WorkspaceShellProps {
   onExportBackup: () => void
   // Bottom panel
   bottomPanelTabs: BottomPanelTabDef[]
-  // Status bar
-  saveState: 'saved' | 'unsaved' | 'saving' | 'conflict'
-  activeProfile: Mode
-  onClickProfile: () => void
-  apiKeyMissing: boolean
-  onClickApiKeyWarning: () => void
-  cursorLine: number | null
-  cursorCol: number | null
-  onOpenSettings: () => void
-  onToggleChat: () => void
-  meterTokens: number | null
-  meterCostUsd: number | null
-  wordCount: number
-  selectionWordCount: number | null
+  // StatusBar self-sources its state from services; no props plumb through.
 }
 
 export function WorkspaceShell(props: WorkspaceShellProps) {
@@ -112,12 +98,6 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
     settings, onUpdateSettings,
     onExportBackup,
     bottomPanelTabs,
-    saveState, activeProfile,
-    onClickProfile, apiKeyMissing, onClickApiKeyWarning,
-    cursorLine, cursorCol,
-    onOpenSettings, onToggleChat,
-    meterTokens, meterCostUsd,
-    wordCount, selectionWordCount,
   } = props
 
   const contributions = useContributions()
@@ -359,28 +339,7 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
         onSidebarSizeChange={ideLayout.setSidebarSize}
         onBottomSizeChange={ideLayout.setBottomSize}
         onRightSizeChange={ideLayout.setRightSize}
-        statusBar={(
-          <StatusBar
-            saveState={saveState}
-            profile={activeProfile}
-            workspaceName={workspace.root}
-            kind={workspace.kind}
-            wordCount={wordCount}
-            selectionWordCount={selectionWordCount}
-            onClickProfile={onClickProfile}
-            apiKeyMissing={apiKeyMissing}
-            onClickApiKeyWarning={onClickApiKeyWarning}
-            cursorLine={cursorLine}
-            cursorCol={cursorCol}
-            branch={null}
-            diffStats={null}
-            onOpenSettings={onOpenSettings}
-            chatVisible={ideLayout.layout.bottom.visible && ideLayout.layout.bottom.activeTab === 'chat'}
-            onToggleChat={onToggleChat}
-            meterTokens={meterTokens}
-            meterCostUsd={meterCostUsd}
-          />
-        )}
+        statusBar={<StatusBar />}
       />
       </div>
     </div>
