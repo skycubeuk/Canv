@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { EditorView } from '@codemirror/view'
 import { FloatingToolbar } from './components/FloatingToolbar'
 import { MigrationModal } from './components/MigrationModal'
 import { AppOverlays } from './components/ide/AppOverlays'
@@ -10,7 +9,6 @@ import { useSettings } from './hooks/useSettings'
 import { useWorkspace } from './hooks/useWorkspace'
 import { useLocalStorage } from './hooks/useLocalStorage'
 import { useIdeLayout } from './hooks/useIdeLayout'
-import type { OutlineNode } from './lib/outline'
 import type { PaletteMode, PaletteFile } from './components/ide/CommandPalette'
 import type { Action as AgentDef } from './config/types'
 import { useModes } from './hooks/useModes'
@@ -22,9 +20,7 @@ import { RestorePreviewDialog } from './components/ide/sidebar/RestorePreviewDia
 import { exportBackup } from './lib/backup'
 import { useDialogs } from './lib/dialogs'
 import { useNotifications } from './hooks/useNotifications'
-import { useEditorRegistry, editorMapKey } from './hooks/useEditorRegistry'
-import { useService } from './services'
-import { useWorkspaceFileOps } from './hooks/useWorkspaceFileOps'
+import { useEditorRegistry } from './hooks/useEditorRegistry'
 import { useSelectionAgent } from './hooks/useSelectionAgent'
 import { buildChatSystemPreamble } from './lib/buildChatSystemPreamble'
 import { TopBar } from './components/ide/TopBar'
@@ -92,69 +88,19 @@ function AppInner() {
     defaultModeId: defaultModeId ?? 'fiction',
   })
 
-  const fileOps = useWorkspaceFileOps({
-    workspace,
-    dialogs,
-    showToast: notifications.showToast,
-  })
-
-  const onActiveEditorUpdate = useService('editorRegistry').onActiveEditorUpdate
   const editorRegistry = useEditorRegistry({ workspace })
-  const {
-    editorsRef, jumpersRef,
-    getActiveEditor, getActiveEditorForGroup,
-    handleEditorReady, handleEditorDestroy,
-    handleJumperReady, handleJumperDestroy,
-    handleEditorChange,
-    readLiveBuffer,
-    outlineNodes, focusedKey,
-    jumpToMatch,
-  } = editorRegistry
+  const { getActiveEditor, getActiveEditorForGroup } = editorRegistry
 
   const ideLayout = useIdeLayout(workspace.root)
 
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [paletteMode, setPaletteMode] = useState<PaletteMode>('commands')
   const [recentFiles, setRecentFiles] = useState<string[]>([])
-  const [revealFolderRel, setRevealFolderRel] = useState<string | null>(null)
   const [pendingDocAgent, setPendingDocAgent] = useState<AgentDef | null>(null)
-
-  const handleClickBreadcrumbFolder = useCallback((folderRel: string) => {
-    ideLayout.setSidebarTab('files')
-    if (!ideLayout.layout.sidebar.visible) ideLayout.toggleSidebar()
-    setRevealFolderRel(folderRel)
-    // Clear in a microtask so consecutive clicks on the same folder still
-    // bump the prop and re-trigger the FileTree expand effect.
-    setTimeout(() => setRevealFolderRel(null), 0)
-  }, [ideLayout])
 
   const handleOpenDiff = useCallback((rel: string, baseRef: string = 'HEAD', baseLabel?: string) => {
     workspace.openDiffTab(rel, baseRef, baseLabel)
   }, [workspace])
-
-  const handleOutlineJump = useCallback((node: OutlineNode) => {
-    const rel = workspace.activeMarkdownRel
-    if (!rel) return
-    const key = editorMapKey(workspace.activeGroupId, rel)
-    const jumper = jumpersRef.current.get(key)
-    if (jumper) {
-      jumper(node.line, node.index)
-      return
-    }
-    // Fallback: no Canvas-registered jumper (no current code path hits this,
-    // but keeps the contract well-defined). Drive CodeMirror directly.
-    const view = editorsRef.current.get(key)
-    if (!view) return
-    const doc = view.state.doc
-    const safeLine = Math.max(1, Math.min(node.line, doc.lines))
-    const linePos = doc.line(safeLine).from
-    view.dispatch({
-      selection: { anchor: linePos },
-      effects: EditorView.scrollIntoView(linePos, { y: 'start', yMargin: 8 }),
-    })
-    view.focus()
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- editorsRef and jumpersRef are stable refs; omitting them is correct
-  }, [workspace.activeGroupId, workspace.activeMarkdownRel])
 
   // Track recent files for the palette file-open mode.
   useEffect(() => {
@@ -345,20 +291,6 @@ function AppInner() {
     }
   }, [openFileHistory, handleOpenDiff])
 
-  const openRels = useMemo(() => {
-    const out = new Set<string>()
-    for (const g of workspace.editorGroups) {
-      for (const t of g.openTabs) {
-        if (t.kind === 'markdown') out.add(t.relPath)
-      }
-    }
-    return out
-  }, [workspace.editorGroups])
-  const pinnedRels = useMemo(
-    () => new Set(workspace.pinned.map((p) => p.relPath)),
-    [workspace.pinned],
-  )
-
   const applyRunWithSnapshot = useCallback(async (run: import('./components/ResultsPanel').RunRecord, replacement: string) => {
     const rel = workspace.activeMarkdownRel
     const client = raEnabled ? getCanvHistory() : null
@@ -490,34 +422,9 @@ function AppInner() {
         onSetBottomPlacementRight={setBottomPlacementRight}
       />
       <WorkspaceShell
-        ideLayout={ideLayout}
-        workspace={workspace}
-        openRels={openRels}
-        pinnedRels={pinnedRels}
-        onEditorReady={handleEditorReady}
-        onEditorDestroy={handleEditorDestroy}
-        onJumperReady={handleJumperReady}
-        onJumperDestroy={handleJumperDestroy}
-        onEditorChange={handleEditorChange}
-        onActiveEditorUpdate={onActiveEditorUpdate}
-        readLiveBuffer={readLiveBuffer}
-        onJumpToMatch={jumpToMatch}
-        outlineNodes={outlineNodes}
-        focusedKey={focusedKey}
-        onOutlineJump={handleOutlineJump}
-        onClickBreadcrumbFolder={handleClickBreadcrumbFolder}
-        revealFolderRel={revealFolderRel}
-        onCreateFile={fileOps.createFile}
-        onCreateFolder={fileOps.createFolder}
-        onRename={fileOps.rename}
-        onDelete={fileOps.remove}
-        onChangeWorkspace={fileOps.changeWorkspace}
-        onOpenDiff={handleOpenDiff}
         raEnabled={raEnabled}
         onOpenRestore={setRestoreTarget}
         onViewHistory={openFileHistory}
-        settings={settings}
-        onUpdateSettings={update}
         onExportBackup={() => {
           workspace.flushAll()
           exportBackup()
