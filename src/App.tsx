@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { EditorView } from '@codemirror/view'
 import { FloatingToolbar } from './components/FloatingToolbar'
-import { TestExtensionOverlay } from './components/extensions/TestExtensionOverlay'
 import { MigrationModal } from './components/MigrationModal'
 import { AppOverlays } from './components/ide/AppOverlays'
 import { legacyStateExists } from './lib/legacyState'
@@ -768,13 +767,6 @@ export default function App() {
         onOpenFile={(rel) => { void workspace.openTab(rel) }}
         extensionCommands={contributions.commands}
         onInvokeExtensionCommand={(id) => { void window.canvExtensions?.invokeCommand?.(id) }}
-      />
-
-      <TestExtensionOverlay
-        getActiveEditor={getActiveEditor}
-        activeMarkdownRel={workspace.activeMarkdownRel}
-        settings={settings}
-        activeProfile={activeProfile}
       />
     </div>
   )
