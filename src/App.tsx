@@ -29,7 +29,6 @@ import { useNotifications } from './hooks/useNotifications'
 import { useEditorRegistry, editorMapKey } from './hooks/useEditorRegistry'
 import { useContributions } from './hooks/useContributions'
 import { useService } from './services'
-import { useExtensionKeybindings } from './hooks/useExtensionKeybindings'
 import { useWorkspaceFileOps } from './hooks/useWorkspaceFileOps'
 import { useSelectionAgent } from './hooks/useSelectionAgent'
 import { buildChatSystemPreamble } from './lib/buildChatSystemPreamble'
@@ -52,6 +51,7 @@ import './contributions/theme.contribution'
 import './contributions/ollama.contribution'
 import './contributions/quota-error.contribution'
 import './contributions/idle-snapshot.contribution'
+import './contributions/extension-keybindings.contribution'
 
 function basename(rel: string): string {
   const i = rel.lastIndexOf('/')
@@ -128,7 +128,6 @@ function AppInner() {
 
   const commands = useCommands()
   const contributions = useContributions()
-  useExtensionKeybindings(contributions.commands)
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [paletteMode, setPaletteMode] = useState<PaletteMode>('commands')
   const [recentFiles, setRecentFiles] = useState<string[]>([])
