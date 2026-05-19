@@ -29,6 +29,7 @@ const { validateManifest } = require('./extensions/manifest-schema.cjs')
 const { Registry } = require('./extensions/registry.cjs')
 const { WorkspaceTrustStore } = require('./extensions/workspace-trust.cjs')
 const { MAX_OPEN_BYTES } = require('./services/fs-limits.cjs')
+const { canvFSReadFile: canvFSReadFileImpl, canvFSWriteFile: canvFSWriteFileImpl } = require('./services/canvfs.cjs')
 const { hashExtensionDir } = require('./extensions/manifest-hash.cjs')
 const { shouldActivateFor } = require('./extensions/activation-events.cjs')
 const { createSettingsHandlers } = require('./extensions/handlers/settings.cjs')
@@ -384,35 +385,7 @@ function registerFsHandlers() {
       }
     }
     const root = requireWorkspace()
-    const abs = safeResolve(root, rel)
-    const stat = await fsp.stat(abs)
-    if (!stat.isFile()) throw new Error('not a file')
-    if (stat.size > MAX_OPEN_BYTES) {
-      return { ok: false, error: 'too-large', size: stat.size, mtimeMs: stat.mtimeMs }
-    }
-    if (!isAllowedExt(rel, abs)) throw new Error('binary or unsupported file type')
-
-    let buf = await fsp.readFile(abs)
-    let bom = false
-    if (buf.length >= 3 && buf[0] === 0xEF && buf[1] === 0xBB && buf[2] === 0xBF) {
-      bom = true
-      buf = buf.subarray(3)
-    }
-
-    let content
-    try {
-      content = new TextDecoder('utf-8', { fatal: true }).decode(buf)
-    } catch {
-      return { ok: false, error: 'not-utf8', size: stat.size, mtimeMs: stat.mtimeMs }
-    }
-
-    // Scan up to the first 64K decoded chars for CRLF. Lone-\r (classic Mac)
-    // line endings are not detected — out of scope.
-    const scan = content.slice(0, 65536)
-    const eol = scan.includes('\r\n') ? 'crlf' : 'lf'
-    const normalised = eol === 'crlf' ? content.replace(/\r\n/g, '\n') : content
-
-    return { ok: true, content: normalised, mtimeMs: stat.mtimeMs, eol, bom, size: stat.size }
+    return canvFSReadFileImpl(root, rel, { safeResolve, isAllowedExt })
   })
 
   ipcMain.handle('canvFS:writeFile', async (_e, rel, content, expectedMtimeMs, opts) => {
@@ -420,30 +393,7 @@ function registerFsHandlers() {
     // CRLF/BOM files saved to a remote workspace currently re-encode to LF/no-BOM.
     if (isRemote()) return WORKSPACE.backend.writeFile(rel, content, expectedMtimeMs)
     const root = requireWorkspace()
-    const abs = safeResolve(root, rel)
-    if (!isAllowedExt(rel, abs)) throw new Error('unsupported file type')
-    if (typeof content !== 'string') throw new Error('invalid content')
-
-    const wantEol = opts && opts.eol === 'crlf' ? 'crlf' : 'lf'
-    const wantBom = !!(opts && opts.bom)
-
-    const out = wantEol === 'crlf' ? content.replace(/\n/g, '\r\n') : content
-    let buffer = Buffer.from(out, 'utf8')
-    if (wantBom) buffer = Buffer.concat([Buffer.from([0xEF, 0xBB, 0xBF]), buffer])
-    if (buffer.byteLength > MAX_OPEN_BYTES) throw new Error('content too large')
-
-    if (typeof expectedMtimeMs === 'number') {
-      const stat = await fsp.stat(abs).catch(() => null)
-      if (stat && Math.abs(stat.mtimeMs - expectedMtimeMs) > 1) {
-        const err = new Error('stale write')
-        err.code = 'STALE'
-        throw err
-      }
-    }
-    await fsp.mkdir(path.dirname(abs), { recursive: true })
-    await fsp.writeFile(abs, buffer)
-    const stat = await fsp.stat(abs)
-    return { mtimeMs: stat.mtimeMs }
+    return canvFSWriteFileImpl(root, rel, content, expectedMtimeMs, opts, { safeResolve, isAllowedExt })
   })
 
   ipcMain.handle('canvFS:createFile', async (_e, rel, content = '') => {
