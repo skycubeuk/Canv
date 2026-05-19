@@ -5,7 +5,6 @@ const fsp = require('node:fs/promises')
 const { RecentRemotes } = require('./recent-remotes.cjs')
 const serve = require('./serve-folder.cjs')
 const { createHistoryService } = require('./history-service.cjs')
-const { Registry } = require('./extensions/registry.cjs')
 const fsService       = require('./services/fs')
 const serveService    = require('./services/serve')
 const historyService  = require('./services/history')
@@ -18,15 +17,9 @@ let extensionRuntime = null
 let trustStore = null
 let workspaceRegistry = null
 
-function onWorkspaceChangedGlobal() {
-  workspaceRegistry = (WORKSPACE && WORKSPACE.kind === 'local')
-    ? new Registry(WORKSPACE.root)
-    : null
-  invalidateExtensionClaimedExts()
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('canvExtensions:registryChanged')
-  }
-}
+// Set inside app.whenReady() so lifecycle handlers (window-all-closed,
+// the main window's 'closed' event) can invoke workspace helpers via deps.
+let DEPS = null
 
 const APP_ICON = path.join(__dirname, '..', 'build', 'icon.png')
 
@@ -240,19 +233,6 @@ async function buildTree(root, relDir, depth) {
   }
 }
 
-async function closeWorkspace() {
-  await serve.stop()
-  if (!WORKSPACE) return
-  if (WORKSPACE.kind === 'local') {
-    fsService.stopWatcher()
-  } else if (WORKSPACE.kind === 'remote') {
-    if (WORKSPACE.unsub) { try { WORKSPACE.unsub() } catch { /* ignore */ } }
-    try { await WORKSPACE.pool.close() } catch { /* ignore */ }
-  }
-  WORKSPACE = null
-  HISTORY = null
-}
-
 function registerLegacyServeBroadcast() {
   // serve broadcasts: wire once at app startup. Remains in main.cjs until
   // the serve domain takes ownership of its broadcast lifecycle.
@@ -339,7 +319,7 @@ function createWindow() {
       popoutWindow.destroy()
       popoutWindow = null
     }
-    closeWorkspace()
+    if (DEPS) DEPS.closeWorkspace()
   })
 }
 
@@ -365,7 +345,7 @@ electron.protocol.registerSchemesAsPrivileged([
 ])
 
 function makeDeps() {
-  return {
+  const deps = {
     // Mutable shared state — exposed as getters so handlers see live values.
     getWorkspace: () => WORKSPACE,
     setWorkspace: (w) => { WORKSPACE = w },
@@ -388,13 +368,17 @@ function makeDeps() {
     requireWorkspace, isRemote, safeResolve, isAllowedExt, isAllowedDirEntry,
     toRel, isInternal, isSitePath, buildTree,
     getExtensionClaimedExts, invalidateExtensionClaimedExts,
-    onWorkspaceChangedGlobal, getHistoryService,
+    getHistoryService,
     startWatcher: (root) => fsService.startWatcher(root, () => mainWindow, { toRel }),
     stopWatcher: () => fsService.stopWatcher(),
-    closeWorkspace,
     configureWindowOpenHandler,
     APP_ICON, DEV_URL,
   }
+  // Workspace lifecycle helpers live in services/workspace/ and need access
+  // to deps itself, so bind them after the object literal is constructed.
+  deps.closeWorkspace = () => wsService.closeWorkspace(deps)
+  deps.onWorkspaceChangedGlobal = () => wsService.onWorkspaceChangedGlobal(deps)
+  return deps
 }
 
 app.whenReady().then(() => {
@@ -412,6 +396,7 @@ app.whenReady().then(() => {
   )
   recentRemotes = new RecentRemotes(path.join(app.getPath('userData'), 'recent-remotes.json'))
   const deps = makeDeps()
+  DEPS = deps
   fsService.registerIpcHandlers(ipcMain, deps)
   serveService.registerIpcHandlers(ipcMain, deps)
   historyService.registerIpcHandlers(ipcMain, deps)
@@ -428,7 +413,7 @@ app.on('before-quit', () => {
 })
 
 app.on('window-all-closed', () => {
-  closeWorkspace()
+  if (DEPS) DEPS.closeWorkspace()
   if (process.platform !== 'darwin') app.quit()
 })
 
