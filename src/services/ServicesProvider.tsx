@@ -16,15 +16,15 @@ import { useLintIssues } from '../hooks/useLintIssues'
 import { useProfilePicker } from '../hooks/useProfilePicker'
 import { useChatSessions } from '../hooks/useChatSessions'
 import { useSelectionAgent } from '../hooks/useSelectionAgent'
-import type { CanvHistory } from '../lib/history'
+import { useWorkspaceSetup } from '../hooks/useWorkspaceSetup'
+import { getCanvHistory } from '../lib/history'
+import { getFs } from '../lib/fs'
 import { ServicesContext } from './useService'
 import type { ICanvServices } from './index'
 
 export interface ServicesProviderConfig {
   /** Whether the legacy-migration modal is open. Drives profile-picker auto-show. */
   migrationOpen?: boolean
-  /** Resolved CanvHistory client for chat tool calls; null when revision-archaeology is off. */
-  historyClient?: CanvHistory | null
 }
 
 export interface ServicesProviderProps {
@@ -91,6 +91,22 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
     modes.modes.find((m) => m.id === activeProfileId) ??
     modes.modes.find((m) => m.id === modes.defaultModeId)!
 
+  // Workspace-setup phase + config. Drives the RA-enabled flag and
+  // therefore the historyClient passed into chatSessions.
+  const setup = useWorkspaceSetup({
+    workspaceReady: workspace.ready,
+    workspaceRoot: workspace.root,
+    remote: workspace.kind?.kind === 'remote',
+    fs: getFs(),
+    // Stub when canvHistory is not exposed (e.g. dock popout / web build).
+    // The hook only calls history.init when enableRA + non-remote, so the
+    // stub is unreachable in that path; this keeps the type happy.
+    history: getCanvHistory() ?? { init: async () => ({ branch: 'canv-history', headCommit: '' }) },
+    defaultModeId: modes.defaultModeId ?? 'fiction',
+  })
+  const raEnabled = setup.config?.revisionArchaeology.enabled === true
+  const historyClient = raEnabled ? getCanvHistory() : null
+
   const chatSessions = useChatSessions({
     settings: settingsApi.settings,
     update: settingsApi.update,
@@ -102,7 +118,7 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
     showRetryUndoToast: notifications.showRetryUndoToast,
     dismissRetryUndo: notifications.dismissRetryUndo,
     dialogs,
-    historyClient: config.historyClient ?? null,
+    historyClient,
   })
 
   const selectionAgent = useSelectionAgent({
@@ -134,6 +150,7 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
     workspaceFileOps,
     editorStats,
     profilePicker,
+    setup,
   }), [
     workspace,
     settingsApi,
@@ -152,6 +169,7 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
     workspaceFileOps,
     editorStats,
     profilePicker,
+    setup,
   ])
 
   return <ServicesContext.Provider value={services}>{children}</ServicesContext.Provider>

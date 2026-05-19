@@ -14,6 +14,7 @@ import type { useWorkspaceFileOps } from '../hooks/useWorkspaceFileOps'
 import type { useEditorStats } from '../hooks/useEditorStats'
 import type { useProfilePicker } from '../hooks/useProfilePicker'
 import type { useExtensionEventBridge } from '../hooks/useExtensionEventBridge'
+import type { useWorkspaceSetup } from '../hooks/useWorkspaceSetup'
 
 /**
  * The full service registry exposed to React components via useService(...)
@@ -50,6 +51,7 @@ export interface ICanvServices {
   workspaceFileOps: ReturnType<typeof useWorkspaceFileOps>
   editorStats: ReturnType<typeof useEditorStats>
   profilePicker: ReturnType<typeof useProfilePicker>
+  setup: ReturnType<typeof useWorkspaceSetup>
 }
 
 export { ServicesProvider } from './ServicesProvider'

@@ -2,8 +2,11 @@ import { useCallback, useMemo } from 'react'
 import { useService } from '../services/useService'
 import { buildBottomPanelTabs, type BottomPanelTabsAdapter } from '../components/ide/bottomPanelTabs'
 import { getCanvHistory } from '../lib/history'
+import { useApplyRunWithSnapshot } from './useApplyRunWithSnapshot'
+import { buildChatSystemPreamble } from '../lib/buildChatSystemPreamble'
+import { getAdapter, configuredProviders } from '../adapters'
+import type { Provider } from '../adapters'
 import type { ChatProvider } from '../components/ChatPanel'
-import type { RunRecord } from '../components/ResultsPanel'
 import type { LintIssue } from '../lib/lintTypes'
 import type { FileHistoryOpenDiff, FileHistoryRestore } from '../components/ide/bottom/FileHistoryTab'
 
@@ -12,30 +15,23 @@ function basename(rel: string): string {
   return i >= 0 ? rel.slice(i + 1) : rel
 }
 
-/** Inputs the hook can't derive from services — App-local UI state and
- *  closures composed in App.tsx. Everything else flows in via useService. */
+/** Inputs the hook can't derive from services — App-local UI state. */
 export interface UseBottomPanelTabsArgs {
   /** App-local UI state: rel path of file whose history tab is showing. */
   fileHistoryTarget: string | null
   /** App-local UI state: nonce bumped on each openFileHistory call so the tab refreshes. */
   fileHistoryNonce: number
-  /** App-local flag: revision-archaeology enabled per workspace setup config. */
-  raEnabled: boolean
-  /** App-local closures (touch workspace/history/notifications outside the service surface). */
-  applyRunWithSnapshot: (run: RunRecord, text: string) => void
-  availableModels: Record<ChatProvider, string[]>
-  chatSystemPreamble: string
-  onOpenDiff: (rel: string, baseRef?: string, baseLabel?: string) => void
+  /** App-local UI state setter for the restore-preview dialog. */
   onOpenRestore: (target: { snapshotId: string; relPath: string }) => void
 }
 
 /**
  * Builds the bottom-panel tabs array from services + App-local UI state.
  *
- * This replaces a ~57-line dependency array `useMemo` that previously lived
- * in App.tsx. Services handle their own change-detection so the hook only
- * lists the App-local arg references in its deps; everything inside the
- * memo dereferences fresh service values on each call.
+ * Everything except the file-history target/nonce and the restore setter is
+ * derived from services here, so AppInner doesn't need to manufacture
+ * applyRunWithSnapshot / availableModels / chatSystemPreamble / raEnabled
+ * just to pass them through.
  */
 export function useBottomPanelTabs(args: UseBottomPanelTabsArgs) {
   const workspace = useService('workspace')
@@ -44,12 +40,56 @@ export function useBottomPanelTabs(args: UseBottomPanelTabsArgs) {
   const chatSessions = useService('chatSessions')
   const lint = useService('lint')
   const editorRegistry = useService('editorRegistry')
+  const setup = useService('setup')
+  const modesSvc = useService('modes')
 
-  const {
-    fileHistoryTarget, fileHistoryNonce, raEnabled,
-    applyRunWithSnapshot, availableModels, chatSystemPreamble,
-    onOpenDiff, onOpenRestore,
-  } = args
+  const { fileHistoryTarget, fileHistoryNonce, onOpenRestore } = args
+  const raEnabled = setup.config?.revisionArchaeology.enabled === true
+
+  const applyRunWithSnapshot = useApplyRunWithSnapshot()
+
+  // Active profile derivation — mirrors ServicesProvider.
+  const activeProfileId = modesSvc.profile ?? modesSvc.defaultModeId
+  const activeProfile =
+    modesSvc.modes.find((m) => m.id === activeProfileId) ??
+    modesSvc.modes.find((m) => m.id === modesSvc.defaultModeId)!
+
+  const chatSystemPreamble = useMemo(
+    () => buildChatSystemPreamble({ activeProfile }),
+    [activeProfile],
+  )
+
+  const { chatMessages, chatProvider } = chatSessions
+  const availableModels: Record<ChatProvider, string[]> = useMemo(() => {
+    const visible = new Set<Provider>(configuredProviders({
+      apiKeys: settings.apiKeys,
+      baseUrls: settings.baseUrls,
+      ollamaModels: settings.ollamaModels,
+    }))
+    // Preserve the active session's provider only when the chat is locked (has messages) —
+    // an empty session inherited settings.provider and shouldn't keep an unconfigured
+    // provider visible just because it's the current default.
+    if (chatMessages.length > 0) visible.add(chatProvider as Provider)
+    if (visible.size === 0) {
+      // Nothing configured and no locked chat to preserve — fall back to the full list
+      // so the picker isn't empty.
+      ;(['anthropic', 'openai', 'ollama'] as Provider[]).forEach((p) => visible.add(p))
+    }
+    const result = {} as Record<ChatProvider, string[]>
+    for (const id of visible) {
+      result[id as ChatProvider] = id === 'ollama'
+        ? settings.ollamaModels
+        : getAdapter(id).models
+    }
+    return result
+  }, [settings.apiKeys, settings.baseUrls, settings.ollamaModels, chatProvider, chatMessages.length])
+
+  const onOpenDiff = useCallback(
+    (rel: string, baseRef: string = 'HEAD', baseLabel?: string) => {
+      workspace.openDiffTab(rel, baseRef, baseLabel)
+    },
+    [workspace],
+  )
 
   const jumpToProblem = useCallback(
     (issue: LintIssue) => {

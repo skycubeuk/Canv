@@ -27,6 +27,7 @@ export function makeStubServices(overrides: Partial<ICanvServices> = {}): ICanvS
     workspaceFileOps: undefined,
     editorStats: undefined,
     profilePicker: undefined,
+    setup: undefined,
   }
   Object.assign(stub, overrides)
   return stub as unknown as ICanvServices

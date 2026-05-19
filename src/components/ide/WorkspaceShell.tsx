@@ -27,6 +27,7 @@ import type { BottomLayout } from '../../hooks/useIdeLayout'
 import type { OutlineNode } from '../../lib/outline'
 import { EditorView } from '@codemirror/view'
 import { isElectron } from '../../lib/fs'
+import { exportBackup } from '../../lib/backup'
 import { useService } from '../../services/useService'
 
 function dockSlotForPlacement(bottom: BottomLayout): DockSlot {
@@ -36,22 +37,17 @@ function dockSlotForPlacement(bottom: BottomLayout): DockSlot {
 }
 
 export interface WorkspaceShellProps {
-  // Revision Archaeology — App-local UI state (driven by setup.config)
-  raEnabled: boolean
   /** Opens the restore-preview dialog; target is App-local UI state. */
   onOpenRestore: (r: { snapshotId: string; relPath: string }) => void
   /** Triggers when the Files-tab context menu fires "View history" on a file. */
   onViewHistory?: (rel: string) => void
-  // Settings tab — App-local callback (touches App-level backup machinery)
-  onExportBackup: () => void
   // Bottom panel — App-local (composed via useBottomPanelTabs in App.tsx)
   bottomPanelTabs: BottomPanelTabDef[]
 }
 
 export function WorkspaceShell(props: WorkspaceShellProps) {
   const {
-    raEnabled, onOpenRestore, onViewHistory,
-    onExportBackup,
+    onOpenRestore, onViewHistory,
     bottomPanelTabs,
   } = props
 
@@ -61,8 +57,14 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
   const ideLayout = useService('ideLayout')
   const settingsApi = useService('settings')
   const fileOps = useService('workspaceFileOps')
+  const setup = useService('setup')
   const { settings } = settingsApi
   const onUpdateSettings = settingsApi.update
+  const raEnabled = setup.config?.revisionArchaeology.enabled === true
+  const onExportBackup = useCallback(() => {
+    workspace.flushAll()
+    exportBackup()
+  }, [workspace])
 
   const contributions = useContributions()
   const fileHandlerRouting = useFileHandlerRouting()
