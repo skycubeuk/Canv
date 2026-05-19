@@ -14,6 +14,12 @@ function countWords(text: string): number {
   return trimmed ? trimmed.split(/\s+/).length : 0
 }
 
+// Debounce window for word-count recomputes. Selection-only changes still
+// notify immediately (cheap); doc changes both delay the notify AND gate the
+// actual recompute inside getSnapshot — so continuous typing on a large doc
+// produces no React re-renders and no doc.toString() until typing settles.
+const DOC_SETTLE_MS = 200
+
 export function useEditorStats(view: EditorView | null): EditorStats {
   // Cache doc word count keyed by the immutable Text instance. CodeMirror
   // mutates state.doc only when the document changes, so a cursor-only move
@@ -22,13 +28,8 @@ export function useEditorStats(view: EditorView | null): EditorStats {
   // multi-MB allocation on large docs.
   const lastDoc = useRef<Text | null>(null)
   const lastDocWordCount = useRef(0)
+  const lastWordCountAt = useRef(0)
   const lastStats = useRef<EditorStats>(EMPTY)
-
-  // Debounce window for word-count recomputes. Selection-only changes still
-  // notify immediately (cheap); doc changes notify after this idle window so
-  // continuous typing on a large doc doesn't re-render the React tree per
-  // keystroke just to update the word counter.
-  const DOC_SETTLE_MS = 200
 
   const subscribe = useCallback(
     (notify: () => void) => {
@@ -76,9 +77,19 @@ export function useEditorStats(view: EditorView | null): EditorStats {
     const doc = view.state.doc
     let wordCount = lastDocWordCount.current
     if (doc !== lastDoc.current) {
-      wordCount = countWords(doc.toString())
-      lastDoc.current = doc
-      lastDocWordCount.current = wordCount
+      // Doc has changed. Recompute the word count only if we're past the
+      // settle window — otherwise show the previous count. Continuous typing
+      // hits this branch every keystroke (immutable Text → new ref); without
+      // this gate we'd do a 2MB toString + regex split per keystroke.
+      // The subscribe() debounce ensures we'll be re-called once typing
+      // settles, at which point the gate opens and we recompute.
+      const now = performance.now()
+      if (now - lastWordCountAt.current >= DOC_SETTLE_MS) {
+        wordCount = countWords(doc.toString())
+        lastDoc.current = doc
+        lastDocWordCount.current = wordCount
+        lastWordCountAt.current = now
+      }
     }
     const sel = view.state.selection.main
     let selectionWordCount: number | null = null
