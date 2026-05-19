@@ -197,7 +197,7 @@ export function useEditorRegistry(args: UseEditorRegistryArgs): UseEditorRegistr
   const handleEditorChange = useCallback(
     (groupId: EditorGroupId, rel: string, markdown: string) => {
       workspace.saveTab(rel, markdown, groupId)
-      liveDocsChannel.publish(`${groupId}:${rel}`, markdown)
+      liveDocsChannel.publish(`${groupId}:${rel}`)
     },
     [workspace, liveDocsChannel],
   )

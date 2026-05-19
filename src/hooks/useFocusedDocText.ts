@@ -20,11 +20,15 @@ export function createLiveDocsChannel(): LiveDocsChannel {
   const listeners = new Set<(key: string) => void>()
   let getter: ((key: string) => string | undefined) | null = null
   return {
+    /** `_text` is intentionally ignored — kept only for source-compatibility
+     *  with callers that pass the new markdown value. */
     publish(key, _text?) {
       liveKeys.add(key)
       for (const l of listeners) l(key)
     },
     read(key) {
+      // Returning undefined for an unseen key lets callers distinguish
+      // "no live edits yet" from "live edits exist — look up current text."
       if (!liveKeys.has(key)) return undefined
       return getter ? getter(key) : undefined
     },
