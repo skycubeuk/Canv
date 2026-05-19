@@ -37,34 +37,7 @@ const { createUiPromptHandlers } = require('./extensions/handlers/ui-prompt.cjs'
 const { createStatusBarHandlers } = require('./extensions/handlers/statusBar.cjs')
 const activity = require('./extensions/activity.cjs')
 const { buildAllContributions, EMPTY: EMPTY_CONTRIBS } = require('./extensions/contributions.cjs')
-const { createSession, listSessions, loadSession, writeIteration, appendHistory, deleteSession, pruneOldSessions } = require('./extensions/builder/scratch.cjs')
-const { parsePayload } = require('./extensions/builder/parse-payload.cjs')
 const { readDefaults: readFileHandlerDefaults, writeDefault: writeFileHandlerDefault } = require('./extensions/file-handler-defaults.cjs')
-
-const SCRATCH_BASE_DIR = path.join(app.getPath('userData'), 'Canv', 'builder-scratch')
-const SCRATCH_KEEP_N = 20  // prune older sessions automatically
-const SCRATCH_PREFIX = '__builder__'
-
-function parseScratchId(id) {
-  if (typeof id !== 'string' || !id.startsWith(SCRATCH_PREFIX)) return null
-  const inner = id.slice(SCRATCH_PREFIX.length)
-  if (!inner.endsWith('__')) return null
-  return inner.slice(0, -2)
-}
-
-function scratchDirForId(id) {
-  const sessionId = parseScratchId(id)
-  if (!sessionId) return null
-  const dir = path.join(SCRATCH_BASE_DIR, sessionId)
-  return fs.existsSync(dir) ? dir : null
-}
-
-function scratchManifestForId(id) {
-  const dir = scratchDirForId(id)
-  if (!dir) return null
-  try { return JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf-8')) }
-  catch { return null }
-}
 
 let extensionRuntime = null
 let trustStore = null
@@ -946,7 +919,6 @@ function registerSiteHandlers() {
 }
 
 let popoutWindow = null
-let builderWindow = null
 
 function broadcastToMainWindow(channel, payload) {
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -958,193 +930,6 @@ function broadcastToPopout(channel, payload) {
   if (popoutWindow && !popoutWindow.isDestroyed()) {
     popoutWindow.webContents.send(channel, payload)
   }
-}
-
-function broadcastToBuilder(channel, payload) {
-  if (builderWindow && !builderWindow.isDestroyed()) {
-    builderWindow.webContents.send(channel, payload)
-  }
-}
-
-function openBuilderWindow(opts = {}) {
-  if (builderWindow && !builderWindow.isDestroyed()) {
-    builderWindow.focus()
-    return
-  }
-  const win = new BrowserWindow({
-    width: 1200, height: 800, minWidth: 800, minHeight: 600,
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#171717' : '#fafaf9',
-    title: 'Extension Builder',
-    icon: APP_ICON,
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.cjs'),
-      contextIsolation: true,
-      nodeIntegration: false,
-      sandbox: true,
-    },
-  })
-  builderWindow = win
-  configureWindowOpenHandler(win)
-
-  const editExt = encodeURIComponent(opts.editExtension || '')
-  if (app.isPackaged) {
-    win.loadFile(path.join(__dirname, '..', 'dist', 'index.html'), { search: `mode=builder&editExt=${editExt}` })
-  } else {
-    win.loadURL(`${DEV_URL}?mode=builder&editExt=${editExt}`)
-    win.webContents.openDevTools({ mode: 'detach' })
-  }
-
-  win.on('closed', () => {
-    if (builderWindow === win) builderWindow = null
-  })
-}
-
-function registerBuilderWindowHandlers() {
-  ipcMain.handle('canvExtBuilder:openWindow', async (_e, opts = {}) => {
-    openBuilderWindow(opts || {})
-  })
-  ipcMain.handle('canvExtBuilder:closeWindow', async () => {
-    if (builderWindow && !builderWindow.isDestroyed()) builderWindow.destroy()
-    builderWindow = null
-  })
-  ipcMain.handle('canvExtBuilder:exportTranscript', async (event, payload) => {
-    const { defaultName, content } = payload || {}
-    if (typeof content !== 'string' || !content) {
-      return { ok: false, error: 'empty transcript' }
-    }
-    const win = electron.BrowserWindow.fromWebContents(event.sender) ?? builderWindow ?? mainWindow
-    const result = await electron.dialog.showSaveDialog(win, {
-      title: 'Export Builder Transcript',
-      defaultPath: defaultName || 'canv-builder-transcript.md',
-      filters: [
-        { name: 'Markdown', extensions: ['md'] },
-        { name: 'All Files', extensions: ['*'] },
-      ],
-    })
-    if (result.canceled || !result.filePath) return { ok: false, canceled: true }
-    try {
-      await fsp.writeFile(result.filePath, content, 'utf-8')
-      return { ok: true, path: result.filePath }
-    } catch (e) {
-      return { ok: false, error: (e && e.message) || String(e) }
-    }
-  })
-}
-
-function loadAndAttachDir(id) {
-  const s = loadSession(SCRATCH_BASE_DIR, id)
-  if (!s) return null
-  return { ...s, dir: path.join(SCRATCH_BASE_DIR, id) }
-}
-
-function registerBuilderIpcHandlers() {
-  ipcMain.handle('canvExtBuilder:listSessions', async () => {
-    return listSessions(SCRATCH_BASE_DIR)
-  })
-
-  ipcMain.handle('canvExtBuilder:openSession', async (_e, id, opts = {}) => {
-    // If id provided, load it. Else create a new one with optional editingExtensionId.
-    if (id) {
-      const s = loadSession(SCRATCH_BASE_DIR, id)
-      if (!s) throw new Error(`session not found: ${id}`)
-      const dir = path.join(SCRATCH_BASE_DIR, s.id)
-      return { ...s, dir }
-    }
-    const s = createSession(SCRATCH_BASE_DIR, { editingExtensionId: opts.editingExtensionId })
-    pruneOldSessions(SCRATCH_BASE_DIR, SCRATCH_KEEP_N)
-    const sessionDir = path.join(SCRATCH_BASE_DIR, s.id)
-
-    // Pre-load installed extension files if editingExtensionId is set.
-    if (opts.editingExtensionId && WORKSPACE && WORKSPACE.kind === 'local') {
-      const installedDir = path.join(WORKSPACE.root, '.canv', 'extensions', opts.editingExtensionId)
-      try {
-        const manifest = JSON.parse(await fsp.readFile(path.join(installedDir, 'manifest.json'), 'utf-8'))
-        const files = {}
-        async function walk(dir, prefix) {
-          const entries = await fsp.readdir(dir, { withFileTypes: true })
-          for (const ent of entries) {
-            if (ent.name === 'settings.json' || ent.name === 'log' || ent.name === 'manifest.json' || ent.name === 'storage.json') continue
-            const rel = prefix ? `${prefix}/${ent.name}` : ent.name
-            if (ent.isDirectory()) await walk(path.join(dir, ent.name), rel)
-            else if (ent.isFile()) {
-              const text = await fsp.readFile(path.join(dir, ent.name), 'utf-8')
-              files[rel] = text
-            }
-          }
-        }
-        await walk(installedDir, '')
-        writeIteration(sessionDir, { manifest, files })
-        appendHistory(sessionDir, {
-          role: 'assistant',
-          content: `I've loaded version ${manifest.version} of "${manifest.name}" for editing. Describe the change you want to make.`,
-        })
-      } catch (e) {
-        // If the installed extension is missing or unreadable, fall back to a blank session.
-        console.warn(`[builder] could not pre-load extension "${opts.editingExtensionId}":`, e.message)
-      }
-    }
-
-    const loaded = loadSession(SCRATCH_BASE_DIR, s.id)
-    return { ...(loaded || { id: s.id, history: [], builderPrompt: '', editingExtensionId: null }), dir: sessionDir }
-  })
-
-  ipcMain.handle('canvExtBuilder:appendHistory', async (_e, sessionId, message) => {
-    const dir = path.join(SCRATCH_BASE_DIR, sessionId)
-    appendHistory(dir, message)
-  })
-
-  ipcMain.handle('canvExtBuilder:applyPayload', async (_e, sessionId, rawAiResponse) => {
-    const parsed = parsePayload(rawAiResponse)
-    if (!parsed.ok) return { ok: false, errors: parsed.errors }
-    const dir = path.join(SCRATCH_BASE_DIR, sessionId)
-    writeIteration(dir, parsed.payload)
-    return { ok: true, manifest: parsed.payload.manifest }
-  })
-
-  ipcMain.handle('canvExtBuilder:deleteSession', async (_e, sessionId) => {
-    deleteSession(SCRATCH_BASE_DIR, sessionId)
-  })
-
-  ipcMain.handle('canvExtBuilder:spawnPreview', async (_e, sessionId, bounds) => {
-    if (!builderWindow || builderWindow.isDestroyed()) throw new Error('Builder window not open')
-    const dir = path.join(SCRATCH_BASE_DIR, sessionId)
-    if (!fs.existsSync(dir)) throw new Error(`scratch session not found: ${sessionId}`)
-    let manifest
-    try { manifest = JSON.parse(await fsp.readFile(path.join(dir, 'manifest.json'), 'utf-8')) }
-    catch (e) { throw new Error(`scratch manifest read failed: ${e.message}`) }
-
-    const previewId = SCRATCH_PREFIX + sessionId + '__'
-
-    // Destroy any existing preview for this session.
-    if (extensionRuntime.manifestFor(previewId)) {
-      await extensionRuntime.destroy(previewId)
-    }
-
-    // Spawn with the manifest's id overridden to the synthetic id, so the
-    // runtime tracks it under the prefix and the protocol handler resolves it.
-    const spawnManifest = { ...manifest, id: previewId }
-    await extensionRuntime.spawn({
-      extensionDir: dir,
-      manifest: spawnManifest,
-      hostWindow: builderWindow,
-      bounds: bounds || { x: 600, y: 60, width: 580, height: 700 },
-    })
-    return { ok: true, previewId }
-  })
-
-  ipcMain.handle('canvExtBuilder:destroyPreview', async (_e, sessionId) => {
-    const previewId = SCRATCH_PREFIX + sessionId + '__'
-    if (extensionRuntime.manifestFor(previewId)) {
-      await extensionRuntime.destroy(previewId)
-    }
-  })
-
-  ipcMain.handle('canvExtBuilder:setPreviewBounds', async (_e, sessionId, bounds) => {
-    const previewId = SCRATCH_PREFIX + sessionId + '__'
-    if (extensionRuntime.manifestFor(previewId)) {
-      extensionRuntime.setBounds(previewId, bounds)
-    }
-  })
 }
 
 function registerDockHandlers() {
@@ -1401,9 +1186,6 @@ function registerExtensionHandlers() {
 
   registerProtocol(electron.protocol, {
     extensionDirFor: (id) => {
-      // Scratch dirs (Builder preview) take precedence.
-      const scratch = scratchDirForId(id)
-      if (scratch) return scratch
       // Spawned extensions (panels, fileHandlers) know their own dir.
       const fromRuntime = extensionRuntime.extensionDirFor(id)
       if (fromRuntime) return fromRuntime
@@ -1421,8 +1203,6 @@ function registerExtensionHandlers() {
     },
     sharedDir: EXTENSIONS_SHARED_DIR,
     manifestFor: (id) => {
-      const scratch = scratchManifestForId(id)
-      if (scratch) return scratch
       const fromRuntime = extensionRuntime.manifestFor(id)
       if (fromRuntime) return fromRuntime
       // Installed-but-not-spawned: read manifest from disk so the protocol
@@ -1558,7 +1338,6 @@ function registerExtensionHandlers() {
         capabilities: v.manifest.capabilities,
         network: v.manifest.network ?? [],
         settings: v.manifest.settings ?? [],
-        builderPrompt: v.manifest.builderPrompt,
         contributions: v.manifest.contributions,
       },
     }
@@ -1933,9 +1712,9 @@ electron.protocol.registerSchemesAsPrivileged([
 ])
 
 app.whenReady().then(() => {
-  // No top-level application menu: Build New / Manage are reachable from the
-  // Extensions tab in the activity bar. On macOS we still want the standard
-  // app menu (Quit, Hide, etc.) without an Extensions submenu.
+  // Extensions are managed from the sidebar Extensions tab, so we don't need
+  // an Extensions submenu. On macOS we still set the standard app menu
+  // (Quit, Hide, etc.).
   Menu.setApplicationMenu(
     process.platform === 'darwin'
       ? Menu.buildFromTemplate([
@@ -1950,8 +1729,6 @@ app.whenReady().then(() => {
   registerSiteHandlers()
   registerDockHandlers()
   registerExtensionHandlers()
-  registerBuilderWindowHandlers()
-  registerBuilderIpcHandlers()
   createWindow()
 })
 

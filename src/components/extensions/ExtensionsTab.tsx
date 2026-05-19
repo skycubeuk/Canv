@@ -30,9 +30,7 @@ declare global {
         kind: 'input'; extensionId: string; prompt: string; placeholder?: string; defaultValue?: string
       }) => void) => () => void
       promptResolve?: (reqId: number, value: { value: unknown } | null) => void
-      onMenu?: (cb: (msg: { action: string }) => void) => () => void
       onStatusBarChanged?: (cb: (p: unknown) => void) => () => void
-      openBuilder?: (opts: { editExtension?: string }) => Promise<void>
       showPanelInSlot?: (slotId: string, bounds: { x: number; y: number; width: number; height: number }) => Promise<{ ok: boolean; error?: string }>
       hidePanelInSlot?: (slotId: string) => Promise<void>
       invokeCommand?: (commandId: string, args?: unknown) => Promise<{ ok: boolean; error?: string }>
@@ -209,7 +207,7 @@ export function ExtensionsTab() {
                     void window.canvExtensions?.reload(e.id)
                   }}
                   onExpand={(open) => setExpanded(open ? e.id : null)}
-                  onEditInBuilder={() => void window.canvExtensions?.openBuilder?.({ editExtension: e.id })}
+
                 />
                 {isOpen && (
                   <div style={{ padding: '8px 12px 16px 32px', background: 'var(--color-app, var(--color-panel))' }}>
@@ -229,14 +227,15 @@ export function ExtensionsTab() {
           })}
         </ul>
       )}
-      <div style={{ padding: 12, borderTop: '1px solid var(--border-color-default)', display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        <button type="button" onClick={() => void onInstall()} style={primaryBtn}>Install from folder…</button>
-        <button
-          type="button"
-          onClick={() => void window.canvExtensions?.openBuilder?.({})}
-          style={secondaryBtn}
-        >Build new…</button>
-        {installError && <div style={{ marginTop: 8, color: 'rgb(255 120 120)', fontSize: 11, flexBasis: '100%' }}>{installError}</div>}
+      <div style={{ padding: 12, borderTop: '1px solid var(--border-color-default)' }}>
+        <div style={{ fontSize: 11, color: 'var(--text-color-subtle)', marginBottom: 8 }}>
+          To build a new extension, open Claude Code in this workspace and ask it to
+          build one. Run <code>npm run skill:install</code> once to enable the author skill.
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button type="button" onClick={() => void onInstall()} style={primaryBtn}>Install from folder…</button>
+          {installError && <div style={{ marginTop: 8, color: 'rgb(255 120 120)', fontSize: 11, flexBasis: '100%' }}>{installError}</div>}
+        </div>
       </div>
     </div>
   )

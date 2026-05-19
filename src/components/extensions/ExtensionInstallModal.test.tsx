@@ -11,7 +11,6 @@ const MANIFEST = {
   capabilities: ['activeDoc.read', 'ai', 'net'],
   network: ['api.openai.com', 'wttr.in'],
   contributions: [],
-  builderPrompt: 'count words by chapter',
 }
 
 beforeEach(() => cleanup())
@@ -38,12 +37,6 @@ describe('ExtensionInstallModal', () => {
       onCancel={() => {}} onConfirm={() => {}} />)
     expect(screen.getByText('api.openai.com')).toBeTruthy()
     expect(screen.getByText('wttr.in')).toBeTruthy()
-  })
-
-  it('renders builder prompt when present', () => {
-    render(<ExtensionInstallModal sourceFolder="/x" manifest={MANIFEST}
-      onCancel={() => {}} onConfirm={() => {}} />)
-    expect(screen.getByText(/count words by chapter/)).toBeTruthy()
   })
 
   it('shows contribution summary', () => {

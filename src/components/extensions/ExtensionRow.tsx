@@ -20,10 +20,9 @@ interface Props {
   onUninstall: () => void
   onReload: () => void
   onExpand: (expanded: boolean) => void
-  onEditInBuilder?: () => void
 }
 
-export function ExtensionRow({ entry, manifest, running, crashed, expanded, onToggleEnabled, onSetTrusted, onUninstall, onReload, onExpand, onEditInBuilder }: Props) {
+export function ExtensionRow({ entry, manifest, running, crashed, expanded, onToggleEnabled, onSetTrusted, onUninstall, onReload, onExpand }: Props) {
   const [menuOpen, setMenuOpen] = useState(false)
   const needsTrust = entry.trustedAt == null
 
@@ -80,9 +79,6 @@ export function ExtensionRow({ entry, manifest, running, crashed, expanded, onTo
                 <button type="button" onClick={() => { setMenuOpen(false); onSetTrusted(null) }} style={menuItemStyle}>Revoke trust</button>
               )}
               <button type="button" onClick={() => { setMenuOpen(false); onReload() }} style={menuItemStyle}>Reload</button>
-              {onEditInBuilder && entry.trustedAt != null && !crashed && (
-                <button type="button" onClick={() => { setMenuOpen(false); onEditInBuilder() }} style={menuItemStyle}>Edit in Builder…</button>
-              )}
               <button type="button" onClick={() => { setMenuOpen(false); if (confirm('Uninstall this extension?')) onUninstall() }} style={menuItemStyle}>Uninstall…</button>
             </div>
           )}

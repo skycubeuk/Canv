@@ -38,7 +38,6 @@ export interface ExtensionManifest {
   description?: string
   author?: string
   createdAt?: string
-  builderPrompt?: string
   capabilities: CapabilityString[]
   network?: string[]
   contributions: Contribution[]

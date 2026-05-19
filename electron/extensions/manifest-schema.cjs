@@ -130,7 +130,6 @@ const ManifestSchema = z.object({
   description: z.string().max(2000).optional(),
   author: z.string().max(80).optional(),
   createdAt: z.string().datetime().optional(),
-  builderPrompt: z.string().max(5000).optional(),
   capabilities: z.array(Capability).default([]),
   network: z.array(NetworkOrigin).default([]),
   settings: z.array(SettingDef).default([]).superRefine((arr, ctx) => {

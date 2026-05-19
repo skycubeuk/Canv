@@ -11,7 +11,6 @@ export interface PreviewManifest {
   capabilities: string[]
   network: string[]
   settings?: unknown[]
-  builderPrompt?: string
   contributions: unknown[]
 }
 
@@ -69,12 +68,6 @@ export function ExtensionInstallModal({ sourceFolder, manifest, onCancel, onConf
           </div>
         </Section>
 
-        {manifest.builderPrompt && (
-          <Section title="Builder prompt">
-            <pre style={preStyle}>{manifest.builderPrompt}</pre>
-          </Section>
-        )}
-
         <Section title="Source folder">
           <code style={{ fontSize: 11, color: 'var(--text-color-muted)' }}>{sourceFolder}</code>
         </Section>
@@ -129,10 +122,6 @@ const netChipStyle: React.CSSProperties = {
 }
 const emptyStyle: React.CSSProperties = {
   fontSize: 11, color: 'var(--text-color-subtle)', fontStyle: 'italic',
-}
-const preStyle: React.CSSProperties = {
-  background: 'var(--bg-app, var(--color-panel))', padding: 8, borderRadius: 4,
-  fontSize: 11, color: 'var(--text-color-default)', whiteSpace: 'pre-wrap', margin: 0,
 }
 const primaryBtn: React.CSSProperties = {
   background: 'rgb(99 102 241)', color: 'white', border: 'none',

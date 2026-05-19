@@ -199,17 +199,6 @@ export default function App() {
     return () => window.removeEventListener('canv:quota-error', handler)
   }, [showToast])
 
-  // Handle Extensions menu signals from the application menu (Electron).
-  useEffect(() => {
-    const off = window.canvExtensions?.onMenu?.((msg) => {
-      if (msg.action === 'openManageTab') {
-        ideLayout.setSidebarTab('extensions')
-        if (!ideLayout.layout.sidebar.visible) ideLayout.toggleSidebar()
-      }
-    })
-    return () => { off?.() }
-  }, [ideLayout])
-
   // Track recent files for the palette file-open mode.
   useEffect(() => {
     const rel = workspace.activeMarkdownRel
