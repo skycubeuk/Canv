@@ -52,7 +52,6 @@ export interface WorkspaceShellProps {
   onJumperReady: (groupId: EditorGroupId, rel: string, jumper: Jumper) => void
   onJumperDestroy: (groupId: EditorGroupId, rel: string) => void
   onEditorChange: (groupId: EditorGroupId, rel: string, markdown: string) => void
-  onEditorSelectionChange: () => void
   onActiveEditorUpdate?: (info: ActiveEditorUpdateInfo) => void
   readLiveBuffer: (groupId: EditorGroupId, rel: string) => string | undefined
   onJumpToMatch: (match: SearchMatch, q: { query: string; regex: boolean; caseSensitive: boolean }, ordinalInFile: number) => Promise<void>
@@ -102,7 +101,7 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
   const {
     ideLayout, workspace, openRels, pinnedRels,
     onEditorReady, onEditorDestroy, onJumperReady, onJumperDestroy,
-    onEditorChange, onEditorSelectionChange, onActiveEditorUpdate,
+    onEditorChange, onActiveEditorUpdate,
     readLiveBuffer,
     onJumpToMatch,
     outlineNodes, focusedKey, onOutlineJump,
@@ -319,7 +318,6 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
                       lineWidth={settings.lineWidth}
                       viewMode={viewMode}
                       onChange={onEditorChange}
-                      onSelectionChange={onEditorSelectionChange}
                       onEditorReady={onEditorReady}
                       onEditorDestroy={onEditorDestroy}
                       onJumperReady={onJumperReady}

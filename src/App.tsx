@@ -118,11 +118,10 @@ export default function App() {
   const editorRegistry = useEditorRegistry({ workspace })
   const {
     editorsRef, jumpersRef,
-    selectionTick,
     getActiveEditor, getActiveEditorForGroup,
     handleEditorReady, handleEditorDestroy,
     handleJumperReady, handleJumperDestroy,
-    handleEditorChange, handleEditorSelectionChange,
+    handleEditorChange,
     readLiveBuffer,
     openSources, outlineNodes, focusedKey,
     jumpToMatch,
@@ -647,7 +646,6 @@ export default function App() {
         onJumperReady={handleJumperReady}
         onJumperDestroy={handleJumperDestroy}
         onEditorChange={handleEditorChange}
-        onEditorSelectionChange={handleEditorSelectionChange}
         onActiveEditorUpdate={onActiveEditorUpdate}
         readLiveBuffer={readLiveBuffer}
         onJumpToMatch={jumpToMatch}
@@ -738,7 +736,6 @@ export default function App() {
 
       <FloatingToolbar
         view={activeEditor}
-        selectionVersion={selectionTick}
         profile={activeProfile}
         onAgent={handleAgentFromToolbar}
       />

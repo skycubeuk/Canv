@@ -34,7 +34,7 @@ import { useWorkspace } from './useWorkspace'
 import { wsKey } from '../lib/wsKey'
 
 async function withWorkspace() {
-  const hook = renderHook(() => useWorkspace({}))
+  const hook = renderHook(() => useWorkspace({ saveDebounceMs: 50 }))
   await act(async () => {
     // Force-adopt the test workspace by writing the LAST_WS_KEY beforehand isn't easy; instead,
     // we drive the hook through pickWorkspace's side effect by mocking it to return our root.
@@ -80,7 +80,7 @@ describe('useWorkspace — diff tabs', () => {
       await hook.result.current.openDiffTab('a.md', 'HEAD')
     })
     // Simulate a reload: reset and re-adopt the same root.
-    const hook2 = renderHook(() => useWorkspace({}))
+    const hook2 = renderHook(() => useWorkspace({ saveDebounceMs: 50 }))
     ;(window as unknown as { canvFS: typeof fsMock }).canvFS = fsMock
     fsMock.pickWorkspace.mockResolvedValueOnce({ root: '/ws/test' })
     await act(async () => { await hook2.result.current.pickWorkspace() })
@@ -170,7 +170,7 @@ describe('useWorkspace — split groups', () => {
     hook.unmount()
 
     fsMock.pickWorkspace.mockResolvedValueOnce({ root: '/ws/test' })
-    const second = renderHook(() => useWorkspace({}))
+    const second = renderHook(() => useWorkspace({ saveDebounceMs: 50 }))
     await act(async () => { await second.result.current.pickWorkspace() })
     expect(second.result.current.editorGroups).toHaveLength(2)
     const g1 = second.result.current.editorGroups.find((g) => g.id === 'g1')!
@@ -229,7 +229,7 @@ describe('useWorkspace — pin context', () => {
 
     // Restore on remount.
     fsMock.pickWorkspace.mockResolvedValueOnce({ root: '/ws/test' })
-    const hook2 = renderHook(() => useWorkspace({}))
+    const hook2 = renderHook(() => useWorkspace({ saveDebounceMs: 50 }))
     await act(async () => { await hook2.result.current.pickWorkspace() })
     expect(hook2.result.current.pinned.find((p) => p.relPath === 'e.md')).toBeDefined()
   })

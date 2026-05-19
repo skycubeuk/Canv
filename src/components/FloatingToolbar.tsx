@@ -6,8 +6,6 @@ import { useContextMenu } from '../lib/contextMenu'
 
 interface Props {
   view: EditorView | null
-  /** Bumped every time the parent observes a CM update. */
-  selectionVersion: number
   profile: ModeConfig
   onAgent: (agent: Action, range: { from: number; to: number }, text: string, instruction?: string) => void
 }
@@ -20,7 +18,7 @@ interface Pos {
 type Mode = { kind: 'idle' } | { kind: 'presets' } | { kind: 'instruction'; agent: Action }
 
 export function FloatingToolbar(props: Props) {
-  const { view, selectionVersion, profile, onAgent } = props
+  const { view, profile, onAgent } = props
   const [pos, setPos] = useState<Pos | null>(null)
   const [selection, setSelection] = useState<{ from: number; to: number; text: string } | null>(null)
   const [mode, setMode] = useState<Mode>({ kind: 'idle' })
@@ -66,9 +64,31 @@ export function FloatingToolbar(props: Props) {
     setSelection({ from: sel.from, to: sel.to, text })
   }, [view])
 
-  // Re-evaluate when parent says selection or doc changed.
-  // eslint-disable-next-line react-hooks/set-state-in-effect -- recompute calls setState; that's the whole point of this effect — drive toolbar state from external CM updates signalled by selectionVersion bumps
-  useEffect(() => { recompute() }, [recompute, selectionVersion])
+  // Self-subscribe to selection changes via a rAF poll on the view's selection
+  // range. Previously the parent (App.tsx) held a `selectionTick` useState that
+  // bumped on every CM selection event and re-rendered the entire 782-LOC App
+  // tree just so the toolbar could see the new selection. Polling locally
+  // keeps the render contained to this component.
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- recompute is intentionally driven from the rAF tick; setState inside recompute bails out via Object.is when nothing meaningful changed
+  useEffect(() => {
+    if (!view) {
+      recompute()
+      return
+    }
+    let raf = 0
+    let lastKey = `${view.state.selection.main.from}-${view.state.selection.main.to}-${view.state.doc.length}`
+    recompute()
+    const tick = () => {
+      const key = `${view.state.selection.main.from}-${view.state.selection.main.to}-${view.state.doc.length}`
+      if (key !== lastKey) {
+        lastKey = key
+        recompute()
+      }
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [view, recompute])
 
   // Layout-only events (window resize, scroll) — same as before.
   useEffect(() => {

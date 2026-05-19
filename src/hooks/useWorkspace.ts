@@ -16,7 +16,7 @@ import { tabKey, SETTINGS_TAB_KEY, DIFF_TAB_KEY_PREFIX, EXTENSION_TAB_KEY_PREFIX
 const SCHEMA_VERSION = '2'
 const SCHEMA_KEY = 'canv:schemaVersion'
 const LAST_WS_KEY = 'canv:lastWorkspace'
-const SAVE_DEBOUNCE_MS = 1000
+const SAVE_DEBOUNCE_MS = 5000
 const TREE_REFRESH_DEBOUNCE_MS = 200
 // How long to remember our own writes before evicting them from the
 // recentWrites map. Suppression itself doesn't depend on age — it matches by
@@ -151,6 +151,9 @@ export interface WorkspaceApi {
 interface OnQuotaErrorOptions {
   onConflict?: (rel: string) => void
   onToast?: (msg: string) => void
+  /** Override the autosave debounce window (ms). Defaults to SAVE_DEBOUNCE_MS.
+   * Exposed primarily so tests can drive the save path without a 5s wait. */
+  saveDebounceMs?: number
 }
 
 // ---------------------------------------------------------------------------
@@ -177,6 +180,7 @@ function tabKeysFor(group: EditorGroupState): string[] {
 
 export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
   const available = isElectron()
+  const saveDebounceMs = opts.saveDebounceMs ?? SAVE_DEBOUNCE_MS
 
   const [root, setRoot] = useState<string | null>(null)
   const [kind, setKind] = useState<WorkspaceKind | null>(null)
@@ -360,9 +364,9 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
       const writer = lastWriterGroupRef.current.get(rel)
       lastWriterGroupRef.current.delete(rel)
       writeFileCoalesced(rel, pending, writer)
-    }, SAVE_DEBOUNCE_MS)
+    }, saveDebounceMs)
     saveTimers.current.set(rel, t)
-  }, [setDirty, writeFileCoalesced])
+  }, [setDirty, writeFileCoalesced, saveDebounceMs])
 
   const flushAll = useCallback(async () => {
     const tasks: Promise<void>[] = []

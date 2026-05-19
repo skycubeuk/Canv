@@ -26,7 +26,6 @@ export interface UseEditorRegistryArgs {
 export interface UseEditorRegistryApi {
   editorsRef: React.MutableRefObject<Map<string, EditorView>>
   jumpersRef: React.MutableRefObject<Map<string, Jumper>>
-  selectionTick: number
   getActiveEditor: () => EditorView | null
   getActiveEditorForGroup: (groupId: EditorGroupId) => EditorView | null
   handleEditorReady: (groupId: EditorGroupId, rel: string, view: EditorView) => void
@@ -34,7 +33,6 @@ export interface UseEditorRegistryApi {
   handleJumperReady: (groupId: EditorGroupId, rel: string, jumper: Jumper) => void
   handleJumperDestroy: (groupId: EditorGroupId, rel: string) => void
   handleEditorChange: (groupId: EditorGroupId, rel: string, markdown: string) => void
-  handleEditorSelectionChange: () => void
   jumpToMatch: (match: SearchMatch, q: { query: string; regex: boolean; caseSensitive: boolean }, ordinalInFile: number) => Promise<void>
   jumpToProblem: (issue: LintIssue, allIssues: LintIssue[]) => Promise<void>
   /**
@@ -231,11 +229,6 @@ export function useEditorRegistry(args: UseEditorRegistryArgs): UseEditorRegistr
     prevLoadedRef.current = next
   }, [workspace.editorGroups, liveDocsChannel])
 
-  const [selectionTick, setSelectionTick] = useState(0)
-  const handleEditorSelectionChange = useCallback(() => {
-    setSelectionTick((n) => n + 1)
-  }, [])
-
   const focusedRel = workspace.activeMarkdownRel
   const focusedGroupId = workspace.activeGroupId
   const focusedKey = focusedRel ? `${focusedGroupId}:${focusedRel}` : null
@@ -347,20 +340,18 @@ export function useEditorRegistry(args: UseEditorRegistryArgs): UseEditorRegistr
 
   return useMemo<UseEditorRegistryApi>(() => ({
     editorsRef, jumpersRef,
-    selectionTick,
     getActiveEditor, getActiveEditorForGroup,
     handleEditorReady, handleEditorDestroy,
     handleJumperReady, handleJumperDestroy,
-    handleEditorChange, handleEditorSelectionChange,
+    handleEditorChange,
     jumpToMatch, jumpToProblem,
     readLiveBuffer,
     openSources, outlineNodes, focusedKey,
   }), [
-    selectionTick,
     getActiveEditor, getActiveEditorForGroup,
     handleEditorReady, handleEditorDestroy,
     handleJumperReady, handleJumperDestroy,
-    handleEditorChange, handleEditorSelectionChange,
+    handleEditorChange,
     jumpToMatch, jumpToProblem,
     readLiveBuffer,
     openSources, outlineNodes, focusedKey,
