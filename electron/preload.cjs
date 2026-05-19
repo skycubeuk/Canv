@@ -1,5 +1,4 @@
 const { contextBridge, ipcRenderer } = require('electron')
-const { MAX_OPEN_BYTES } = require('./services/fs-limits.cjs')
 
 function isDockPopout() {
   try {
@@ -265,10 +264,6 @@ contextBridge.exposeInMainWorld('canvHistory', {
   getTipCommit: () => ipcRenderer.invoke('canvHistory:getTipCommit'),
   getSnapshotDelta: (id) => ipcRenderer.invoke('canvHistory:getSnapshotDelta', id),
   getFileHistory: (rel) => ipcRenderer.invoke('canvHistory:getFileHistory', rel),
-})
-
-contextBridge.exposeInMainWorld('canvHost', {
-  limits: { maxOpenBytes: MAX_OPEN_BYTES },
 })
 
 contextBridge.exposeInMainWorld('canvDock', {
