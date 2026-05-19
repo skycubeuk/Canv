@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, dialog, ipcMain, nativeTheme, shell } = require('electron')
+const { app, BrowserWindow, Menu, ipcMain, nativeTheme, protocol, shell } = require('electron')
 const path = require('node:path')
 const fs = require('node:fs')
 const fsp = require('node:fs/promises')
@@ -253,14 +253,6 @@ function registerLegacyServeBroadcast() {
 let popoutWindow = null
 
 
-function buildSearchPattern(q) {
-  const flags = q.caseSensitive ? 'g' : 'gi'
-  if (q.regex) return new RegExp(q.query, flags)
-  // Literal substring — escape regex metacharacters.
-  const escaped = q.query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  return new RegExp(escaped, flags)
-}
-
 function configureWindowOpenHandler(win) {
   win.webContents.setWindowOpenHandler(({ url }) => {
     try {
@@ -329,7 +321,7 @@ if (screenshotTheme === 'dark' || screenshotTheme === 'light') {
   nativeTheme.themeSource = screenshotTheme
 }
 
-electron.protocol.registerSchemesAsPrivileged([
+protocol.registerSchemesAsPrivileged([
   {
     scheme: 'canv-extension',
     privileges: {
