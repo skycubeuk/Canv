@@ -41,7 +41,6 @@ import { useIdleAutosnapshot } from './hooks/useIdleAutosnapshot'
 import type { ChatProvider } from './components/ChatPanel'
 import { getAdapter, configuredProviders } from './adapters'
 import type { Provider } from './adapters'
-import { ollamaAdapter } from './adapters/ollama'
 import { ServicesProvider } from './services'
 import { Contributions } from './contributions'
 
@@ -51,6 +50,7 @@ import { Contributions } from './contributions'
 // `registerContribution` from ./index, which would still be initializing
 // if the side-effect imports lived next to the registry definition.
 import './contributions/theme.contribution'
+import './contributions/ollama.contribution'
 
 function basename(rel: string): string {
   const i = rel.lastIndexOf('/')
@@ -74,25 +74,6 @@ function AppInner() {
   const notifications = useNotifications()
   const { showToast } = notifications
   const { settings, update, modelForAgent } = useSettings()
-
-  // Auto-refresh the Ollama model list whenever the base URL is set or changes.
-  // Silent on failure — keep the existing settings.ollamaModels so a previously
-  // successful refresh survives transient outages (server down, network blip).
-  useEffect(() => {
-    const url = settings.baseUrls?.ollama
-    if (!url) return
-    let cancelled = false
-    void (async () => {
-      try {
-        const names = await ollamaAdapter.listModels!(url)
-        if (cancelled) return
-        update({ ollamaModels: names })
-      } catch {
-        // Ollama not reachable. Keep the existing list as-is.
-      }
-    })()
-    return () => { cancelled = true }
-  }, [settings.baseUrls?.ollama, update])
 
   const [profile, setProfile] = useLocalStorage<string | null>('canv:profile', null)
   const { modes, defaultModeId } = useModes()
