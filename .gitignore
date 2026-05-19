@@ -37,3 +37,6 @@ canv-0.6.0/
 site/node_modules/
 site/dist/
 site/.astro/
+
+# Local-only brainstorming input
+PLAN.md
