@@ -32,7 +32,6 @@ import { useContributions } from './hooks/useContributions'
 import { useExtensionKeybindings } from './hooks/useExtensionKeybindings'
 import { useWorkspaceFileOps } from './hooks/useWorkspaceFileOps'
 import { useSelectionAgent } from './hooks/useSelectionAgent'
-import { applyAccent, applyTheme, resolveTheme } from './lib/accent'
 import { buildChatSystemPreamble } from './lib/buildChatSystemPreamble'
 import { TopBar } from './components/ide/TopBar'
 import { useChatSessions } from './hooks/useChatSessions'
@@ -45,6 +44,13 @@ import type { Provider } from './adapters'
 import { ollamaAdapter } from './adapters/ollama'
 import { ServicesProvider } from './services'
 import { Contributions } from './contributions'
+
+// Side-effect imports: each contribution self-registers via
+// registerContribution(). Importing them from a leaf (App.tsx, not
+// contributions/index.ts) sidesteps a TDZ cycle: contributions import
+// `registerContribution` from ./index, which would still be initializing
+// if the side-effect imports lived next to the registry definition.
+import './contributions/theme.contribution'
 
 function basename(rel: string): string {
   const i = rel.lastIndexOf('/')
@@ -68,19 +74,6 @@ function AppInner() {
   const notifications = useNotifications()
   const { showToast } = notifications
   const { settings, update, modelForAgent } = useSettings()
-
-  useEffect(() => {
-    applyAccent(settings.accent)
-    applyTheme(resolveTheme(settings.theme))
-  }, [settings.accent, settings.theme])
-
-  useEffect(() => {
-    if (settings.theme !== 'system') return
-    const mq = window.matchMedia('(prefers-color-scheme: dark)')
-    const onChange = () => applyTheme(mq.matches ? 'dark' : 'light')
-    mq.addEventListener('change', onChange)
-    return () => mq.removeEventListener('change', onChange)
-  }, [settings.theme])
 
   // Auto-refresh the Ollama model list whenever the base URL is set or changes.
   // Silent on failure — keep the existing settings.ollamaModels so a previously
