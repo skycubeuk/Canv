@@ -5,8 +5,7 @@ import { MigrationModal } from './components/MigrationModal'
 import { AppOverlays } from './components/ide/AppOverlays'
 import { legacyStateExists } from './lib/legacyState'
 import { WorkspaceShell } from './components/ide/WorkspaceShell'
-import { buildBottomPanelTabs, type BottomPanelTabsAdapter } from './components/ide/bottomPanelTabs'
-import { useLintIssues } from './hooks/useLintIssues'
+import { useBottomPanelTabs } from './hooks/useBottomPanelTabs'
 import { useSettings } from './hooks/useSettings'
 import { useWorkspace } from './hooks/useWorkspace'
 import { useLocalStorage } from './hooks/useLocalStorage'
@@ -108,7 +107,7 @@ function AppInner() {
     handleJumperReady, handleJumperDestroy,
     handleEditorChange,
     readLiveBuffer,
-    openSources, outlineNodes, focusedKey,
+    outlineNodes, focusedKey,
     jumpToMatch,
   } = editorRegistry
 
@@ -119,12 +118,6 @@ function AppInner() {
   const [recentFiles, setRecentFiles] = useState<string[]>([])
   const [revealFolderRel, setRevealFolderRel] = useState<string | null>(null)
   const [pendingDocAgent, setPendingDocAgent] = useState<AgentDef | null>(null)
-
-  const lintIssuesApi = useLintIssues({
-    openSources,
-    tree: workspace.tree,
-    opts: settings.lintRules,
-  })
 
   const handleClickBreadcrumbFolder = useCallback((folderRel: string) => {
     ideLayout.setSidebarTab('files')
@@ -242,10 +235,8 @@ function AppInner() {
     showBottomTab,
   })
   const {
-    runs, activeTabId, setActiveTabId,
     handleAgentFromToolbar, handleAgentOnDocument,
-    handleApply, handleRerun, handleCloseTab,
-    refineRun,
+    handleApply,
   } = selectionAgent
 
   const chatSession = useChatSessions({
@@ -261,16 +252,7 @@ function AppInner() {
     dialogs,
     historyClient: raEnabled ? getCanvHistory() : null,
   })
-  const {
-    chatMessages, chatBusy, pendingApprovals,
-    followLatest, setFollowLatest,
-    chatProvider, chatModel,
-    sendChat, retryFromAnchor, editAndRetry,
-    stopChat, clearChat,
-    onApprovalDecide,
-    sessions, activeId, createSession, selectSession, closeSession, setActiveSessionProviderModel,
-    getSession,
-  } = chatSession
+  const { chatMessages, chatProvider } = chatSession
 
   const availableModels: Record<ChatProvider, string[]> = useMemo(() => {
     const visible = new Set<Provider>(configuredProviders({ apiKeys: settings.apiKeys, baseUrls: settings.baseUrls, ollamaModels: settings.ollamaModels }))
@@ -315,13 +297,6 @@ function AppInner() {
       window.removeEventListener('canv:docAgent:pending', onDocAgentPending)
     }
   }, [])
-
-  const jumpToProblem = useCallback(
-    (issue: import('./lib/lintTypes').LintIssue) => {
-      editorRegistry.jumpToProblem(issue, lintIssuesApi.issues)
-    },
-    [editorRegistry, lintIssuesApi.issues],
-  )
 
   const chatSystemPreamble = useMemo(
     () => buildChatSystemPreamble({ activeProfile }),
@@ -445,64 +420,16 @@ function AppInner() {
     }
   }, [workspace, raEnabled, handleApply, getActiveEditor, notifications])
 
-  const bottomPanelAdapter = useMemo<BottomPanelTabsAdapter>(() => ({
-    runs,
-    activeRunId: activeTabId,
-    selectRun: setActiveTabId,
-    closeRun: handleCloseTab,
-    applyRun: applyRunWithSnapshot,
-    rerunRun: handleRerun,
-    refineRun,
-    chatMessages,
-    chatBusy,
-    chatProvider,
-    chatModel,
-    sendChat,
-    clearChat,
-    stopChat,
-    retryChat: retryFromAnchor,
-    editAndRetryChat: editAndRetry,
-    pendingApprovals,
-    decideApproval: onApprovalDecide,
-    followLatest,
-    setFollowLatest,
-    contextFileName: workspace.activeMarkdownRel ? basename(workspace.activeMarkdownRel) : null,
-    chatFontSize: settings.chatFontSize,
-    sessions,
-    activeSessionId: activeId,
-    createSession,
-    selectSession,
-    closeSession,
-    changeProviderModel: setActiveSessionProviderModel,
-    availableModels,
-    getSession,
-    chatSystemPreamble,
-    problems: lintIssuesApi.issues,
-    lintScanState: lintIssuesApi.scanState,
-    lintScanError: lintIssuesApi.scanError,
-    scanProblems: () => { void lintIssuesApi.scanWorkspace() },
-    clearProblems: lintIssuesApi.clearWorkspaceIssues,
-    jumpToProblem,
-    pricingOverrides: settings.pricingOverrides,
-    fileHistoryEnabled: raEnabled,
+  const bottomPanelTabs = useBottomPanelTabs({
     fileHistoryTarget,
     fileHistoryNonce,
-    fileHistoryHistory: raEnabled ? getCanvHistory() : null,
-    onFileHistoryOpenDiff: (r) => handleOpenDiff(r.relPath, r.commitSha, r.baseLabel),
-    onFileHistoryRestore: (r) => setRestoreTarget(r),
-  }), [
-    runs, activeTabId, setActiveTabId, handleCloseTab, applyRunWithSnapshot, handleRerun, refineRun,
-    chatMessages, chatBusy, chatProvider, chatModel,
-    sendChat, clearChat, stopChat, retryFromAnchor, editAndRetry,
-    pendingApprovals, onApprovalDecide, followLatest, setFollowLatest,
-    workspace.activeMarkdownRel, settings.chatFontSize, settings.pricingOverrides,
-    sessions, activeId, createSession, selectSession, closeSession, setActiveSessionProviderModel, availableModels,
-    getSession, chatSystemPreamble,
-    lintIssuesApi, jumpToProblem,
-    raEnabled, fileHistoryTarget, fileHistoryNonce, handleOpenDiff, setRestoreTarget,
-  ])
-
-  const bottomPanelTabs = useMemo(() => buildBottomPanelTabs(bottomPanelAdapter), [bottomPanelAdapter])
+    raEnabled,
+    applyRunWithSnapshot,
+    availableModels,
+    chatSystemPreamble,
+    onOpenDiff: handleOpenDiff,
+    onOpenRestore: setRestoreTarget,
+  })
 
   // Browser-only build: show a simple banner instead of the workspace UI.
   if (!isElectron()) {
