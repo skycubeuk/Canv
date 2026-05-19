@@ -27,8 +27,8 @@ import { exportBackup } from './lib/backup'
 import { useDialogs } from './lib/dialogs'
 import { useNotifications } from './hooks/useNotifications'
 import { useEditorRegistry, editorMapKey } from './hooks/useEditorRegistry'
-import { useExtensionEventBridge } from './hooks/useExtensionEventBridge'
 import { useContributions } from './hooks/useContributions'
+import { useService } from './services'
 import { useExtensionKeybindings } from './hooks/useExtensionKeybindings'
 import { useWorkspaceFileOps } from './hooks/useWorkspaceFileOps'
 import { useSelectionAgent } from './hooks/useSelectionAgent'
@@ -103,7 +103,7 @@ function AppInner() {
     showToast: notifications.showToast,
   })
 
-  const onActiveEditorUpdate = useExtensionEventBridge()
+  const onActiveEditorUpdate = useService('editorRegistry').onActiveEditorUpdate
   const editorRegistry = useEditorRegistry({ workspace })
   const {
     editorsRef, jumpersRef,

@@ -10,6 +10,7 @@ import { useIdeLayout } from '../hooks/useIdeLayout'
 import { useCommands } from '../hooks/useCommands'
 import { useContributions } from '../hooks/useContributions'
 import { useEditorRegistry } from '../hooks/useEditorRegistry'
+import { useExtensionEventBridge } from '../hooks/useExtensionEventBridge'
 import { useEditorStats } from '../hooks/useEditorStats'
 import { useLintIssues } from '../hooks/useLintIssues'
 import { useProfilePicker } from '../hooks/useProfilePicker'
@@ -61,7 +62,12 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
   const contributions = useContributions()
 
   // Editor registry + everything that consumes it.
-  const editorRegistry = useEditorRegistry({ workspace })
+  const editorRegistryRaw = useEditorRegistry({ workspace })
+  const onActiveEditorUpdate = useExtensionEventBridge()
+  const editorRegistry = useMemo(
+    () => ({ ...editorRegistryRaw, onActiveEditorUpdate }),
+    [editorRegistryRaw, onActiveEditorUpdate],
+  )
   const activeEditor = editorRegistry.getActiveEditor()
   const editorStats = useEditorStats(activeEditor)
   const lint = useLintIssues({
