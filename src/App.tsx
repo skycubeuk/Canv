@@ -34,7 +34,6 @@ import { useSelectionAgent } from './hooks/useSelectionAgent'
 import { buildChatSystemPreamble } from './lib/buildChatSystemPreamble'
 import { TopBar } from './components/ide/TopBar'
 import { useChatSessions } from './hooks/useChatSessions'
-import { useAppCommands } from './hooks/useAppCommands'
 import { useDockBridgeMain } from './hooks/useDockBridgeMain'
 import type { ChatProvider } from './components/ChatPanel'
 import { getAdapter, configuredProviders } from './adapters'
@@ -52,6 +51,7 @@ import './contributions/ollama.contribution'
 import './contributions/quota-error.contribution'
 import './contributions/idle-snapshot.contribution'
 import './contributions/extension-keybindings.contribution'
+import './contributions/commands.contribution'
 
 function basename(rel: string): string {
   const i = rel.lastIndexOf('/')
@@ -309,45 +309,31 @@ function AppInner() {
     return result
   }, [settings.apiKeys, settings.baseUrls, settings.ollamaModels, chatProvider, chatMessages.length])
 
-  const handleExport = useCallback(
-    (fmt: 'txt' | 'md') => {
-      const view = getActiveEditor()
-      if (!view || !workspace.activeMarkdownRel) return
-      const text = view.state.doc.toString()
-      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      const name = basename(workspace.activeMarkdownRel).replace(/\.(md|markdown)$/i, '')
-      a.href = url
-      a.download = `${name || 'document'}.${fmt}`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
-    },
-    [getActiveEditor, workspace.activeMarkdownRel],
-  )
-
   const activeEditor = editorRegistry.getActiveEditor()
   const { wordCount, selectionWordCount } = useEditorStats(activeEditor)
 
-  useAppCommands({
-    commands,
-    ideLayout,
-    workspace,
-    activeProfile,
-    dialogs,
-    openSettingsTab,
-    openSwitcher: profilePicker.openSwitcher,
-    changeWorkspace: fileOps.changeWorkspace,
-    openRemoteWorkspace: fileOps.openRemoteWorkspace,
-    handleExport,
-    getActiveEditor,
-    handleAgentOnDocument,
-    setPaletteMode,
-    setPaletteOpen,
-    setPendingDocAgent,
-  })
+  // Bridge events from commands.contribution → App-local UI state.
+  // The palette open/close flags and pendingDocAgent stay in AppInner;
+  // the contribution dispatches CustomEvents to drive them.
+  useEffect(() => {
+    const onPaletteOpen = (e: Event) => {
+      const detail = (e as CustomEvent<{ mode: PaletteMode }>).detail
+      if (!detail) return
+      setPaletteMode(detail.mode)
+      setPaletteOpen(true)
+    }
+    const onDocAgentPending = (e: Event) => {
+      const detail = (e as CustomEvent<{ agent: AgentDef }>).detail
+      if (!detail) return
+      setPendingDocAgent(detail.agent)
+    }
+    window.addEventListener('canv:palette:open', onPaletteOpen)
+    window.addEventListener('canv:docAgent:pending', onDocAgentPending)
+    return () => {
+      window.removeEventListener('canv:palette:open', onPaletteOpen)
+      window.removeEventListener('canv:docAgent:pending', onDocAgentPending)
+    }
+  }, [])
 
   const jumpToProblem = useCallback(
     (issue: import('./lib/lintTypes').LintIssue) => {

@@ -1,52 +1,45 @@
-import { useEffect, useRef } from 'react'
+import { DisposableStore, toDisposable } from '../lib/lifecycle'
 import { isElectron } from '../lib/fs'
 import { SETTINGS_TAB_KEY } from '../lib/tabKey'
 import type { Action as AgentDef } from '../config/types'
-import type { useCommands } from './useCommands'
-import type { useIdeLayout } from './useIdeLayout'
-import type { useWorkspace } from './useWorkspace'
-import type { useDialogs } from '../lib/dialogs'
 import type { EditorGroupId } from '../types/workspace'
-import type { PaletteMode } from '../components/ide/CommandPalette'
+import { registerContribution, type Contribution } from './index'
 
-type CommandsApi = ReturnType<typeof useCommands>
-type IdeLayoutApi = ReturnType<typeof useIdeLayout>
-type WorkspaceApi = ReturnType<typeof useWorkspace>
-type DialogsApi = ReturnType<typeof useDialogs>
+/**
+ * Replaces useAppCommands. Registers every built-in command into
+ * `services.commands` and the per-agent "Run on document" commands derived
+ * from the active profile.
+ *
+ * Two pieces of state that previously lived in App.tsx via React useState —
+ * the command palette open/mode flags and `pendingDocAgent` — remain in
+ * AppInner; this contribution drives them via DOM CustomEvents (App listens
+ * and updates state). That keeps the migration narrow: no service-shape
+ * changes, no cascading consumer rewrites.
+ *
+ * Events (all dispatched on `window`):
+ *   - 'canv:palette:open'  { detail: { mode: 'commands' | 'files' } }
+ *   - 'canv:docAgent:pending'  { detail: { agent: AgentDef } }
+ *
+ * The contribution is re-registered whenever the services identity changes
+ * (e.g. activeProfile.actions changes), which re-derives the doc-agent
+ * commands. The keyboard registry tolerates re-registration as a replace.
+ */
+export const commands: Contribution = {
+  name: 'commands',
+  register(services) {
+    const store = new DisposableStore()
+    const cmds = services.commands
+    const { ideLayout, workspace, dialogs, modes, workspaceFileOps, profilePicker, editorRegistry, selectionAgent } = services
 
-export interface UseAppCommandsArgs {
-  commands: CommandsApi
-  ideLayout: IdeLayoutApi
-  workspace: WorkspaceApi
-  activeProfile: { actions: AgentDef[] }
-  dialogs: DialogsApi
-  openSettingsTab: () => void
-  openSwitcher: () => void
-  changeWorkspace: () => Promise<void>
-  openRemoteWorkspace: () => Promise<void>
-  handleExport: (fmt: 'txt' | 'md') => void
-  getActiveEditor: () => import('@codemirror/view').EditorView | null
-  handleAgentOnDocument: (groupId: EditorGroupId, agent: AgentDef, instruction?: string) => void
-  setPaletteMode: (m: PaletteMode) => void
-  setPaletteOpen: (open: boolean) => void
-  setPendingDocAgent: (agent: AgentDef | null) => void
-}
+    // Resolve the active profile the same way ServicesProvider / AppInner do.
+    const activeProfileId = modes.profile ?? modes.defaultModeId
+    const activeProfile =
+      modes.modes.find((m) => m.id === activeProfileId) ??
+      modes.modes.find((m) => m.id === modes.defaultModeId)!
 
-export function useAppCommands(args: UseAppCommandsArgs): void {
-  const {
-    commands, ideLayout, workspace, activeProfile, dialogs,
-    openSettingsTab, openSwitcher,
-    changeWorkspace, openRemoteWorkspace,
-    handleExport, getActiveEditor,
-    handleAgentOnDocument,
-    setPaletteMode, setPaletteOpen,
-    setPendingDocAgent,
-  } = args
-
-  // ---- The big command-registration effect ----
-  useEffect(() => {
-    const disposers: Array<() => void> = []
-    const reg = (cmd: Parameters<typeof commands.register>[0]) => disposers.push(commands.register(cmd))
+    const reg = (cmd: Parameters<typeof cmds.register>[0]) => {
+      store.add(toDisposable(cmds.register(cmd)))
+    }
 
     reg({
       id: 'view.toggleSidebar', label: 'View: Toggle Sidebar', group: 'View',
@@ -116,25 +109,29 @@ export function useAppCommands(args: UseAppCommandsArgs): void {
     reg({
       id: 'palette.open', label: 'Open Command Palette', group: 'Palette',
       shortcut: 'Ctrl+Shift+P', runInEditable: true,
-      run: () => { setPaletteMode('commands'); setPaletteOpen(true) },
+      run: () => {
+        window.dispatchEvent(new CustomEvent('canv:palette:open', { detail: { mode: 'commands' } }))
+      },
     })
     reg({
       id: 'palette.openFile', label: 'Open File…', group: 'Palette',
       shortcut: 'Ctrl+P', runInEditable: true,
-      run: () => { setPaletteMode('files'); setPaletteOpen(true) },
+      run: () => {
+        window.dispatchEvent(new CustomEvent('canv:palette:open', { detail: { mode: 'files' } }))
+      },
     })
     reg({
       id: 'workspace.openSettings', label: 'Open Settings', group: 'Workspace',
       shortcut: 'Ctrl+,', runInEditable: true,
-      run: () => openSettingsTab(),
+      run: () => workspace.openSettingsTab(),
     })
     reg({
       id: 'workspace.changeWorkspace', label: 'Change Workspace…', group: 'Workspace',
-      run: () => { changeWorkspace() },
+      run: () => { void workspaceFileOps.changeWorkspace() },
     })
     reg({
       id: 'workspace.openRemote', label: 'Open Remote Workspace…', group: 'Workspace',
-      run: () => { openRemoteWorkspace() },
+      run: () => { void workspaceFileOps.openRemoteWorkspace() },
     })
     reg({
       id: 'tab.close', label: 'Close Active Tab', group: 'Tabs',
@@ -168,7 +165,7 @@ export function useAppCommands(args: UseAppCommandsArgs): void {
     })
     reg({
       id: 'profile.switch', label: 'Switch Profile…', group: 'Workspace',
-      run: () => openSwitcher(),
+      run: () => profilePicker.openSwitcher(),
     })
     reg({
       id: 'editor.splitRight', label: 'Split Right', group: 'Editor',
@@ -202,56 +199,69 @@ export function useAppCommands(args: UseAppCommandsArgs): void {
         }
       },
     })
+
+    // ---- Export commands ----
+    // Original handleExport lived in App.tsx; its logic is small and only
+    // touches services (editorRegistry + workspace), so inline it here.
+    const handleExport = (fmt: 'txt' | 'md') => {
+      const view = editorRegistry.getActiveEditor()
+      const rel = workspace.activeMarkdownRel
+      if (!view || !rel) return
+      const text = view.state.doc.toString()
+      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      const i = rel.lastIndexOf('/')
+      const base = i >= 0 ? rel.slice(i + 1) : rel
+      const name = base.replace(/\.(md|markdown)$/i, '')
+      a.href = url
+      a.download = `${name || 'document'}.${fmt}`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    }
+
     reg({
       id: 'export.markdown',
       label: 'Export as .md',
       group: 'Workspace',
-      when: () => workspace.activeMarkdownRel != null && getActiveEditor() != null,
+      when: () => workspace.activeMarkdownRel != null && editorRegistry.getActiveEditor() != null,
       run: () => handleExport('md'),
     })
     reg({
       id: 'export.text',
       label: 'Export as .txt',
       group: 'Workspace',
-      when: () => workspace.activeMarkdownRel != null && getActiveEditor() != null,
+      when: () => workspace.activeMarkdownRel != null && editorRegistry.getActiveEditor() != null,
       run: () => handleExport('txt'),
     })
 
-    return () => { for (const d of disposers) d() }
-  }, [commands, ideLayout, workspace, changeWorkspace, openRemoteWorkspace, openSwitcher, openSettingsTab, getActiveEditor, handleExport, dialogs, setPaletteMode, setPaletteOpen])
-
-  // ---- Document-agent commands effect ----
-  // Document-agent palette commands. Registered separately so the big effect
-  // above doesn't re-run (and re-fire ~30 register/dispose notifies) every
-  // time handleAgentOnDocument's identity changes — that path was hitting
-  // React's max-update-depth via useSyncExternalStore notifications.
-  const agentRunRef = useRef(handleAgentOnDocument)
-  // eslint-disable-next-line react-hooks/refs -- keep the ref in sync with the latest callback so the agent-command effect doesn't need it as a dep
-  agentRunRef.current = handleAgentOnDocument
-  const agentWorkspaceRef = useRef(workspace)
-  // eslint-disable-next-line react-hooks/refs -- keep the ref in sync with the latest workspace so when()/run() closures see fresh state without re-registering
-  agentWorkspaceRef.current = workspace
-
-  useEffect(() => {
-    const disposers: Array<() => void> = []
+    // ---- Document-agent commands ----
+    // One command per agent that consumes the whole document. Agents that
+    // need an instruction surface the doc-agent input via the
+    // 'canv:docAgent:pending' event; AppOverlays renders the modal.
     const enabledDocAgents = activeProfile.actions.filter(
       (a) => a.inputMode === 'document' || a.inputMode === 'selection-or-document',
     )
     for (const agent of enabledDocAgents) {
-      disposers.push(commands.register({
+      reg({
         id: `agent.runOnDocument.${agent.id}`,
         label: `Run "${agent.label}" on document`,
         group: 'Agent',
-        when: () => agentWorkspaceRef.current.activeMarkdownRel != null,
+        when: () => workspace.activeMarkdownRel != null,
         run: () => {
           if (agent.needsInstruction) {
-            setPendingDocAgent(agent)
+            window.dispatchEvent(new CustomEvent<{ agent: AgentDef }>('canv:docAgent:pending', { detail: { agent } }))
           } else {
-            agentRunRef.current(agentWorkspaceRef.current.activeGroupId, agent)
+            selectionAgent.handleAgentOnDocument(workspace.activeGroupId, agent)
           }
         },
-      }))
+      })
     }
-    return () => { for (const d of disposers) d() }
-  }, [commands, activeProfile.actions, setPendingDocAgent])
+
+    return store
+  },
 }
+
+registerContribution(commands)
