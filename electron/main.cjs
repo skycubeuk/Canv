@@ -791,88 +791,6 @@ function registerFsHandlers() {
 
 let popoutWindow = null
 
-function broadcastToMainWindow(channel, payload) {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send(channel, payload)
-  }
-}
-
-function broadcastToPopout(channel, payload) {
-  if (popoutWindow && !popoutWindow.isDestroyed()) {
-    popoutWindow.webContents.send(channel, payload)
-  }
-}
-
-function registerDockHandlers() {
-  ipcMain.handle('canvDock:openPopout', async () => {
-    if (popoutWindow && !popoutWindow.isDestroyed()) {
-      popoutWindow.focus()
-      return
-    }
-    const win = new BrowserWindow({
-      width: 600,
-      height: 800,
-      minWidth: 360,
-      minHeight: 320,
-      backgroundColor: nativeTheme.shouldUseDarkColors ? '#171717' : '#fafaf9',
-      title: 'Canv Dock',
-      icon: APP_ICON,
-      webPreferences: {
-        preload: path.join(__dirname, 'preload.cjs'),
-        contextIsolation: true,
-        nodeIntegration: false,
-        sandbox: true,
-      },
-    })
-    popoutWindow = win
-    configureWindowOpenHandler(win)
-
-    if (app.isPackaged) {
-      const indexPath = path.join(__dirname, '..', 'dist', 'index.html')
-      await win.loadFile(indexPath, { search: 'mode=dock' })
-    } else {
-      await win.loadURL(`${DEV_URL}?mode=dock`)
-    }
-
-    win.on('closed', () => {
-      // Tear down any extension WebContentsViews that were reparented into the
-      // pop-out. The next mount in main triggers a fresh spawn via the normal
-      // showPanelInSlot path — simpler than reparenting back to main here,
-      // and avoids guessing bounds when the main-window slot isn't mounted.
-      if (extensionRuntime) {
-        const hosted = extensionRuntime.idsHostedBy(win)
-        for (const id of hosted) {
-          try { extensionRuntime.destroy(id, { reason: 'host-window-closed' }) } catch { /* ignore */ }
-        }
-      }
-      if (popoutWindow === win) popoutWindow = null
-      broadcastToMainWindow('canvDock:popoutClosed')
-    })
-  })
-
-  ipcMain.handle('canvDock:closePopout', async () => {
-    if (popoutWindow && !popoutWindow.isDestroyed()) {
-      popoutWindow.destroy()
-    }
-    popoutWindow = null
-  })
-
-  // Relay: main renderer pushes state → forward to popout.
-  ipcMain.on('canvDock:state', (_e, state) => {
-    broadcastToPopout('canvDock:state', state)
-  })
-
-  // Relay: popout sends user action → forward to main renderer.
-  ipcMain.on('canvDock:userAction', (_e, action) => {
-    broadcastToMainWindow('canvDock:userAction', action)
-  })
-
-  // Relay: popout signals ready → tell main renderer so it can push an immediate snapshot.
-  ipcMain.on('canvDock:ready', () => {
-    broadcastToMainWindow('canvDock:popoutReady')
-  })
-}
-
 function buildExtensionHost() {
   // The main window's React renderer owns the editor state. We can't query it
   // synchronously from main, so the renderer subscribes to a tiny request/reply
@@ -1627,6 +1545,8 @@ function makeDeps() {
     toRel, isInternal, isSitePath,
     getExtensionClaimedExts, invalidateExtensionClaimedExts,
     onWorkspaceChangedGlobal, getHistoryService, startWatcher, stopWatcher,
+    configureWindowOpenHandler,
+    APP_ICON, DEV_URL,
 
     // Module-scoped maps used by extension/UI handlers
     getPendingPrompts: () => pendingPrompts,
@@ -1658,7 +1578,6 @@ app.whenReady().then(() => {
   extService.registerIpcHandlers(ipcMain, deps)
   wsService.registerIpcHandlers(ipcMain, deps)
   registerFsHandlers()
-  registerDockHandlers()
   registerExtensionHandlers()
   createWindow()
 })
