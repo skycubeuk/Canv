@@ -30,6 +30,8 @@ contextBridge.exposeInMainWorld('canv', {
     insertAtCursor:    (text) => ipcRenderer.invoke('canvExt:activeDoc.insertAtCursor', text),
     replaceSelection:  (text) => ipcRenderer.invoke('canvExt:activeDoc.replaceSelection', text),
     setText:           (text) => ipcRenderer.invoke('canvExt:activeDoc.setText', text),
+    getBytes:          () => ipcRenderer.invoke('canvExt:activeDoc.getBytes'),
+    setBytes:          (bytes) => ipcRenderer.invoke('canvExt:activeDoc.setBytes', bytes),
   },
   workspace: {
     getRoot:  () => ipcRenderer.invoke('canvExt:workspace.getRoot'),

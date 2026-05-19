@@ -26,4 +26,26 @@ describe('test fixtures', () => {
     if (!r.ok) throw new Error(r.errors.join('\n'))
     expect(r.manifest.contributions).toHaveLength(3)
   })
+
+  it('phase5b-pdf-viewer manifest is valid', () => {
+    const raw = JSON.parse(fs.readFileSync(path.join(__dirname, 'phase5b-pdf-viewer', 'manifest.json'), 'utf-8'))
+    const r = validateManifest(raw)
+    if (!r.ok) throw new Error(r.errors.join('\n'))
+    expect(r.manifest.id).toBe('phase5b-pdf-viewer')
+    expect(r.manifest.contributions.some((c) => c.type === 'fileHandler')).toBe(true)
+  })
+
+  it('phase5b-md-toolbox manifest is valid', () => {
+    const raw = JSON.parse(fs.readFileSync(path.join(__dirname, 'phase5b-md-toolbox', 'manifest.json'), 'utf-8'))
+    const r = validateManifest(raw)
+    if (!r.ok) throw new Error(r.errors.join('\n'))
+    expect(r.manifest.contributions).toHaveLength(3)
+  })
+
+  it('phase5b-tex-language manifest is valid', () => {
+    const raw = JSON.parse(fs.readFileSync(path.join(__dirname, 'phase5b-tex-language', 'manifest.json'), 'utf-8'))
+    const r = validateManifest(raw)
+    if (!r.ok) throw new Error(r.errors.join('\n'))
+    expect(r.manifest.contributions.some((c) => c.type === 'language')).toBe(true)
+  })
 })

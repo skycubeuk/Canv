@@ -1,0 +1,10 @@
+{
+  "id": "phase5b-pdf-viewer",
+  "name": "Phase 5b PDF Viewer",
+  "version": "1.0.0",
+  "description": "Opens .pdf files in a viewer tab. Demonstrates fileHandler with mode: viewer and the activeFile.changed event.",
+  "capabilities": [],
+  "contributions": [
+    { "type": "fileHandler", "id": "main", "extensions": [".pdf"], "mode": "viewer", "entry": "panels/main.html" }
+  ]
+}

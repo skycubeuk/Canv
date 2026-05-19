@@ -39,6 +39,7 @@ const activity = require('./extensions/activity.cjs')
 const { buildAllContributions, EMPTY: EMPTY_CONTRIBS } = require('./extensions/contributions.cjs')
 const { createSession, listSessions, loadSession, writeIteration, appendHistory, deleteSession, pruneOldSessions } = require('./extensions/builder/scratch.cjs')
 const { parsePayload } = require('./extensions/builder/parse-payload.cjs')
+const { readDefaults: readFileHandlerDefaults, writeDefault: writeFileHandlerDefault } = require('./extensions/file-handler-defaults.cjs')
 
 const SCRATCH_BASE_DIR = path.join(app.getPath('userData'), 'Canv', 'builder-scratch')
 const SCRATCH_KEEP_N = 20  // prune older sessions automatically
@@ -70,12 +71,16 @@ let trustStore = null
 let workspaceRegistry = null
 const pendingPrompts = new Map()    // reqId → { resolve, reject }
 const statusBarOverrides = new Map() // key: '<extensionId>:<itemId>' → { text?, icon?, tooltip? }
+// Phase 5b: tracks the file each fileHandler-spawned extension is showing,
+// so canv.activeDoc.getBytes/setBytes know which path to operate on.
+const extensionActiveFile = new Map() // extensionId → { relPath, absPath, mode }
 let nextPromptId = 1
 
 function onWorkspaceChangedGlobal() {
   workspaceRegistry = (WORKSPACE && WORKSPACE.kind === 'local')
     ? new Registry(WORKSPACE.root)
     : null
+  invalidateExtensionClaimedExts()
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('canvExtensions:registryChanged')
   }
@@ -162,12 +167,51 @@ function isSitePath(rel) {
   return parts.length >= 4 && parts[2].length > 0
 }
 
+// Set of file extensions claimed by enabled+trusted extensions' language or
+// fileHandler contributions in the current workspace. Lazily rebuilt — kept
+// in sync via invalidateExtensionClaimedExts() on registry changes.
+let extensionClaimedExts = null
+
+function getExtensionClaimedExts() {
+  if (extensionClaimedExts) return extensionClaimedExts
+  const out = new Set()
+  try {
+    if (workspaceRegistry && WORKSPACE && WORKSPACE.kind === 'local') {
+      const dir = path.join(WORKSPACE.root, '.canv', 'extensions')
+      for (const entry of workspaceRegistry.listEntries()) {
+        if (!entry.enabled || entry.trustedAt == null) continue
+        let manifest
+        try { manifest = JSON.parse(fs.readFileSync(path.join(dir, entry.id, 'manifest.json'), 'utf-8')) }
+        catch { continue }
+        for (const c of (manifest.contributions || [])) {
+          if (!c || (c.type !== 'language' && c.type !== 'fileHandler')) continue
+          if (!Array.isArray(c.extensions)) continue
+          for (const e of c.extensions) {
+            if (typeof e === 'string') out.add(e.toLowerCase())
+          }
+        }
+      }
+    }
+  } catch { /* fall through with whatever we have */ }
+  extensionClaimedExts = out
+  return out
+}
+
+function invalidateExtensionClaimedExts() {
+  extensionClaimedExts = null
+}
+
 function isAllowedExt(rel, abs) {
   const ext = path.extname(abs).toLowerCase()
   if (rel === '.canv/site_index.yaml') return ext === '.yaml'
   if (isSitePath(rel)) return SITE_EXTS.has(ext)
   if (isInternal(rel)) return INTERNAL_EXTS.has(ext)
-  return PUBLIC_EXTS.has(ext)
+  if (PUBLIC_EXTS.has(ext)) return true
+  // Extensions that contribute a language or fileHandler for this extension
+  // unlock the file for reading. Without this, .tex/.bib/etc would be
+  // rejected by the FS bridge before a language contribution could syntax-
+  // highlight them.
+  return getExtensionClaimedExts().has(ext)
 }
 
 function isAllowedDirEntry(name) {
@@ -1253,6 +1297,8 @@ function buildExtensionHost() {
       // No timeout — user might take their time.
     }),
 
+    getActiveFileFor: (extensionId) => extensionActiveFile.get(extensionId) ?? null,
+
     onStatusBarItemUpdated: (itemId, payload) => {
       const key = `${payload.extensionId}:${itemId}`
       const existing = statusBarOverrides.get(key) || {}
@@ -1306,16 +1352,26 @@ function registerExtensionHandlers() {
   }
 
   function onRegistryChanged() {
+    invalidateExtensionClaimedExts()
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('canvExtensions:registryChanged')
     }
   }
 
+  // Per-extension in-flight spawn locks. React strict-mode and fast tab
+  // switches can fire showFileInExtension twice before the first spawn
+  // completes; without the lock the second call sees manifestFor still false
+  // and tries to spawn again, throwing "already spawned".
+  const spawnLocks = new Map()
+
   async function spawnInstalled(id, opts = {}) {
     if (!WORKSPACE || WORKSPACE.kind !== 'local') return { ok: false, reason: 'no-workspace' }
     if (!workspaceRegistry) return { ok: false, reason: 'no-registry' }
+    const existing = spawnLocks.get(id)
+    if (existing) return await existing
     const entry = workspaceRegistry.get(id)
     if (!entry) return { ok: false, reason: 'not-installed' }
+    const promise = (async () => {
     const dir = path.join(WORKSPACE.root, '.canv', 'extensions', id)
     // Tamper detection: any spawn path (enable toggle, requestActivation,
     // reload) re-hashes the installed dir and compares to the hash recorded
@@ -1334,14 +1390,54 @@ function registerExtensionHandlers() {
     const bounds = opts.bounds ?? { x: 0, y: 0, width: 0, height: 0 }
     await extensionRuntime.spawn({
       extensionDir: dir, manifest, hostWindow: mainWindow, bounds,
+      entryRel: opts.entryRel,
     })
     return { ok: true }
+    })()
+    spawnLocks.set(id, promise)
+    try { return await promise }
+    finally { spawnLocks.delete(id) }
   }
 
   registerProtocol(electron.protocol, {
-    extensionDirFor: (id) => scratchDirForId(id) ?? extensionRuntime.extensionDirFor(id),
+    extensionDirFor: (id) => {
+      // Scratch dirs (Builder preview) take precedence.
+      const scratch = scratchDirForId(id)
+      if (scratch) return scratch
+      // Spawned extensions (panels, fileHandlers) know their own dir.
+      const fromRuntime = extensionRuntime.extensionDirFor(id)
+      if (fromRuntime) return fromRuntime
+      // Installed-but-not-spawned extensions (e.g. language contributions
+      // loaded into the main renderer via dynamic import) live on disk under
+      // <workspace>/.canv/extensions/<id>. Allow the protocol to serve their
+      // files even though no WebContentsView is running.
+      if (WORKSPACE && WORKSPACE.kind === 'local' && workspaceRegistry) {
+        const entry = workspaceRegistry.get(id)
+        if (entry && entry.enabled && entry.trustedAt != null) {
+          return path.join(WORKSPACE.root, '.canv', 'extensions', id)
+        }
+      }
+      return null
+    },
     sharedDir: EXTENSIONS_SHARED_DIR,
-    manifestFor: (id) => scratchManifestForId(id) ?? extensionRuntime.manifestFor(id),
+    manifestFor: (id) => {
+      const scratch = scratchManifestForId(id)
+      if (scratch) return scratch
+      const fromRuntime = extensionRuntime.manifestFor(id)
+      if (fromRuntime) return fromRuntime
+      // Installed-but-not-spawned: read manifest from disk so the protocol
+      // handler can compute a per-extension CSP for served language entries.
+      if (WORKSPACE && WORKSPACE.kind === 'local' && workspaceRegistry) {
+        const entry = workspaceRegistry.get(id)
+        if (entry && entry.enabled && entry.trustedAt != null) {
+          try {
+            const raw = fs.readFileSync(path.join(WORKSPACE.root, '.canv', 'extensions', id, 'manifest.json'), 'utf-8')
+            return JSON.parse(raw)
+          } catch { /* fall through to null */ }
+        }
+      }
+      return null
+    },
   })
 
   // Bundle all handlers and register them with ipcMain.
@@ -1416,6 +1512,18 @@ function registerExtensionHandlers() {
   ipcMain.handle('canvExtensions:listInstalled', async () => {
     if (!workspaceRegistry) return []
     return workspaceRegistry.listEntries()
+  })
+
+  ipcMain.handle('canvExtensions:getFileHandlerDefaults', async () => {
+    if (!WORKSPACE || WORKSPACE.kind !== 'local') return {}
+    return readFileHandlerDefaults(WORKSPACE.root)
+  })
+
+  ipcMain.handle('canvExtensions:setFileHandlerDefault', async (_e, ext, extensionId) => {
+    if (!WORKSPACE || WORKSPACE.kind !== 'local') return { ok: false }
+    writeFileHandlerDefault(WORKSPACE.root, ext, extensionId)
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('canvExtensions:registryChanged')
+    return { ok: true }
   })
 
   ipcMain.handle('canvExtensions:readAllContributions', async () => {
@@ -1664,6 +1772,43 @@ function registerExtensionHandlers() {
     const m = /^ext:([^:]+):([^:]+)$/.exec(slotId)
     if (!m) return
     const [, extensionId] = m
+    if (extensionRuntime?.manifestFor(extensionId)) {
+      extensionRuntime.setBounds(extensionId, { x: 0, y: 0, width: 0, height: 0 })
+    }
+  })
+
+  ipcMain.handle('canvExtensions:showFileInExtension', async (_e, extensionId, relPath, mode, bounds) => {
+    if (!extensionRuntime || !workspaceRegistry || !WORKSPACE || WORKSPACE.kind !== 'local') return { ok: false, error: 'no workspace' }
+    const wsTrust = trustStore.stateFor(WORKSPACE.root)
+    if (wsTrust !== 'trusted') return { ok: false, error: 'workspace not trusted' }
+    let absPath
+    try { absPath = safeResolve(WORKSPACE.root, relPath) }
+    catch (e) { return { ok: false, error: (e && e.message) || 'path escape' } }
+    extensionActiveFile.set(extensionId, { relPath, absPath, mode })
+    if (extensionRuntime.manifestFor(extensionId)) {
+      extensionRuntime.setBounds(extensionId, bounds)
+      extensionRuntime.dispatchEvent('canvExt:activeFile.changed', { extensionId, relPath, mode })
+      return { ok: true }
+    }
+    // First spawn for this fileHandler — load its declared entry, not the
+    // default index.html (which doesn't exist on fileHandler-only extensions).
+    const ext = (relPath.match(/\.[^./\\]+$/) || [''])[0].toLowerCase()
+    const dir = path.join(WORKSPACE.root, '.canv', 'extensions', extensionId)
+    let entryRel = null
+    try {
+      const manifest = JSON.parse(await fsp.readFile(path.join(dir, 'manifest.json'), 'utf-8'))
+      const handler = (manifest.contributions || []).find((c) => c && c.type === 'fileHandler' && Array.isArray(c.extensions) && c.extensions.includes(ext))
+      if (handler && typeof handler.entry === 'string') entryRel = handler.entry
+    } catch { /* fall through; spawnInstalled will use default */ }
+    return await spawnInstalled(extensionId, { bounds, entryRel })
+  })
+
+  ipcMain.handle('canvExtensions:hideFileInExtension', async (_e, extensionId /*, _relPath */) => {
+    // Do NOT clear extensionActiveFile here. React strict-mode mounts the
+    // slot twice (mount → cleanup → remount), which would otherwise race
+    // against the renderer's first getBytes call and produce "no active
+    // file for this extension". The next showFileInExtension overwrites the
+    // entry; closing the tab just hides the view via zero bounds.
     if (extensionRuntime?.manifestFor(extensionId)) {
       extensionRuntime.setBounds(extensionId, { x: 0, y: 0, width: 0, height: 0 })
     }

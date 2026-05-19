@@ -33,6 +33,8 @@ function setMockCanvExt(overrides: Partial<NonNullable<typeof window.canvExtensi
     }) as never,
     onChanged: vi.fn(() => () => {}),
     onCrashed: vi.fn(() => () => {}),
+    getFileHandlerDefaults: vi.fn().mockResolvedValue({}) as never,
+    setFileHandlerDefault: vi.fn().mockResolvedValue(undefined) as never,
   }
   window.canvExtensions = { ...base, ...overrides }
 }

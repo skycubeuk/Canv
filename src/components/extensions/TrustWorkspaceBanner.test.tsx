@@ -28,6 +28,8 @@ beforeEach(() => {
       languages: [],
     }) as never,
     onCrashed: vi.fn(() => () => {}),
+    getFileHandlerDefaults: vi.fn().mockResolvedValue({}) as never,
+    setFileHandlerDefault: vi.fn() as never,
   }
 })
 

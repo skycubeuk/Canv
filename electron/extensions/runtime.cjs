@@ -76,7 +76,7 @@ class ExtensionRuntime {
   // with { electron, extensionPreloadPath } so it can create WebContentsViews.
   // ------------------------------------------------------------------
 
-  async spawn({ extensionDir, manifest, hostWindow, bounds }) {
+  async spawn({ extensionDir, manifest, hostWindow, bounds, entryRel }) {
     if (!this._electron) throw new Error('runtime not bound to electron (constructor opts.electron)')
     if (this._byId.has(manifest.id)) throw new Error(`extension "${manifest.id}" already spawned`)
 
@@ -137,11 +137,16 @@ class ExtensionRuntime {
       })
     }
 
-    // Load entry; the protocol handler serves canv-extension://<id>/ → <extensionDir>/index.html
-    // (or panels/main.html if the manifest's first panel contribution declares one).
+    // Load entry. Callers can pass an explicit entryRel (e.g. fileHandler's
+    // entry when spawning for a file open). Otherwise default to the first
+    // panel contribution's entry, falling back to index.html.
     const firstPanel = manifest.contributions.find((c) => c.type === 'panel')
-    const entryRel = firstPanel ? firstPanel.entry : 'index.html'
-    await view.webContents.loadURL(`canv-extension://${manifest.id}/${entryRel}`)
+    const firstFileHandler = manifest.contributions.find((c) => c.type === 'fileHandler')
+    const resolvedEntry = entryRel
+      ?? (firstPanel ? firstPanel.entry : null)
+      ?? (firstFileHandler ? firstFileHandler.entry : null)
+      ?? 'index.html'
+    await view.webContents.loadURL(`canv-extension://${manifest.id}/${resolvedEntry}`)
 
     // Open DevTools in dev for the extension renderer (AFTER load so it attaches
     // cleanly and shows the loaded page rather than about:blank).

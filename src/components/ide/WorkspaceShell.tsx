@@ -20,6 +20,8 @@ import { DiffTab } from './tabs/DiffTab'
 import { ActivityBar, type BuiltinTab } from './ActivityBar'
 import { Folder, Search, History as HistoryIcon, LayoutDashboard, Puzzle } from 'lucide-react'
 import { useContributions } from '../../hooks/useContributions'
+import { useFileHandlerRouting } from '../../hooks/useFileHandlerRouting'
+import { ExtensionEditorTab } from '../extensions/ExtensionEditorTab'
 import type { Mode } from '../../config/types'
 import type { UseIdeLayoutApi, BottomLayout } from '../../hooks/useIdeLayout'
 import type { WorkspaceApi } from '../../hooks/useWorkspace'
@@ -120,6 +122,31 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
   } = props
 
   const contributions = useContributions()
+  const fileHandlerRouting = useFileHandlerRouting()
+
+  /**
+   * Open a file, routing through extension file handlers when a match exists.
+   * Pass opts.withExtensionId to force a specific handler, or null to force CodeMirror.
+   */
+  function openFile(rel: string, opts?: { withExtensionId?: string | null }) {
+    if (opts?.withExtensionId !== undefined) {
+      if (opts.withExtensionId === null) {
+        // Force text editor
+        void workspace.openTab(rel)
+        return
+      }
+      const handler = fileHandlerRouting.list(rel).find((h) => h.extensionId === opts.withExtensionId)
+      workspace.openExtensionTab(rel, opts.withExtensionId, handler?.mode ?? 'viewer')
+      return
+    }
+    // Auto-route
+    const handler = fileHandlerRouting.resolve(rel)
+    if (handler) {
+      workspace.openExtensionTab(rel, handler.extensionId, handler.mode)
+      return
+    }
+    void workspace.openTab(rel)
+  }
 
   const builtinTabs: BuiltinTab[] = [
     { id: 'files', label: 'Files', icon: Folder },
@@ -215,7 +242,8 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
                 openRels={openRels}
                 activeRel={workspace.activeMarkdownRel}
                 pinnedRels={pinnedRels}
-                onOpen={(rel) => workspace.openTab(rel)}
+                onOpen={(rel) => openFile(rel)}
+                onOpenWith={(rel, extensionId) => openFile(rel, { withExtensionId: extensionId })}
                 onPin={(rel) => workspace.pin(rel)}
                 onUnpin={(rel) => workspace.unpin(rel)}
                 onCreateFile={onCreateFile}
@@ -271,6 +299,16 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
                   }
                   if (t.kind === 'diff') {
                     return <DiffTab relPath={t.relPath} baseRef={t.baseRef} baseLabel={t.baseLabel} isActive={isActive} />
+                  }
+                  if (t.kind === 'extension') {
+                    return (
+                      <ExtensionEditorTab
+                        extensionId={t.extensionId}
+                        relPath={t.relPath}
+                        mode={t.mode}
+                        isActive={isActive}
+                      />
+                    )
                   }
                   return (
                     <Canvas

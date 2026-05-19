@@ -1,5 +1,6 @@
 'use strict'
 
+const fs = require('node:fs')
 const { requireCapability } = require('../capability.cjs')
 
 function requireCaller(runtime, event) {
@@ -48,6 +49,20 @@ function createActiveDocHandlers({ runtime, host }) {
       requireCapability(manifest, 'activeDoc.write')
       assertString(text, 'text')
       return host.setActiveDocText(text)
+    },
+    'canvExt:activeDoc.getBytes': async (event) => {
+      const { id: extensionId } = requireCaller(runtime, event)
+      const file = host.getActiveFileFor(extensionId)
+      if (!file) throw new Error('no active file for this extension')
+      return fs.readFileSync(file.absPath)
+    },
+    'canvExt:activeDoc.setBytes': async (event, bytes) => {
+      const { id: extensionId } = requireCaller(runtime, event)
+      const file = host.getActiveFileFor(extensionId)
+      if (!file) throw new Error('no active file for this extension')
+      if (file.mode !== 'editor') throw new Error('this fileHandler was opened read-only (mode: viewer)')
+      if (!Buffer.isBuffer(bytes) && !(bytes instanceof Uint8Array)) throw new TypeError('bytes must be a Buffer or Uint8Array')
+      fs.writeFileSync(file.absPath, Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes))
     },
   }
 }

@@ -1,6 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { EditorView } from '@codemirror/view'
-import { makeMarkdownState, type ActiveEditorUpdateInfo } from '../lib/cm/markdownEditor'
+import type { Extension } from '@codemirror/state'
+import { makeMarkdownState, languageCompartment, type ActiveEditorUpdateInfo } from '../lib/cm/markdownEditor'
+import { loadLanguageFor } from '../extensions-runtime/languageLoader'
 import { markdownToHtml } from '../lib/markdown'
 import type { LineWidth } from '../hooks/useSettings'
 import type { OpenTab, EditorGroupId } from '../types/workspace'
@@ -110,6 +112,17 @@ export function Canvas({
     const view = new EditorView({ state, parent: container })
     viewRef.current = view
     onEditorReady(groupId, tab.relPath, view)
+
+    // Asynchronously load a LanguageSupport from a workspace extension if one
+    // claims this file's extension. Reconfigures the language compartment in-place
+    // so the built-in markdown support is replaced without rebuilding the view.
+    // We guard with `viewRef.current === view` so a stale promise from a
+    // previous mount can never reconfigure a different file's editor.
+    void loadLanguageFor(tab.relPath).then((extLang) => {
+      if (extLang && viewRef.current === view) {
+        view.dispatch({ effects: languageCompartment.reconfigure(extLang as Extension) })
+      }
+    })
 
     const jumper: Jumper = (line, index) => {
       if (viewModeRef.current === 'preview') {

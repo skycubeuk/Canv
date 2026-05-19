@@ -8,10 +8,16 @@ const EVENT_TO_CAP = {
   selectionChanged: 'events.selectionChanged',
   docSaved: 'events.docSaved',
   workspaceChanged: 'events.workspaceChanged',
+  // fileHandler-specific: no capability required (the event is about the file
+  // that the fileHandler extension itself has open)
+  'activeFile.changed': null,
 }
 
+// Returns the required capability string, an empty string (no capability needed),
+// or undefined if the event type is unknown.
 function capabilityForEventType(t) {
-  return Object.prototype.hasOwnProperty.call(EVENT_TO_CAP, t) ? EVENT_TO_CAP[t] : null
+  if (!Object.prototype.hasOwnProperty.call(EVENT_TO_CAP, t)) return undefined
+  return EVENT_TO_CAP[t]
 }
 
 function createEventsHandlers({ runtime }) {
@@ -19,8 +25,8 @@ function createEventsHandlers({ runtime }) {
     'canvExt:events.subscribe': async (event, eventType) => {
       const { id, manifest } = requireCaller(runtime, event)
       const cap = capabilityForEventType(eventType)
-      if (!cap) throw new Error(`unknown event type "${eventType}"`)
-      requireCapability(manifest, cap)
+      if (cap === undefined) throw new Error(`unknown event type "${eventType}"`)
+      if (cap !== null) requireCapability(manifest, cap)
       runtime.subscribe(id, eventType)
     },
     'canvExt:events.unsubscribe': async (event, eventType) => {

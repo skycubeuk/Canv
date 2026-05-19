@@ -9,8 +9,11 @@ describe('capabilityForEventType', () => {
     expect(capabilityForEventType('docSaved')).toBe('events.docSaved')
     expect(capabilityForEventType('workspaceChanged')).toBe('events.workspaceChanged')
   })
-  it('returns null for unknown event types', () => {
-    expect(capabilityForEventType('badEvent')).toBe(null)
+  it('returns undefined for unknown event types', () => {
+    expect(capabilityForEventType('badEvent')).toBeUndefined()
+  })
+  it('returns null for activeFile.changed (no capability needed)', () => {
+    expect(capabilityForEventType('activeFile.changed')).toBe(null)
   })
 })
 

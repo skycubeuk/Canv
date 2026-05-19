@@ -98,4 +98,18 @@ describe('ExtensionInstallModal', () => {
     expect(screen.getByText(/No capabilities requested/i)).toBeTruthy()
     expect(screen.getByText(/No network access requested/i)).toBeTruthy()
   })
+
+  it('shows the red language banner when a language contribution is present', () => {
+    const m = { ...MANIFEST, contributions: [{ type: 'language', extensions: ['.tex'], entry: 'l.js' }] }
+    render(<ExtensionInstallModal sourceFolder="/x" manifest={m} onCancel={() => {}} onConfirm={() => {}} />)
+    expect(screen.getByText(/runs code in your editor/i)).toBeTruthy()
+    expect(screen.getByRole('button', { name: /understand/i })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /^install to this workspace$/i })).toBeNull()
+  })
+
+  it('shows the regular Install button when no language contribution', () => {
+    render(<ExtensionInstallModal sourceFolder="/x" manifest={MANIFEST} onCancel={() => {}} onConfirm={() => {}} />)
+    expect(screen.getByRole('button', { name: /install to this workspace/i })).toBeTruthy()
+    expect(screen.queryByText(/runs code in your editor/i)).toBeNull()
+  })
 })

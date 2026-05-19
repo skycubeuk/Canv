@@ -1,4 +1,6 @@
 import type React from 'react'
+import { LanguageRedConsentBanner } from './LanguageRedConsentBanner'
+import { summariseContributions } from './summariseContributions'
 
 export interface PreviewManifest {
   id: string
@@ -22,17 +24,11 @@ interface Props {
 
 const ELEVATED_CAPS = new Set(['workspace.write', 'activeDoc.write', 'ai', 'net'])
 
-function summariseContributions(contribs: unknown[]): string {
-  const counts: Record<string, number> = {}
-  for (const c of contribs as Array<{ type?: string }>) {
-    if (c && typeof c.type === 'string') counts[c.type] = (counts[c.type] || 0) + 1
-  }
-  return Object.entries(counts)
-    .map(([t, n]) => `${n} ${t}${n > 1 ? 's' : ''}`)
-    .join(' · ')
-}
-
 export function ExtensionInstallModal({ sourceFolder, manifest, onCancel, onConfirm }: Props) {
+  const languageContribs = (manifest.contributions as Array<{ type?: string; extensions?: string[] }>).filter((c) => c?.type === 'language')
+  const languageExts = Array.from(new Set(languageContribs.flatMap((c) => c.extensions ?? [])))
+  const hasLanguage = languageExts.length > 0
+
   return (
     <div role="dialog" aria-modal="true"
       onKeyDown={(e) => { if (e.key === 'Escape') onCancel() }}
@@ -44,6 +40,8 @@ export function ExtensionInstallModal({ sourceFolder, manifest, onCancel, onConf
           v{manifest.version} {manifest.author && `· by ${manifest.author}`}
         </div>
         {manifest.description && <p style={{ fontSize: 13, marginBottom: 12 }}>{manifest.description}</p>}
+
+        {hasLanguage && <LanguageRedConsentBanner extensionsHandled={languageExts} />}
 
         <Section title="Capabilities">
           {manifest.capabilities.length === 0
@@ -83,7 +81,13 @@ export function ExtensionInstallModal({ sourceFolder, manifest, onCancel, onConf
 
         <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
           <button type="button" onClick={onCancel} style={secondaryBtn}>Cancel</button>
-          <button type="button" onClick={onConfirm} style={primaryBtn}>Install to this workspace</button>
+          <button
+            type="button"
+            onClick={onConfirm}
+            style={hasLanguage ? redConsentBtn : primaryBtn}
+          >
+            {hasLanguage ? 'I understand — install anyway' : 'Install to this workspace'}
+          </button>
         </div>
       </div>
     </div>
@@ -138,4 +142,15 @@ const secondaryBtn: React.CSSProperties = {
   background: 'var(--color-elev)', color: 'var(--text-color-default)',
   border: '1px solid var(--border-color-default)', borderRadius: 4,
   padding: '8px 14px', cursor: 'pointer', font: 'inherit', fontSize: 12,
+}
+const redConsentBtn: React.CSSProperties = {
+  background: 'rgb(180 60 60)',
+  color: 'white',
+  border: '1px solid rgb(255 100 100)',
+  borderRadius: 4,
+  padding: '8px 14px',
+  cursor: 'pointer',
+  font: 'inherit',
+  fontSize: 12,
+  fontWeight: 600,
 }

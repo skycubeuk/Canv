@@ -19,6 +19,7 @@ interface Props {
   revealRel?: string | null
   revisionArchaeologyEnabled?: boolean
   onViewHistory?: (rel: string) => void
+  onOpenWith?: (rel: string, extensionId: string | null) => void
 }
 
 export function FilesTab(props: Props) {
@@ -42,6 +43,7 @@ export function FilesTab(props: Props) {
       revealRel={props.revealRel}
       revisionArchaeologyEnabled={props.revisionArchaeologyEnabled}
       onViewHistory={props.onViewHistory}
+      onOpenWith={props.onOpenWith}
     />
   )
 }

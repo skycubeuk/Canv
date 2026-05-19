@@ -3,6 +3,7 @@ import { useState, useRef, useEffect, useCallback, type KeyboardEvent } from 're
 interface ChatMessage {
   role: string  // 'user' | 'assistant'
   content: string
+  kind?: 'skills'
 }
 
 interface Props {
@@ -55,6 +56,37 @@ function AssistantMessage({ content }: { content: string }) {
   )
 }
 
+function SkillMessage({ content }: { content: string }) {
+  let skills: string[] = []
+  try {
+    const parsed = JSON.parse(content) as { skillsCalled?: unknown }
+    if (Array.isArray(parsed.skillsCalled)) skills = parsed.skillsCalled.filter((s): s is string => typeof s === 'string')
+  } catch { /* ignore */ }
+  if (skills.length === 0) return null
+  return (
+    <div style={{
+      alignSelf: 'flex-start',
+      fontSize: 11,
+      color: 'var(--text-color-subtle)',
+      padding: '4px 10px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: 4,
+      flexWrap: 'wrap',
+    }}>
+      <span>🛠 Consulted</span>
+      {skills.map((s, i) => (
+        <code key={i} style={{
+          padding: '1px 5px',
+          background: 'var(--color-elev)',
+          borderRadius: 3,
+          fontSize: 10,
+        }}>{s}</code>
+      ))}
+    </div>
+  )
+}
+
 export function BuilderChat({ history, pending, onSend }: Props) {
   const [input, setInput] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -87,13 +119,12 @@ export function BuilderChat({ history, pending, onSend }: Props) {
             Describe what you want the extension to do. Cmd+Enter (or Ctrl+Enter) to send.
           </div>
         )}
-        {history.map((m, i) => (
-          m.role === 'user' ? (
-            <div key={i} data-role="user" style={userBubble}>{m.content}</div>
-          ) : (
-            <AssistantMessage key={i} content={m.content} />
-          )
-        ))}
+        {history.map((m, i) => {
+          if (m.kind === 'skills') return <SkillMessage key={i} content={m.content} />
+          return m.role === 'user'
+            ? <div key={i} data-role="user" style={userBubble}>{m.content}</div>
+            : <AssistantMessage key={i} content={m.content} />
+        })}
         {pending && (
           <div style={{ alignSelf: 'flex-start', fontSize: 11, color: 'var(--text-color-subtle)', padding: '6px 10px' }}>
             generating…

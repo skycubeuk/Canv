@@ -10,13 +10,17 @@ import react from '@vitejs/plugin-react'
 // CSP can't express "private network only", and we ship to a single trusted
 // renderer with no remote untrusted content loaded, so the trade-off is
 // acceptable for the spike. Tighten if/when an Electron-main IPC proxy lands.
+// `canv-extension:` is allowed in script-src + connect-src so the main
+// renderer can dynamic-import language contributions served via Canv's
+// custom protocol. Without it, Phase 5b `language` extensions are blocked
+// before their default-export function ever runs.
 const PROD_CSP =
   "default-src 'self'; " +
-  "script-src 'self'; " +
+  "script-src 'self' canv-extension:; " +
   "style-src 'self' 'unsafe-inline'; " +
   "font-src 'self' data:; " +
   "img-src 'self' data: blob:; " +
-  "connect-src http: https://api.anthropic.com https://api.openai.com; " +
+  "connect-src http: https://api.anthropic.com https://api.openai.com canv-extension:; " +
   "worker-src 'self' blob:; " +
   "object-src 'none'; " +
   "base-uri 'self'; " +
@@ -24,11 +28,11 @@ const PROD_CSP =
 
 const DEV_CSP =
   "default-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' canv-extension:; " +
   "style-src 'self' 'unsafe-inline'; " +
   "font-src 'self' data:; " +
   "img-src 'self' data: blob:; " +
-  "connect-src 'self' ws: wss: http: https://api.anthropic.com https://api.openai.com; " +
+  "connect-src 'self' ws: wss: http: https://api.anthropic.com https://api.openai.com canv-extension:; " +
   "worker-src 'self' blob:;"
 
 function cspByMode(): Plugin {

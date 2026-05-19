@@ -7,6 +7,8 @@ import type { DirEntry, DirFile, DirNode } from '../lib/fs'
 import { useDialogs } from '../lib/dialogs'
 import { useServeStatus } from '../hooks/useServeStatus'
 import { getServe } from '../lib/serve'
+import { useContributions } from '../hooks/useContributions'
+import { FileTreeContextMenuExtensions } from './files/FileTreeContextMenuExtensions'
 
 interface Props {
   root: string | null
@@ -28,6 +30,8 @@ interface Props {
   revisionArchaeologyEnabled?: boolean
   /** Called when the user picks "View history" on a file. */
   onViewHistory?: (rel: string) => void
+  /** Called when an extension's "Open with…" item is chosen. extensionId=null means force text editor. */
+  onOpenWith?: (rel: string, extensionId: string | null) => void
 }
 
 interface MenuState {
@@ -51,7 +55,7 @@ export function FileTree(props: Props) {
     root, tree, truncated, openRels, activeRel, pinnedRels,
     onOpen, onPin, onUnpin,
     onCreateFile, onCreateFolder, onRename, onDelete, onChangeWorkspace,
-    revealRel, revisionArchaeologyEnabled, onViewHistory,
+    revealRel, revisionArchaeologyEnabled, onViewHistory, onOpenWith,
   } = props
 
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
@@ -265,6 +269,7 @@ export function FileTree(props: Props) {
           onCreateFolder={onCreateFolder}
           revisionArchaeologyEnabled={revisionArchaeologyEnabled}
           onViewHistory={onViewHistory}
+          onOpenWith={onOpenWith}
         />
       )}
     </aside>
@@ -283,6 +288,7 @@ function ContextMenu(props: {
   onCreateFolder: (parentRel: string) => void
   revisionArchaeologyEnabled?: boolean
   onViewHistory?: (rel: string) => void
+  onOpenWith?: (rel: string, extensionId: string | null) => void
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const dialogs = useDialogs()
@@ -290,6 +296,7 @@ function ContextMenu(props: {
   const parentRel = isDir ? props.target.relPath : dirname(props.target.relPath)
   const isMd = !isDir && /\.(md|markdown)$/i.test(props.target.relPath)
   const serveStatus = useServeStatus()
+  const contributions = useContributions()
 
   useEffect(() => {
     const el = ref.current
@@ -399,6 +406,19 @@ function ContextMenu(props: {
           Copy path
         </MenuItem>
       )}
+      <FileTreeContextMenuExtensions
+        target={{ relPath: props.target.relPath, isDir }}
+        menus={contributions.menus}
+        handlers={contributions.fileHandlers}
+        onCommand={(commandId, args) => {
+          void window.canvExtensions?.invokeCommand?.(commandId, args)
+          props.onClose()
+        }}
+        onOpenWith={(extensionId) => {
+          props.onOpenWith?.(props.target.relPath, extensionId)
+          props.onClose()
+        }}
+      />
     </div>
   )
 }

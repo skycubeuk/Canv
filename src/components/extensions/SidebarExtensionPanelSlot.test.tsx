@@ -31,6 +31,8 @@ beforeEach(() => {
     onCrashed: vi.fn(() => () => {}),
     showPanelInSlot: vi.fn().mockResolvedValue({ ok: true }) as never,
     hidePanelInSlot: vi.fn().mockResolvedValue(undefined) as never,
+    getFileHandlerDefaults: vi.fn().mockResolvedValue({}) as never,
+    setFileHandlerDefault: vi.fn().mockResolvedValue(undefined) as never,
   }
 })
 

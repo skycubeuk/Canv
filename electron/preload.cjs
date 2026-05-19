@@ -195,6 +195,8 @@ if (!isDockPopout()) {
     readActivity: (id) => ipcRenderer.invoke('canvExtensions:readActivity', id),
     showPanelInSlot: (slotId, bounds) => ipcRenderer.invoke('canvExtensions:showPanelInSlot', slotId, bounds),
     hidePanelInSlot: (slotId) => ipcRenderer.invoke('canvExtensions:hidePanelInSlot', slotId),
+    showFileInExtension: (extensionId, relPath, mode, bounds) => ipcRenderer.invoke('canvExtensions:showFileInExtension', extensionId, relPath, mode, bounds),
+    hideFileInExtension: (extensionId, relPath) => ipcRenderer.invoke('canvExtensions:hideFileInExtension', extensionId, relPath),
     onChanged: (cb) => {
       const listener = () => { try { cb() } catch { /* ignore */ } }
       ipcRenderer.on('canvExtensions:registryChanged', listener)
@@ -224,6 +226,8 @@ if (!isDockPopout()) {
       return () => ipcRenderer.removeListener('canvExtensions:statusBarChanged', listener)
     },
     invokeCommand: (commandId, args) => ipcRenderer.invoke('canvExtensions:invokeCommand', commandId, args),
+    getFileHandlerDefaults: () => ipcRenderer.invoke('canvExtensions:getFileHandlerDefaults'),
+    setFileHandlerDefault: (ext, extensionId) => ipcRenderer.invoke('canvExtensions:setFileHandlerDefault', ext, extensionId),
   })
 
   contextBridge.exposeInMainWorld('canvExtensionsDev', {

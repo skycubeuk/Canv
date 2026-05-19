@@ -27,6 +27,7 @@ const noopProps = {
   onRename: vi.fn(),
   onDelete: vi.fn(),
   onChangeWorkspace: vi.fn(),
+  onOpenWith: vi.fn(),
 }
 
 describe('FileTree — pin badge and context menu', () => {

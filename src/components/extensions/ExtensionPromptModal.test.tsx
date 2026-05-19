@@ -11,6 +11,8 @@ beforeEach(() => {
   window.canvExtensions = {
     onPromptRequest: vi.fn((cb: PromptHandler) => { promptHandler = cb; return () => { promptHandler = null } }),
     promptResolve: vi.fn(),
+    getFileHandlerDefaults: vi.fn().mockResolvedValue({}) as never,
+    setFileHandlerDefault: vi.fn().mockResolvedValue(undefined) as never,
   } as never
 })
 

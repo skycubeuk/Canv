@@ -1,7 +1,7 @@
 import { useCallback, useState, type ReactNode } from 'react'
 import { EditorTabs } from '../EditorTabs'
 import { SubToolbar } from './SubToolbar'
-import { tabKey, isMarkdownTab, isDiffTab } from '../../lib/tabKey'
+import { tabKey, isMarkdownTab, isDiffTab, isExtensionTab } from '../../lib/tabKey'
 import type { OpenTab, EditorGroupId } from '../../types/workspace'
 
 type ViewMode = 'edit' | 'preview'
@@ -34,7 +34,7 @@ export function EditorGroup(props: Props) {
   } = props
 
   const activeTab = tabs.find((t) => tabKey(t) === activeKey) ?? null
-  const breadcrumbRel = activeTab && isMarkdownTab(activeTab) ? activeTab.relPath : null
+  const breadcrumbRel = activeTab && (isMarkdownTab(activeTab) || isExtensionTab(activeTab)) ? activeTab.relPath : null
   const breadcrumbDiff = activeTab && isDiffTab(activeTab) ? activeTab : null
   const hasMarkdownTab = activeTab !== null && isMarkdownTab(activeTab)
 

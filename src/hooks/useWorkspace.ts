@@ -11,7 +11,7 @@ import {
 import type { RemoteStatus } from '../lib/fs'
 import type { OpenTab, PinnedEntry, EditorGroupId, EditorGroupState } from '../types/workspace'
 import { wsKey } from '../lib/wsKey'
-import { tabKey, SETTINGS_TAB_KEY, DIFF_TAB_KEY_PREFIX, isMarkdownTab } from '../lib/tabKey'
+import { tabKey, SETTINGS_TAB_KEY, DIFF_TAB_KEY_PREFIX, EXTENSION_TAB_KEY_PREFIX, isMarkdownTab } from '../lib/tabKey'
 
 const SCHEMA_VERSION = '2'
 const SCHEMA_KEY = 'canv:schemaVersion'
@@ -108,6 +108,7 @@ export interface WorkspaceApi {
   setActiveTab: (rel: string | null, groupId?: EditorGroupId) => void
   openSettingsTab: (groupId?: EditorGroupId) => void
   openDiffTab: (relPath: string, baseRef?: string, baseLabel?: string, groupId?: EditorGroupId) => void
+  openExtensionTab: (relPath: string, extensionId: string, mode: 'viewer' | 'editor', groupId?: EditorGroupId) => void
   closeTabByKey: (key: string, groupId?: EditorGroupId) => Promise<void>
   setActiveTabByKey: (key: string | null, groupId?: EditorGroupId) => void
   /** Promote the focused tab in `fromGroupId` to a new group on the right (creates `g2`). */
@@ -166,6 +167,7 @@ function tabKeysFor(group: EditorGroupState): string[] {
   return group.openTabs.map((t) => {
     if (t.kind === 'markdown') return `markdown:${t.relPath}`
     if (t.kind === 'settings') return 'settings'
+    if (t.kind === 'extension') return `ext:${t.extensionId}:${t.mode}:${t.relPath}`
     // diff
     return `diff:${t.relPath}@${t.baseRef}`
   })
@@ -366,10 +368,11 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
 
   const openTab = useCallback(async (rel: string, groupId?: EditorGroupId) => {
     if (!rootRef.current) return
-    if (!isMd(rel)) {
-      if (onToast) onToast('Only .md / .markdown files are editable in this version')
-      return
-    }
+    // Any text file is openable in CodeMirror. Binary files (e.g. .pdf) should
+    // be routed through a fileHandler extension before reaching here; if one
+    // hits this path the CodeMirror buffer just shows the raw bytes, which is
+    // ugly but harmless. Removing the previous .md-only gate so that .tex /
+    // .json / etc files participate in language-extension highlighting.
     const targetGroup = groupId ?? activeGroupIdRef.current
     // Already open in target group?
     const existingInTarget = (findGroup(editorGroupsRef.current, targetGroup)?.openTabs ?? [])
@@ -510,6 +513,30 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
     setActiveGroupIdState(target)
   }, [persistGroups])
 
+  const openExtensionTab = useCallback((relPath: string, extensionId: string, mode: 'viewer' | 'editor', groupId?: EditorGroupId) => {
+    const target = groupId ?? activeGroupIdRef.current
+    const key = `${EXTENSION_TAB_KEY_PREFIX}${extensionId}:${relPath}`
+    const tab: OpenTab = { kind: 'extension', relPath, extensionId, mode }
+    setEditorGroups((prev) => {
+      // If the tab is already open in any group, focus it there.
+      const existingGroup = findGroupContaining(prev, key)
+      if (existingGroup) {
+        const next = withGroupUpdate(prev, existingGroup.id, (g) => ({ ...g, activeTabKey: key }))
+        if (rootRef.current) persistGroups(rootRef.current, next, existingGroup.id)
+        setActiveGroupIdState(existingGroup.id)
+        return next
+      }
+      const next = withGroupUpdate(prev, target, (g) => ({
+        ...g,
+        openTabs: [...g.openTabs, tab],
+        activeTabKey: key,
+      }))
+      if (rootRef.current) persistGroups(rootRef.current, next, target)
+      return next
+    })
+    setActiveGroupIdState(target)
+  }, [persistGroups])
+
   const closeTabByKey = useCallback(async (key: string, groupId?: EditorGroupId) => {
     if (key === SETTINGS_TAB_KEY) {
       let target: EditorGroupId
@@ -544,7 +571,7 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
       setActiveGroupIdState(newActiveGroup)
       return
     }
-    if (key.startsWith(DIFF_TAB_KEY_PREFIX)) {
+    if (key.startsWith(DIFF_TAB_KEY_PREFIX) || key.startsWith(EXTENSION_TAB_KEY_PREFIX)) {
       let target: EditorGroupId
       if (groupId) {
         target = groupId
@@ -552,7 +579,7 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
         const containing = findGroupContaining(editorGroupsRef.current, key)
         target = containing?.id ?? activeGroupIdRef.current
       }
-      const computeDiffClose = (prev: EditorGroupState[]): { finalGroups: EditorGroupState[]; newActiveGroup: EditorGroupId } => {
+      const computeKeyedClose = (prev: EditorGroupState[]): { finalGroups: EditorGroupState[]; newActiveGroup: EditorGroupId } => {
         const next = withGroupUpdate(prev, target, (g) => {
           const remaining = g.openTabs.filter((t) => tabKey(t) !== key)
           const newActive = g.activeTabKey === key
@@ -568,7 +595,7 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
           : 'g1'
         return { finalGroups, newActiveGroup }
       }
-      const { finalGroups, newActiveGroup } = computeDiffClose(editorGroupsRef.current)
+      const { finalGroups, newActiveGroup } = computeKeyedClose(editorGroupsRef.current)
       setEditorGroups(() => {
         if (rootRef.current) persistGroups(rootRef.current, finalGroups, newActiveGroup)
         return finalGroups
@@ -823,6 +850,24 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
             }
             continue
           }
+          if (stored.startsWith('ext:')) {
+            // Format: 'ext:<extensionId>:<mode>:<relPath>'
+            const rest = stored.slice('ext:'.length)
+            const firstColon = rest.indexOf(':')
+            if (firstColon >= 1) {
+              const extensionId = rest.slice(0, firstColon)
+              const rest2 = rest.slice(firstColon + 1)
+              const secondColon = rest2.indexOf(':')
+              if (secondColon >= 1) {
+                const mode = rest2.slice(0, secondColon) as 'viewer' | 'editor'
+                const relPath = rest2.slice(secondColon + 1)
+                if (relPath && (mode === 'viewer' || mode === 'editor')) {
+                  tabs.push({ kind: 'extension', relPath, extensionId, mode })
+                }
+              }
+            }
+            continue
+          }
           const rel = stored.startsWith('markdown:') ? stored.slice('markdown:'.length) : stored
           try {
             const { content, mtimeMs } = await getFs().readFile(rel)
@@ -866,6 +911,23 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
             const baseRef = inner.slice(atIdx + 1)
             if (relPath && baseRef) {
               tabs.push({ kind: 'diff', relPath, baseRef })
+            }
+          }
+          continue
+        }
+        if (stored.startsWith('ext:')) {
+          const rest = stored.slice('ext:'.length)
+          const firstColon = rest.indexOf(':')
+          if (firstColon >= 1) {
+            const extensionId = rest.slice(0, firstColon)
+            const rest2 = rest.slice(firstColon + 1)
+            const secondColon = rest2.indexOf(':')
+            if (secondColon >= 1) {
+              const mode = rest2.slice(0, secondColon) as 'viewer' | 'editor'
+              const relPath = rest2.slice(secondColon + 1)
+              if (relPath && (mode === 'viewer' || mode === 'editor')) {
+                tabs.push({ kind: 'extension', relPath, extensionId, mode })
+              }
             }
           }
           continue
@@ -1148,6 +1210,7 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
     setActiveTab,
     openSettingsTab,
     openDiffTab,
+    openExtensionTab,
     closeTabByKey,
     setActiveTabByKey,
     splitRight,
@@ -1169,5 +1232,5 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
     reloadTabFromDisk,
     remoteStatus,
     reconnect,
-  }), [ready, available, root, kind, tree, treeTruncated, editorGroups, activeGroupId, activeTabKey, activeMarkdownRel, allOpenKeys, dirtySet, pinned, pickWorkspace, openRemote, closeWorkspace, openTab, closeTab, setActiveTab, openSettingsTab, openDiffTab, closeTabByKey, setActiveTabByKey, splitRight, moveTab, setActiveGroupId, saveTab, writeFileFromTool, noteOwnDiskWrite, flushAll, pin, unpin, createFile, createFolder, renameOp, remove, refreshTree, conflict, resolveConflict, reloadTabFromDisk, remoteStatus, reconnect])
+  }), [ready, available, root, kind, tree, treeTruncated, editorGroups, activeGroupId, activeTabKey, activeMarkdownRel, allOpenKeys, dirtySet, pinned, pickWorkspace, openRemote, closeWorkspace, openTab, closeTab, setActiveTab, openSettingsTab, openDiffTab, openExtensionTab, closeTabByKey, setActiveTabByKey, splitRight, moveTab, setActiveGroupId, saveTab, writeFileFromTool, noteOwnDiskWrite, flushAll, pin, unpin, createFile, createFolder, renameOp, remove, refreshTree, conflict, resolveConflict, reloadTabFromDisk, remoteStatus, reconnect])
 }

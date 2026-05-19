@@ -1,9 +1,11 @@
 import type React from 'react'
+import { summariseContributions } from '../extensions/summariseContributions'
 
 interface ManifestSummary {
   capabilities: string[]
   network: string[]
   settings?: unknown[]
+  contributions?: unknown[]
 }
 
 interface Props {
@@ -42,6 +44,15 @@ export function BuilderRequestsPanel({ manifestSummary, errors, onFixWithAi, fix
             <li key={o} style={chipStyle(false)}>{o}</li>
           ))}
         </ul>
+      )}
+
+      {manifestSummary && manifestSummary.contributions && manifestSummary.contributions.length > 0 && (
+        <>
+          <div style={{ ...sectionHeader, marginTop: 12 }}>Adds</div>
+          <div style={{ fontSize: 11, color: 'var(--text-color-muted)' }}>
+            {summariseContributions(manifestSummary.contributions)}
+          </div>
+        </>
       )}
 
       {errors.length > 0 && (

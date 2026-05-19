@@ -36,6 +36,10 @@ declare global {
       showPanelInSlot?: (slotId: string, bounds: { x: number; y: number; width: number; height: number }) => Promise<{ ok: boolean; error?: string }>
       hidePanelInSlot?: (slotId: string) => Promise<void>
       invokeCommand?: (commandId: string, args?: unknown) => Promise<{ ok: boolean; error?: string }>
+      getFileHandlerDefaults?: () => Promise<Record<string, string>>
+      setFileHandlerDefault?: (ext: string, extensionId: string | null) => Promise<void>
+      showFileInExtension?: (extensionId: string, relPath: string, mode: 'viewer' | 'editor', bounds: { x: number; y: number; width: number; height: number }) => Promise<{ ok: boolean; error?: string }>
+      hideFileInExtension?: (extensionId: string, relPath: string) => Promise<void>
     }
   }
 }

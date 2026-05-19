@@ -1,4 +1,4 @@
-import { tabKey, isMarkdownTab, isDiffTab } from '../lib/tabKey'
+import { tabKey, isMarkdownTab, isDiffTab, isExtensionTab } from '../lib/tabKey'
 import type { OpenTab, EditorGroupId } from '../types/workspace'
 import { setTabDragPayload, readTabDragPayload, hasTabDragPayload } from './ide/dnd'
 import React, { useState } from 'react'
@@ -22,6 +22,7 @@ function basename(rel: string): string {
 
 function tabLabel(t: OpenTab): React.ReactNode {
   if (isMarkdownTab(t)) return basename(t.relPath)
+  if (isExtensionTab(t)) return basename(t.relPath)
   if (isDiffTab(t)) {
     return (
       <span className="inline-flex items-center gap-1">
@@ -40,6 +41,7 @@ function tabLabel(t: OpenTab): React.ReactNode {
 
 function tabTitle(t: OpenTab): string {
   if (isMarkdownTab(t)) return t.relPath
+  if (isExtensionTab(t)) return t.relPath
   if (isDiffTab(t)) return `Diff: ${t.relPath} (${t.baseRef})`
   return 'Settings'
 }

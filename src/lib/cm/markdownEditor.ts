@@ -1,10 +1,21 @@
-import { EditorState, type Extension } from '@codemirror/state'
+import { EditorState, Compartment, type Extension } from '@codemirror/state'
 import { EditorView, keymap, lineNumbers } from '@codemirror/view'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
 import { syntaxHighlighting, defaultHighlightStyle, indentUnit } from '@codemirror/language'
 import { markdown } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
 import { searchKeymap } from '@codemirror/search'
+
+/**
+ * Shared compartment instance for the language extension.
+ * Exported so callers can dispatch a reconfigure after an async language load
+ * (e.g. from a workspace extension).
+ *
+ * One compartment is enough because only one EditorView is active per Canvas
+ * mount; when Canvas unmounts it destroys the view and recreates it, which
+ * always seeds a fresh compartment slot from the same singleton.
+ */
+export const languageCompartment = new Compartment()
 
 export interface ActiveEditorUpdateInfo {
   rel: string | null
@@ -61,7 +72,7 @@ export function markdownEditorExtensions(opts: MarkdownEditorOptions): Extension
   return [
     history(),
     keymap.of([indentWithTab, ...defaultKeymap, ...historyKeymap, ...searchKeymap]),
-    markdown({ codeLanguages: languages }),
+    languageCompartment.of(markdown({ codeLanguages: languages })),
     syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
     EditorView.lineWrapping,
     indentUnit.of('  '),

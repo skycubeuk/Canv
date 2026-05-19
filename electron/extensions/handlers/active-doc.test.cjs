@@ -67,3 +67,67 @@ describe('activeDoc handlers', () => {
     await expect(handlers['canvExt:activeDoc.setText'](event, null)).rejects.toThrow(/string/i)
   })
 })
+
+describe('byte API for fileHandlers', () => {
+  it('getBytes returns the raw bytes of the active file', async () => {
+    const fs = require('node:fs'), os = require('node:os'), path = require('node:path')
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'canv-bytes-'))
+    const filePath = path.join(dir, 'x.pdf')
+    fs.writeFileSync(filePath, Buffer.from([0x25, 0x50, 0x44, 0x46]))
+    const rt = new ExtensionRuntime()
+    rt._registerForTest({
+      id: 'ext',
+      manifest: { id: 'ext', capabilities: [], contributions: [{ type: 'fileHandler', extensions: ['.pdf'], mode: 'viewer', entry: 'p.html', id: 'main' }] },
+      extensionDir: dir,
+      webContentsId: 1,
+    })
+    const host = { getActiveFileFor: () => ({ absPath: filePath, mode: 'viewer' }) }
+    const handlers = createActiveDocHandlers({ runtime: rt, host })
+    const buf = await handlers['canvExt:activeDoc.getBytes']({ sender: { id: 1 } })
+    expect(Buffer.isBuffer(buf) ? buf : Buffer.from(buf)).toEqual(Buffer.from([0x25, 0x50, 0x44, 0x46]))
+  })
+
+  it('setBytes rejects when fileHandler mode is "viewer"', async () => {
+    const rt = new ExtensionRuntime()
+    rt._registerForTest({
+      id: 'ext',
+      manifest: { id: 'ext', capabilities: [], contributions: [{ type: 'fileHandler', extensions: ['.pdf'], mode: 'viewer', entry: 'p.html', id: 'main' }] },
+      extensionDir: '/tmp',
+      webContentsId: 1,
+    })
+    const host = { getActiveFileFor: () => ({ absPath: '/tmp/x.pdf', mode: 'viewer' }) }
+    const handlers = createActiveDocHandlers({ runtime: rt, host })
+    await expect(handlers['canvExt:activeDoc.setBytes']({ sender: { id: 1 } }, Buffer.from([0]))).rejects.toThrow(/read-only/i)
+  })
+
+  it('setBytes writes when mode is "editor"', async () => {
+    const fs = require('node:fs'), os = require('node:os'), path = require('node:path')
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'canv-bytes-'))
+    const filePath = path.join(dir, 'x.pdf')
+    fs.writeFileSync(filePath, '')
+    const rt = new ExtensionRuntime()
+    rt._registerForTest({
+      id: 'ext',
+      manifest: { id: 'ext', capabilities: [], contributions: [{ type: 'fileHandler', extensions: ['.pdf'], mode: 'editor', entry: 'p.html', id: 'main' }] },
+      extensionDir: dir,
+      webContentsId: 1,
+    })
+    const host = { getActiveFileFor: () => ({ absPath: filePath, mode: 'editor' }) }
+    const handlers = createActiveDocHandlers({ runtime: rt, host })
+    await handlers['canvExt:activeDoc.setBytes']({ sender: { id: 1 } }, Buffer.from('hello'))
+    expect(fs.readFileSync(filePath, 'utf-8')).toBe('hello')
+  })
+
+  it('throws when there is no active file for this extension', async () => {
+    const rt = new ExtensionRuntime()
+    rt._registerForTest({
+      id: 'ext',
+      manifest: { id: 'ext', capabilities: [], contributions: [{ type: 'fileHandler', extensions: ['.pdf'], mode: 'viewer', entry: 'p.html', id: 'main' }] },
+      extensionDir: '/tmp',
+      webContentsId: 1,
+    })
+    const host = { getActiveFileFor: () => null }
+    const handlers = createActiveDocHandlers({ runtime: rt, host })
+    await expect(handlers['canvExt:activeDoc.getBytes']({ sender: { id: 1 } })).rejects.toThrow(/no active file/i)
+  })
+})

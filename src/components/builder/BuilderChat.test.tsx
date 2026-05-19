@@ -69,4 +69,11 @@ describe('BuilderChat', () => {
     render(<BuilderChat history={[]} pending={true} onSend={() => {}} />)
     expect((screen.getByLabelText('message') as HTMLTextAreaElement).disabled).toBe(true)
   })
+  it('renders a skills-kind message as a collapsed muted line', () => {
+    render(<BuilderChat history={[
+      { role: 'assistant', content: JSON.stringify({ skillsCalled: ['learn_panel', 'learn_command'] }), kind: 'skills' },
+    ]} pending={false} onSend={() => {}} />)
+    expect(screen.getByText(/learn_panel/)).toBeTruthy()
+    expect(screen.getByText(/learn_command/)).toBeTruthy()
+  })
 })

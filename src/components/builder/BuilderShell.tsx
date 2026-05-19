@@ -10,16 +10,20 @@ import { BuilderRequestsPanel } from './BuilderRequestsPanel'
 import { BuilderPreviewSlot } from './BuilderPreviewSlot'
 import { buildTranscriptMarkdown } from './buildTranscript'
 import systemPromptRaw from '../../agents/extensionBuilder.system.md?raw'
+import { BUILDER_SKILLS, BUILDER_MAX_TOOL_ROUNDS, skillBody } from '../../agents/builderSkills'
+import type { Message } from '../../adapters/types'
 
 interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
+  kind?: 'skills'  // when present, content is JSON-encoded { skillsCalled: string[] }
 }
 
 interface ManifestSummary {
   capabilities: string[]
   network: string[]
   settings?: unknown[]
+  contributions?: unknown[]
 }
 
 interface Session {
@@ -67,11 +71,12 @@ export function BuilderShell({ sessionId, onClose }: Props) {
       setSession(s as Session)
       setHistory(s.history as ChatMessage[])
       if (s.manifest) {
-        const m = s.manifest as { capabilities?: string[]; network?: string[]; settings?: unknown[] }
+        const m = s.manifest as { capabilities?: string[]; network?: string[]; settings?: unknown[]; contributions?: unknown[] }
         setManifestSummary({
           capabilities: m.capabilities ?? [],
           network: m.network ?? [],
           settings: m.settings,
+          contributions: m.contributions ?? [],
         })
         // Re-spawn preview for sessions that already have a manifest.
         try {
@@ -106,29 +111,71 @@ export function BuilderShell({ sessionId, onClose }: Props) {
 
       // Capture current history before state update — the setState above is async.
       // We pass history (the closure value) + userMsg since state may not have updated yet.
-      const result = await adapter.complete({
-        model: settings.defaultModel[provider],
-        apiKey,
-        baseUrl: settings.baseUrls?.[provider],
-        system: systemPromptRaw,
-        messages: [
-          ...history.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
-          { role: 'user' as const, content: userText.trim() },
-        ],
-        maxTokens: 4096,
-      })
+      // Filter out 'skills'-kind messages — they are UI-only metadata, not real turns.
+      const messages: Message[] = [
+        ...history
+          .filter((m) => m.kind !== 'skills')
+          .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content })),
+        { role: 'user' as const, content: userText.trim() },
+      ]
 
-      const assistantMsg: ChatMessage = { role: 'assistant', content: result.text }
+      let finalText = ''
+      const skillsCalled: string[] = []
+
+      for (let round = 0; round < BUILDER_MAX_TOOL_ROUNDS; round++) {
+        const result = await adapter.complete({
+          model: settings.defaultModel[provider],
+          apiKey,
+          baseUrl: settings.baseUrls?.[provider],
+          system: systemPromptRaw,
+          messages,
+          tools: BUILDER_SKILLS,
+          maxTokens: 4096,
+        })
+
+        if (result.toolCalls && result.toolCalls.length > 0) {
+          messages.push({ role: 'assistant', content: result.text, toolCalls: result.toolCalls })
+          const toolResults = result.toolCalls.map((tc) => {
+            skillsCalled.push(tc.name)
+            return { id: tc.id, content: skillBody(tc.name) }
+          })
+          messages.push({ role: 'tool', toolResults })
+          continue
+        }
+
+        finalText = result.text
+        break
+      }
+
+      if (!finalText) {
+        throw new Error(`builder: tool-call loop exceeded ${BUILDER_MAX_TOOL_ROUNDS} rounds without a final payload`)
+      }
+
+      // Persist the skills-called message if any (UI-only metadata).
+      if (skillsCalled.length > 0) {
+        const skillMsg: ChatMessage = {
+          role: 'assistant',
+          content: JSON.stringify({ skillsCalled }),
+          kind: 'skills',
+        }
+        setHistory((h) => [...h, skillMsg])
+        // Persist only role+content — scratch.cjs round-trips whatever fields are passed,
+        // but we strip kind here to keep session.json lean. The local React state retains it.
+        await api.appendHistory(sessionId, { role: skillMsg.role, content: skillMsg.content })
+      }
+
+      const assistantMsg: ChatMessage = { role: 'assistant', content: finalText }
       setHistory((h) => [...h, assistantMsg])
       await api.appendHistory(sessionId, assistantMsg)
 
-      const apply = await api.applyPayload(sessionId, result.text)
+      const apply = await api.applyPayload(sessionId, finalText)
       if (apply.ok) {
-        const m = apply.manifest as { capabilities?: string[]; network?: string[]; settings?: unknown[] }
+        const m = apply.manifest as { capabilities?: string[]; network?: string[]; settings?: unknown[]; contributions?: unknown[] }
         setManifestSummary({
           capabilities: m.capabilities ?? [],
           network: m.network ?? [],
           settings: m.settings,
+          contributions: m.contributions ?? [],
         })
         setErrors([])
         await api.destroyPreview(sessionId)
