@@ -5,61 +5,42 @@ import { CommandPalette, type PaletteMode, type PaletteFile } from './CommandPal
 import OpenRemoteDialog from '../dialogs/OpenRemoteDialog'
 import { DocumentAgentInstructionModal } from '../DocumentAgentInstructionModal'
 import type { Action as AgentDef } from '../../config/types'
-import type { useWorkspace } from '../../hooks/useWorkspace'
-import type { useProfilePicker } from '../../hooks/useProfilePicker'
-import type { useWorkspaceFileOps } from '../../hooks/useWorkspaceFileOps'
-import type { useNotifications } from '../../hooks/useNotifications'
-import type { useCommands } from '../../hooks/useCommands'
 import { editorMapKey } from '../../hooks/useEditorRegistry'
-import type { EditorView } from '@codemirror/view'
-import type React from 'react'
-import type { CommandRecord } from '../../types/extension-contributions'
-
-type WorkspaceApi = ReturnType<typeof useWorkspace>
-type ProfilePickerApi = ReturnType<typeof useProfilePicker>
-type FileOpsApi = ReturnType<typeof useWorkspaceFileOps>
-type NotificationsApi = ReturnType<typeof useNotifications>
-type CommandsApi = ReturnType<typeof useCommands>
+import { useService } from '../../services/useService'
 
 export interface AppOverlaysProps {
-  // Profile picker
-  profilePicker: ProfilePickerApi
-  // Migration
+  // Migration (App-local UI state)
   migrationOpen: boolean
   onMigrationComplete: () => void
-  // Workspace conflict
-  workspace: WorkspaceApi
-  editorsRef: React.MutableRefObject<Map<string, EditorView>>
-  // Remote workspace dialog (file ops)
-  fileOps: FileOpsApi
-  // Document-agent instruction
+  // Document-agent instruction (App-local UI state)
   pendingDocAgent: AgentDef | null
   onSubmitDocAgent: (instruction: string) => void
   onCancelDocAgent: () => void
-  // Notifications + retry undo
-  notifications: NotificationsApi
-  onUndoRetry: () => void
-  // Palette
+  // Palette (App-local UI state)
   paletteOpen: boolean
   paletteMode: PaletteMode
   paletteFiles: PaletteFile[]
   paletteRecents: PaletteFile[]
   onClosePalette: () => void
-  commands: CommandsApi
-  onOpenFile: (rel: string) => void
-  extensionCommands?: CommandRecord[]
-  onInvokeExtensionCommand?: (commandId: string) => void
 }
 
 export function AppOverlays(props: AppOverlaysProps) {
   const {
-    profilePicker, migrationOpen, onMigrationComplete,
-    workspace, editorsRef,
-    fileOps, pendingDocAgent, onSubmitDocAgent, onCancelDocAgent,
-    notifications, onUndoRetry,
+    migrationOpen, onMigrationComplete,
+    pendingDocAgent, onSubmitDocAgent, onCancelDocAgent,
     paletteOpen, paletteMode, paletteFiles, paletteRecents, onClosePalette,
-    commands, onOpenFile, extensionCommands, onInvokeExtensionCommand,
   } = props
+
+  const profilePicker = useService('profilePicker')
+  const workspace = useService('workspace')
+  const editorRegistry = useService('editorRegistry')
+  const fileOps = useService('workspaceFileOps')
+  const notifications = useService('notifications')
+  const chatSessions = useService('chatSessions')
+  const commands = useService('commands')
+  const contributions = useService('contributions')
+
+  const editorsRef = editorRegistry.editorsRef
 
   return (
     <>
@@ -119,7 +100,7 @@ export function AppOverlays(props: AppOverlaysProps) {
           <button
             type="button"
             className="underline font-medium"
-            onClick={onUndoRetry}
+            onClick={() => chatSessions.undoRetry()}
           >
             Undo
           </button>
@@ -134,9 +115,9 @@ export function AppOverlays(props: AppOverlaysProps) {
         recentFiles={paletteRecents}
         onClose={onClosePalette}
         onRunCommand={(id) => { commands.runById(id) }}
-        onOpenFile={onOpenFile}
-        extensionCommands={extensionCommands}
-        onInvokeExtensionCommand={onInvokeExtensionCommand}
+        onOpenFile={(rel) => { void workspace.openTab(rel) }}
+        extensionCommands={contributions.commands}
+        onInvokeExtensionCommand={(id) => { void window.canvExtensions?.invokeCommand?.(id) }}
       />
 
       <ExtensionPromptModal />

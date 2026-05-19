@@ -12,11 +12,9 @@ import { useWorkspace } from './hooks/useWorkspace'
 import { useLocalStorage } from './hooks/useLocalStorage'
 import { useIdeLayout } from './hooks/useIdeLayout'
 import type { OutlineNode } from './lib/outline'
-import { useCommands } from './hooks/useCommands'
 import type { PaletteMode, PaletteFile } from './components/ide/CommandPalette'
 import type { Action as AgentDef } from './config/types'
 import { useModes } from './hooks/useModes'
-import { useProfilePicker } from './hooks/useProfilePicker'
 import { isElectron, flattenTree, getFs } from './lib/fs'
 import { WorkspaceSetupModal } from './components/WorkspaceSetupModal'
 import { useWorkspaceSetup } from './hooks/useWorkspaceSetup'
@@ -26,7 +24,6 @@ import { exportBackup } from './lib/backup'
 import { useDialogs } from './lib/dialogs'
 import { useNotifications } from './hooks/useNotifications'
 import { useEditorRegistry, editorMapKey } from './hooks/useEditorRegistry'
-import { useContributions } from './hooks/useContributions'
 import { useService } from './services'
 import { useWorkspaceFileOps } from './hooks/useWorkspaceFileOps'
 import { useSelectionAgent } from './hooks/useSelectionAgent'
@@ -75,7 +72,7 @@ function AppInner() {
   const { showToast } = notifications
   const { settings, update, modelForAgent } = useSettings()
 
-  const [profile, setProfile] = useLocalStorage<string | null>('canv:profile', null)
+  const [profile] = useLocalStorage<string | null>('canv:profile', null)
   const { modes, defaultModeId } = useModes()
   const activeProfileId = profile ?? defaultModeId
   const activeProfile = modes.find((m) => m.id === activeProfileId) ?? modes.find((m) => m.id === defaultModeId)!
@@ -117,16 +114,6 @@ function AppInner() {
 
   const ideLayout = useIdeLayout(workspace.root)
 
-  const profilePicker = useProfilePicker({
-    profile,
-    setProfile,
-    workspaceReady: workspace.ready,
-    workspaceRoot: workspace.root,
-    migrationOpen,
-  })
-
-  const commands = useCommands()
-  const contributions = useContributions()
   const [paletteOpen, setPaletteOpen] = useState(false)
   const [paletteMode, setPaletteMode] = useState<PaletteMode>('commands')
   const [recentFiles, setRecentFiles] = useState<string[]>([])
@@ -278,7 +265,7 @@ function AppInner() {
     chatMessages, chatBusy, pendingApprovals,
     followLatest, setFollowLatest,
     chatProvider, chatModel,
-    sendChat, retryFromAnchor, editAndRetry, undoRetry,
+    sendChat, retryFromAnchor, editAndRetry,
     stopChat, clearChat,
     onApprovalDecide,
     sessions, activeId, createSession, selectSession, closeSession, setActiveSessionProviderModel,
@@ -655,29 +642,19 @@ function AppInner() {
       <FloatingToolbar onAgent={handleAgentFromToolbar} />
 
       <AppOverlays
-        profilePicker={profilePicker}
         migrationOpen={migrationOpen}
         onMigrationComplete={() => { setMigrationOpen(false); window.location.reload() }}
-        workspace={workspace}
-        editorsRef={editorsRef}
-        fileOps={fileOps}
         pendingDocAgent={pendingDocAgent}
         onSubmitDocAgent={(instruction) => {
           handleAgentOnDocument(workspace.activeGroupId, pendingDocAgent!, instruction)
           setPendingDocAgent(null)
         }}
         onCancelDocAgent={() => setPendingDocAgent(null)}
-        notifications={notifications}
-        onUndoRetry={undoRetry}
         paletteOpen={paletteOpen}
         paletteMode={paletteMode}
         paletteFiles={paletteFiles}
         paletteRecents={paletteRecents}
         onClosePalette={() => setPaletteOpen(false)}
-        commands={commands}
-        onOpenFile={(rel) => { void workspace.openTab(rel) }}
-        extensionCommands={contributions.commands}
-        onInvokeExtensionCommand={(id) => { void window.canvExtensions?.invokeCommand?.(id) }}
       />
     </div>
   )
