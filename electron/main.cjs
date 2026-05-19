@@ -783,35 +783,6 @@ function registerFsHandlers() {
     if (WORKSPACE?.kind === 'remote') WORKSPACE.pool.reconnectNow()
   })
 
-  ipcMain.handle('canvServe:start', async (_e, relPath) => {
-    if (typeof relPath !== 'string') throw new Error('relPath required')
-    if (!WORKSPACE || WORKSPACE.kind !== 'local') throw new Error('serve requires a local workspace')
-    const absRoot = path.resolve(path.join(WORKSPACE.root, relPath))
-    // Defence-in-depth: relPath should not allow escaping the workspace.
-    const resolvedWs = path.resolve(WORKSPACE.root)
-    if (absRoot !== resolvedWs && !absRoot.startsWith(resolvedWs + path.sep)) {
-      throw new Error('serve target must be inside workspace')
-    }
-    try {
-      const { url } = await serve.start(absRoot)
-      shell.openExternal(url).catch(() => {})
-      return { url }
-    } catch (err) {
-      if (err && err.code === 'NO_INDEX') return { error: 'NO_INDEX' }
-      throw err
-    }
-  })
-  ipcMain.handle('canvServe:stop', async () => { await serve.stop(); return null })
-  ipcMain.handle('canvServe:status', () => {
-    const s = serve.status()
-    if (s.running && WORKSPACE && WORKSPACE.kind === 'local') {
-      const resolvedWs = path.resolve(WORKSPACE.root)
-      const rel = path.relative(resolvedWs, s.root).split(path.sep).join('/')
-      return { ...s, relPath: rel }
-    }
-    return s
-  })
-
   // Revision Archaeology — local-only history backed by isomorphic-git on
   // a dedicated canv-history branch. See electron/history-service.cjs.
   ipcMain.handle('canvHistory:init', async () => getHistoryService().initRevisionArchaeology())
