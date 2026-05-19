@@ -24,24 +24,44 @@ export function useEditorStats(view: EditorView | null): EditorStats {
   const lastDocWordCount = useRef(0)
   const lastStats = useRef<EditorStats>(EMPTY)
 
+  // Debounce window for word-count recomputes. Selection-only changes still
+  // notify immediately (cheap); doc changes notify after this idle window so
+  // continuous typing on a large doc doesn't re-render the React tree per
+  // keystroke just to update the word counter.
+  const DOC_SETTLE_MS = 200
+
   const subscribe = useCallback(
     (notify: () => void) => {
       if (!view) return () => {}
       let raf = 0
       let lastDocLen = view.state.doc.length
       let lastSelKey = `${view.state.selection.main.from}-${view.state.selection.main.to}`
+      let docSettleTimer: ReturnType<typeof setTimeout> | null = null
+
       const tick = () => {
         const docLen = view.state.doc.length
         const selKey = `${view.state.selection.main.from}-${view.state.selection.main.to}`
-        if (docLen !== lastDocLen || selKey !== lastSelKey) {
+        const docChanged = docLen !== lastDocLen
+        const selChanged = selKey !== lastSelKey
+        if (docChanged) {
           lastDocLen = docLen
+          if (docSettleTimer) clearTimeout(docSettleTimer)
+          docSettleTimer = setTimeout(() => {
+            docSettleTimer = null
+            notify()
+          }, DOC_SETTLE_MS)
+        }
+        if (selChanged) {
           lastSelKey = selKey
           notify()
         }
         raf = requestAnimationFrame(tick)
       }
       raf = requestAnimationFrame(tick)
-      return () => cancelAnimationFrame(raf)
+      return () => {
+        cancelAnimationFrame(raf)
+        if (docSettleTimer) clearTimeout(docSettleTimer)
+      }
     },
     [view],
   )
