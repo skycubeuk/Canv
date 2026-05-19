@@ -30,6 +30,13 @@ const { Registry } = require('./extensions/registry.cjs')
 const { WorkspaceTrustStore } = require('./extensions/workspace-trust.cjs')
 const { MAX_OPEN_BYTES } = require('./services/fs-limits.cjs')
 const { canvFSReadFile: canvFSReadFileImpl, canvFSWriteFile: canvFSWriteFileImpl } = require('./services/canvfs.cjs')
+const fsService       = require('./services/fs')
+const serveService    = require('./services/serve')
+const historyService  = require('./services/history')
+const sitesService    = require('./services/sites')
+const dockService     = require('./services/dock')
+const extService      = require('./services/extensions')
+const wsService       = require('./services/workspace')
 const { hashExtensionDir } = require('./extensions/manifest-hash.cjs')
 const { shouldActivateFor } = require('./extensions/activation-events.cjs')
 const { createSettingsHandlers } = require('./extensions/handlers/settings.cjs')
@@ -1725,6 +1732,39 @@ electron.protocol.registerSchemesAsPrivileged([
   },
 ])
 
+function makeDeps() {
+  return {
+    // Mutable shared state — exposed as getters so handlers see live values.
+    getWorkspace: () => WORKSPACE,
+    setWorkspace: (w) => { WORKSPACE = w; onWorkspaceChangedGlobal() },
+    getMainWindow: () => mainWindow,
+    setMainWindow: (w) => { mainWindow = w },
+    getPopoutWindow: () => popoutWindow,
+    setPopoutWindow: (w) => { popoutWindow = w },
+    getExtensionRuntime: () => extensionRuntime,
+    setExtensionRuntime: (r) => { extensionRuntime = r },
+    getHistory: () => HISTORY,
+    setHistory: (h) => { HISTORY = h },
+    getTrustStore: () => trustStore,
+    setTrustStore: (s) => { trustStore = s },
+    getWorkspaceRegistry: () => workspaceRegistry,
+    setWorkspaceRegistry: (r) => { workspaceRegistry = r },
+    getRecentRemotes: () => recentRemotes,
+    setRecentRemotes: (r) => { recentRemotes = r },
+
+    // Shared helpers — passed by reference.
+    requireWorkspace, isRemote, safeResolve, isAllowedExt, isAllowedDirEntry,
+    toRel, isInternal, isSitePath,
+    getExtensionClaimedExts, invalidateExtensionClaimedExts,
+    onWorkspaceChangedGlobal, getHistoryService, startWatcher, stopWatcher,
+
+    // Module-scoped maps used by extension/UI handlers
+    getPendingPrompts: () => pendingPrompts,
+    getStatusBarOverrides: () => statusBarOverrides,
+    getExtensionActiveFile: () => extensionActiveFile,
+  }
+}
+
 app.whenReady().then(() => {
   // Extensions are managed from the sidebar Extensions tab, so we don't need
   // an Extensions submenu. On macOS we still set the standard app menu
@@ -1739,6 +1779,14 @@ app.whenReady().then(() => {
       : null,
   )
   recentRemotes = new RecentRemotes(path.join(app.getPath('userData'), 'recent-remotes.json'))
+  const deps = makeDeps()
+  fsService.registerIpcHandlers(ipcMain, deps)
+  serveService.registerIpcHandlers(ipcMain, deps)
+  historyService.registerIpcHandlers(ipcMain, deps)
+  sitesService.registerIpcHandlers(ipcMain, deps)
+  dockService.registerIpcHandlers(ipcMain, deps)
+  extService.registerIpcHandlers(ipcMain, deps)
+  wsService.registerIpcHandlers(ipcMain, deps)
   registerFsHandlers()
   registerSiteHandlers()
   registerDockHandlers()
