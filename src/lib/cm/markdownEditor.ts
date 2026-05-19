@@ -19,7 +19,10 @@ export const languageCompartment = new Compartment()
 
 export interface ActiveEditorUpdateInfo {
   rel: string | null
-  text: string
+  /** Document length in chars. Use this for cheap presence/size checks.
+   * The full text is intentionally not materialised on every update — on a
+   * large doc, toString() on every cursor move was a multi-MB allocation. */
+  length: number
   selection: { from: number; to: number; text: string }
   docChanged: boolean
 }
@@ -62,7 +65,7 @@ export function markdownEditorExtensions(opts: MarkdownEditorOptions): Extension
       const sel = update.state.selection.main
       opts.onActiveEditorUpdate({
         rel: opts.activeRel ?? null,
-        text: update.state.doc.toString(),
+        length: update.state.doc.length,
         selection: { from: sel.from, to: sel.to, text: update.state.sliceDoc(sel.from, sel.to) },
         docChanged: update.docChanged,
       })

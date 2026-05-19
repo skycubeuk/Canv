@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { EditorView } from '@codemirror/view'
 import { FloatingToolbar } from './components/FloatingToolbar'
-import { TestExtensionOverlay } from './components/extensions/TestExtensionOverlay'
 import { MigrationModal } from './components/MigrationModal'
 import { AppOverlays } from './components/ide/AppOverlays'
 import { legacyStateExists } from './lib/legacyState'
@@ -119,11 +118,10 @@ export default function App() {
   const editorRegistry = useEditorRegistry({ workspace })
   const {
     editorsRef, jumpersRef,
-    selectionTick,
     getActiveEditor, getActiveEditorForGroup,
     handleEditorReady, handleEditorDestroy,
     handleJumperReady, handleJumperDestroy,
-    handleEditorChange, handleEditorSelectionChange,
+    handleEditorChange,
     readLiveBuffer,
     openSources, outlineNodes, focusedKey,
     jumpToMatch,
@@ -456,9 +454,11 @@ export default function App() {
 
   const saveState = workspace.conflict
     ? 'conflict' as const
-    : workspace.dirtySet.size > 0
+    : workspace.writingSet.size > 0
       ? 'saving' as const
-      : 'saved' as const
+      : workspace.dirtySet.size > 0
+        ? 'unsaved' as const
+        : 'saved' as const
 
   const applyRunWithSnapshot = useCallback(async (run: import('./components/ResultsPanel').RunRecord, replacement: string) => {
     const rel = workspace.activeMarkdownRel
@@ -648,7 +648,6 @@ export default function App() {
         onJumperReady={handleJumperReady}
         onJumperDestroy={handleJumperDestroy}
         onEditorChange={handleEditorChange}
-        onEditorSelectionChange={handleEditorSelectionChange}
         onActiveEditorUpdate={onActiveEditorUpdate}
         readLiveBuffer={readLiveBuffer}
         onJumpToMatch={jumpToMatch}
@@ -739,7 +738,6 @@ export default function App() {
 
       <FloatingToolbar
         view={activeEditor}
-        selectionVersion={selectionTick}
         profile={activeProfile}
         onAgent={handleAgentFromToolbar}
       />
@@ -768,13 +766,6 @@ export default function App() {
         onOpenFile={(rel) => { void workspace.openTab(rel) }}
         extensionCommands={contributions.commands}
         onInvokeExtensionCommand={(id) => { void window.canvExtensions?.invokeCommand?.(id) }}
-      />
-
-      <TestExtensionOverlay
-        getActiveEditor={getActiveEditor}
-        activeMarkdownRel={workspace.activeMarkdownRel}
-        settings={settings}
-        activeProfile={activeProfile}
       />
     </div>
   )

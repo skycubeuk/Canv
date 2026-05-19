@@ -26,7 +26,6 @@ export interface UseEditorRegistryArgs {
 export interface UseEditorRegistryApi {
   editorsRef: React.MutableRefObject<Map<string, EditorView>>
   jumpersRef: React.MutableRefObject<Map<string, Jumper>>
-  selectionTick: number
   getActiveEditor: () => EditorView | null
   getActiveEditorForGroup: (groupId: EditorGroupId) => EditorView | null
   handleEditorReady: (groupId: EditorGroupId, rel: string, view: EditorView) => void
@@ -34,7 +33,6 @@ export interface UseEditorRegistryApi {
   handleJumperReady: (groupId: EditorGroupId, rel: string, jumper: Jumper) => void
   handleJumperDestroy: (groupId: EditorGroupId, rel: string) => void
   handleEditorChange: (groupId: EditorGroupId, rel: string, markdown: string) => void
-  handleEditorSelectionChange: () => void
   jumpToMatch: (match: SearchMatch, q: { query: string; regex: boolean; caseSensitive: boolean }, ordinalInFile: number) => Promise<void>
   jumpToProblem: (issue: LintIssue, allIssues: LintIssue[]) => Promise<void>
   /**
@@ -59,6 +57,28 @@ export function useEditorRegistry(args: UseEditorRegistryArgs): UseEditorRegistr
 
   const liveDocsChannel = useMemo(() => createLiveDocsChannel(), [])
   const bumpEditors = useCallback(() => bumpEditorRev((n) => n + 1), [])
+
+  // Register a pull-on-demand getter with the channel. The getter reads directly
+  // from the mounted EditorView (zero extra allocation per keystroke). Falls back
+  // to the tab's loadedMarkdown when the view isn't mounted yet.
+  // A stable ref holds the current workspace so the getter closure never goes stale.
+  const workspaceRef = useRef(workspace)
+  useEffect(() => { workspaceRef.current = workspace })
+  useEffect(() => {
+    liveDocsChannel.setGetter((key) => {
+      const view = editorsRef.current.get(key)
+      if (view) return view.state.doc.toString()
+      const ix = key.indexOf(':')
+      if (ix < 0) return undefined
+      const groupId = key.slice(0, ix) as EditorGroupId
+      const rel = key.slice(ix + 1)
+      const group = workspaceRef.current.editorGroups.find((g) => g.id === groupId)
+      if (!group) return undefined
+      const tab = group.openTabs.find((t) => t.kind === 'markdown' && t.relPath === rel)
+      return tab && tab.kind === 'markdown' ? tab.loadedMarkdown : undefined
+    })
+    return () => { liveDocsChannel.setGetter(null) }
+  }, [liveDocsChannel])
 
   const jumpersRef = useRef<Map<string, Jumper>>(new Map())
 
@@ -175,7 +195,7 @@ export function useEditorRegistry(args: UseEditorRegistryArgs): UseEditorRegistr
   const handleEditorChange = useCallback(
     (groupId: EditorGroupId, rel: string, markdown: string) => {
       workspace.saveTab(rel, markdown, groupId)
-      liveDocsChannel.publish(`${groupId}:${rel}`, markdown)
+      liveDocsChannel.publish(`${groupId}:${rel}`)
     },
     [workspace, liveDocsChannel],
   )
@@ -208,11 +228,6 @@ export function useEditorRegistry(args: UseEditorRegistryArgs): UseEditorRegistr
     }
     prevLoadedRef.current = next
   }, [workspace.editorGroups, liveDocsChannel])
-
-  const [selectionTick, setSelectionTick] = useState(0)
-  const handleEditorSelectionChange = useCallback(() => {
-    setSelectionTick((n) => n + 1)
-  }, [])
 
   const focusedRel = workspace.activeMarkdownRel
   const focusedGroupId = workspace.activeGroupId
@@ -325,20 +340,18 @@ export function useEditorRegistry(args: UseEditorRegistryArgs): UseEditorRegistr
 
   return useMemo<UseEditorRegistryApi>(() => ({
     editorsRef, jumpersRef,
-    selectionTick,
     getActiveEditor, getActiveEditorForGroup,
     handleEditorReady, handleEditorDestroy,
     handleJumperReady, handleJumperDestroy,
-    handleEditorChange, handleEditorSelectionChange,
+    handleEditorChange,
     jumpToMatch, jumpToProblem,
     readLiveBuffer,
     openSources, outlineNodes, focusedKey,
   }), [
-    selectionTick,
     getActiveEditor, getActiveEditorForGroup,
     handleEditorReady, handleEditorDestroy,
     handleJumperReady, handleJumperDestroy,
-    handleEditorChange, handleEditorSelectionChange,
+    handleEditorChange,
     jumpToMatch, jumpToProblem,
     readLiveBuffer,
     openSources, outlineNodes, focusedKey,

@@ -65,7 +65,7 @@ describe('openRelsFromSources', () => {
 })
 
 describe('useLintIssues — scan cancellation', () => {
-  let readResolvers: Array<(value: { content: string; mtimeMs: number }) => void>
+  let readResolvers: Array<(value: { ok: true; content: string; mtimeMs: number; eol: 'lf'; bom: false; size: number }) => void>
 
   beforeEach(() => {
     readResolvers = []
@@ -74,7 +74,7 @@ describe('useLintIssues — scan cancellation', () => {
       setWorkspace: async () => {},
       getWorkspace: async () => null,
       listDir: async () => ({ name: '', relPath: '', kind: 'dir' as const, children: [], truncated: false }),
-      readFile: () => new Promise<{ content: string; mtimeMs: number }>((resolve) => {
+      readFile: () => new Promise<{ ok: true; content: string; mtimeMs: number; eol: 'lf'; bom: false; size: number }>((resolve) => {
         readResolvers.push(resolve)
       }),
       writeFile: async () => ({ mtimeMs: 0 }),
@@ -135,8 +135,8 @@ describe('useLintIssues — scan cancellation', () => {
     // have produced a broken-link issue; the second's empty content produces
     // none. With the token bump, only the second's result should land.
     await act(async () => {
-      readResolvers[0]({ content: '[bad](missing.md)', mtimeMs: 0 })
-      readResolvers[1]({ content: '', mtimeMs: 0 })
+      readResolvers[0]({ ok: true, content: '[bad](missing.md)', mtimeMs: 0, eol: 'lf', bom: false, size: 0 })
+      readResolvers[1]({ ok: true, content: '', mtimeMs: 0, eol: 'lf', bom: false, size: 0 })
       // Wait for both scan promises to settle so React state updates land.
       await firstScanPromise
       await secondScanPromise

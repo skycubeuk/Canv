@@ -24,10 +24,12 @@ describe('useFocusedDocText', () => {
 
   it('returns live entry once published, after debounce', () => {
     const channel = createLiveDocsChannel()
+    const store = new Map<string, string>()
+    channel.setGetter((k) => store.get(k))
     const { result } = renderHook(() =>
       useFocusedDocText(channel, 'g1:a.md', '# fallback', 250),
     )
-    act(() => { channel.publish('g1:a.md', '# live') })
+    act(() => { store.set('g1:a.md', '# live'); channel.publish('g1:a.md') })
     expect(result.current).toBe('# fallback')
     act(() => { vi.advanceTimersByTime(250) })
     expect(result.current).toBe('# live')
@@ -35,13 +37,15 @@ describe('useFocusedDocText', () => {
 
   it('debounces rapid publishes to one update per window', () => {
     const channel = createLiveDocsChannel()
+    const store = new Map<string, string>()
+    channel.setGetter((k) => store.get(k))
     const { result } = renderHook(() =>
       useFocusedDocText(channel, 'g1:a.md', '', 250),
     )
     act(() => {
-      channel.publish('g1:a.md', 'a')
-      channel.publish('g1:a.md', 'ab')
-      channel.publish('g1:a.md', 'abc')
+      store.set('g1:a.md', 'a');  channel.publish('g1:a.md')
+      store.set('g1:a.md', 'ab'); channel.publish('g1:a.md')
+      store.set('g1:a.md', 'abc'); channel.publish('g1:a.md')
     })
     expect(result.current).toBe('')
     act(() => { vi.advanceTimersByTime(250) })
@@ -50,9 +54,12 @@ describe('useFocusedDocText', () => {
 
   it('clear drops the stored entry and notifies subscribers', () => {
     const channel = createLiveDocsChannel()
+    const store = new Map<string, string>()
+    channel.setGetter((k) => store.get(k))
     const listener = vi.fn()
     channel.subscribe(listener)
-    channel.publish('g1:a.md', '# live')
+    store.set('g1:a.md', '# live')
+    channel.publish('g1:a.md')
     expect(channel.read('g1:a.md')).toBe('# live')
     channel.clear('g1:a.md')
     expect(channel.read('g1:a.md')).toBeUndefined()
@@ -69,7 +76,10 @@ describe('useFocusedDocText', () => {
 
   it('switching focusedKey returns the new key fallback first', () => {
     const channel = createLiveDocsChannel()
-    channel.publish('g1:a.md', '# live a')
+    const store = new Map<string, string>()
+    channel.setGetter((k) => store.get(k))
+    store.set('g1:a.md', '# live a')
+    channel.publish('g1:a.md')
     const { result, rerender } = renderHook(
       ({ key, fb }: { key: string; fb: string }) =>
         useFocusedDocText(channel, key, fb, 250),
@@ -80,7 +90,8 @@ describe('useFocusedDocText', () => {
     rerender({ key: 'g1:b.md', fb: '# fallback b' })
     expect(result.current).toBe('# fallback b')
     act(() => {
-      channel.publish('g1:b.md', '# live b')
+      store.set('g1:b.md', '# live b')
+      channel.publish('g1:b.md')
       vi.advanceTimersByTime(250)
     })
     expect(result.current).toBe('# live b')

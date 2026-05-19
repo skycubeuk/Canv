@@ -35,7 +35,27 @@ export interface FsEvent {
   mtimeMs?: number
 }
 
-export interface ReadResult { content: string; mtimeMs: number }
+export type ReadOk = {
+  ok: true
+  content: string
+  mtimeMs: number
+  eol: 'lf' | 'crlf'
+  bom: boolean
+  size: number
+}
+export type ReadErr = {
+  ok: false
+  error: 'not-utf8' | 'too-large'
+  size: number
+  mtimeMs: number
+}
+export type ReadResult = ReadOk | ReadErr
+
+export interface WriteOpts {
+  eol?: 'lf' | 'crlf'
+  bom?: boolean
+}
+
 export interface WriteResult { mtimeMs: number }
 
 export interface CanvFs {
@@ -44,7 +64,7 @@ export interface CanvFs {
   getWorkspace(): Promise<string | null>
   listDir(rel?: string): Promise<DirNode>
   readFile(rel: string): Promise<ReadResult>
-  writeFile(rel: string, content: string, expectedMtimeMs?: number): Promise<WriteResult>
+  writeFile(rel: string, content: string, expectedMtimeMs?: number, opts?: WriteOpts): Promise<WriteResult>
   createFile(rel: string, content?: string): Promise<WriteResult>
   createFolder(rel: string): Promise<void>
   rename(oldRel: string, newRel: string): Promise<void>
@@ -120,4 +140,16 @@ export function findEntry(node: DirNode, relPath: string): DirEntry | null {
     }
   }
   return null
+}
+
+/**
+ * Resolve a readFile to plain text, throwing on the error variants.
+ * Use this when the caller only needs content; a thrown error is fine.
+ * Callers that must distinguish error kinds (openTab, adoptWorkspace)
+ * should call fs.readFile directly and switch on result.ok.
+ */
+export async function readFileContent(fs: CanvFs, rel: string): Promise<string> {
+  const r = await fs.readFile(rel)
+  if (!r.ok) throw new Error(`readFile failed: ${r.error}`)
+  return r.content
 }

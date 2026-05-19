@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { lintMarkdown } from '../lib/lint'
 import type { LintIssue, LintOptions, WorkspaceFiles } from '../lib/lintTypes'
-import { getFs, isElectron, flattenTree, type DirNode } from '../lib/fs'
+import { getFs, isElectron, flattenTree, readFileContent, type DirNode } from '../lib/fs'
 
 export type ScanState = 'idle' | 'scanning' | 'done' | 'error'
 
@@ -110,7 +110,7 @@ export function useLintIssues({
         // content (fresher than disk).
         if (rels.has(entry.relPath)) continue
         try {
-          const { content } = await getFs().readFile(entry.relPath)
+          const content = await readFileContent(getFs(), entry.relPath)
           issuesOut.push(...lintMarkdown(content, entry.relPath, f, o))
         } catch {
           // skip unreadable file

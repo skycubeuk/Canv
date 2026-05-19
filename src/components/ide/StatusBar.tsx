@@ -5,7 +5,7 @@ import { useContributions } from '../../hooks/useContributions'
 import { StatusBarItem } from './StatusBarItem'
 
 interface Props {
-  saveState: 'saved' | 'saving' | 'conflict'
+  saveState: 'saved' | 'unsaved' | 'saving' | 'conflict'
   profile: Mode
   workspaceName: string | null
   kind: WorkspaceKind | null
@@ -71,6 +71,11 @@ export function StatusBar(props: Props) {
         <span className="flex items-center gap-1.5">
           <span className="w-1.5 h-1.5 rounded-full bg-[#10b981]" aria-hidden />
           <span>Saved</span>
+        </span>
+      ) : saveState === 'unsaved' ? (
+        <span className="flex items-center gap-1.5 text-muted">
+          <span className="w-1.5 h-1.5 rounded-full bg-[rgb(var(--border-default))]" aria-hidden />
+          <span>Unsaved</span>
         </span>
       ) : saveState === 'saving' ? (
         <span className="flex items-center gap-1.5">

@@ -14,6 +14,8 @@ function makeMarkdownTab(rel: string): OpenTab {
     relPath: rel,
     loadedMarkdown: '',
     mtimeMs: 0,
+    eol: 'lf',
+    bom: false,
   }
 }
 

@@ -31,6 +31,12 @@ export const editFileTool: Tool<Input, Output> = {
       await ctx.applyEditorEdit(v.rel, input.content)
       return { path: v.rel }
     }
+    // ctx.fs.writeFile is swapped to useWorkspace's writeFileFromTool in
+    // useChatSessions.ts; that wrapper looks up the open markdown tab's
+    // {eol, bom} and threads them so CRLF/BOM files round-trip losslessly.
+    // We deliberately do not pass an `opts` argument here — the wrapper owns
+    // EOL/BOM resolution. (If the file isn't open as a tab, the wrapper
+    // defaults to lf/no-bom, which matches the legacy behaviour.)
     const r = await ctx.fs.writeFile(v.rel, input.content, input.expectedMtimeMs)
     return { path: v.rel, mtimeMs: r.mtimeMs }
   },

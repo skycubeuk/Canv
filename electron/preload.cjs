@@ -108,8 +108,8 @@ if (!isDockPopout()) {
     getWorkspace: () => ipcRenderer.invoke('canvFS:getWorkspace'),
     listDir: (rel) => ipcRenderer.invoke('canvFS:listDir', rel ?? ''),
     readFile: (rel) => ipcRenderer.invoke('canvFS:readFile', rel),
-    writeFile: (rel, content, expectedMtimeMs) =>
-      ipcRenderer.invoke('canvFS:writeFile', rel, content, expectedMtimeMs),
+    writeFile: (rel, content, expectedMtimeMs, opts) =>
+      ipcRenderer.invoke('canvFS:writeFile', rel, content, expectedMtimeMs, opts),
     createFile: (rel, content) => ipcRenderer.invoke('canvFS:createFile', rel, content ?? ''),
     createFolder: (rel) => ipcRenderer.invoke('canvFS:createFolder', rel),
     rename: (oldRel, newRel) => ipcRenderer.invoke('canvFS:rename', oldRel, newRel),

@@ -28,6 +28,8 @@ const { createUiHandlers } = require('./extensions/handlers/ui.cjs')
 const { validateManifest } = require('./extensions/manifest-schema.cjs')
 const { Registry } = require('./extensions/registry.cjs')
 const { WorkspaceTrustStore } = require('./extensions/workspace-trust.cjs')
+const { MAX_OPEN_BYTES } = require('./services/fs-limits.cjs')
+const { canvFSReadFile: canvFSReadFileImpl, canvFSWriteFile: canvFSWriteFileImpl } = require('./services/canvfs.cjs')
 const { hashExtensionDir } = require('./extensions/manifest-hash.cjs')
 const { shouldActivateFor } = require('./extensions/activation-events.cjs')
 const { createSettingsHandlers } = require('./extensions/handlers/settings.cjs')
@@ -106,7 +108,6 @@ const SITE_EXTS = new Set([
   '.png', '.jpg', '.jpeg', '.gif', '.webp', '.ico',
 ])
 const SKIP_DIRS = new Set(['node_modules', '.git', '.svn', '.hg', '.DS_Store'])
-const MAX_READ_BYTES = 2 * 1024 * 1024
 const MAX_LIST_ENTRIES = 5000
 const MAX_DEPTH = 8
 
@@ -370,36 +371,29 @@ function registerFsHandlers() {
   })
 
   ipcMain.handle('canvFS:readFile', async (_e, rel) => {
-    if (isRemote()) return WORKSPACE.backend.readFile(rel)
-    const root = requireWorkspace()
-    const abs = safeResolve(root, rel)
-    const stat = await fsp.stat(abs)
-    if (!stat.isFile()) throw new Error('not a file')
-    if (stat.size > MAX_READ_BYTES) throw new Error('file too large')
-    if (!isAllowedExt(rel, abs)) throw new Error('binary or unsupported file type')
-    const content = await fsp.readFile(abs, 'utf8')
-    return { content, mtimeMs: stat.mtimeMs }
-  })
-
-  ipcMain.handle('canvFS:writeFile', async (_e, rel, content, expectedMtimeMs) => {
-    if (isRemote()) return WORKSPACE.backend.writeFile(rel, content, expectedMtimeMs)
-    const root = requireWorkspace()
-    const abs = safeResolve(root, rel)
-    if (!isAllowedExt(rel, abs)) throw new Error('unsupported file type')
-    if (typeof content !== 'string') throw new Error('invalid content')
-    if (Buffer.byteLength(content, 'utf8') > MAX_READ_BYTES) throw new Error('content too large')
-    if (typeof expectedMtimeMs === 'number') {
-      const stat = await fsp.stat(abs).catch(() => null)
-      if (stat && Math.abs(stat.mtimeMs - expectedMtimeMs) > 1) {
-        const err = new Error('stale write')
-        err.code = 'STALE'
-        throw err
+    // Remote backend returns the legacy { content, mtimeMs } shape; we synthesise
+    // eol/bom defaults at this boundary. Updating the remote contract is a future task.
+    if (isRemote()) {
+      const { content, mtimeMs } = await WORKSPACE.backend.readFile(rel)
+      return {
+        ok: true,
+        content,
+        mtimeMs,
+        eol: 'lf',
+        bom: false,
+        size: Buffer.byteLength(content, 'utf8'),
       }
     }
-    await fsp.mkdir(path.dirname(abs), { recursive: true })
-    await fsp.writeFile(abs, content, 'utf8')
-    const stat = await fsp.stat(abs)
-    return { mtimeMs: stat.mtimeMs }
+    const root = requireWorkspace()
+    return canvFSReadFileImpl(root, rel, { safeResolve, isAllowedExt })
+  })
+
+  ipcMain.handle('canvFS:writeFile', async (_e, rel, content, expectedMtimeMs, opts) => {
+    // TODO(remote-fs): SSH backend does not yet honour { eol, bom };
+    // CRLF/BOM files saved to a remote workspace currently re-encode to LF/no-BOM.
+    if (isRemote()) return WORKSPACE.backend.writeFile(rel, content, expectedMtimeMs)
+    const root = requireWorkspace()
+    return canvFSWriteFileImpl(root, rel, content, expectedMtimeMs, opts, { safeResolve, isAllowedExt })
   })
 
   ipcMain.handle('canvFS:createFile', async (_e, rel, content = '') => {
@@ -655,7 +649,7 @@ function registerFsHandlers() {
     let currentText = ''
     try {
       const stat = await fsp.stat(abs)
-      if (stat.isFile() && stat.size <= MAX_READ_BYTES) {
+      if (stat.isFile() && stat.size <= MAX_OPEN_BYTES) {
         currentText = await fsp.readFile(abs, 'utf-8')
       }
     } catch {
@@ -1048,7 +1042,7 @@ function buildExtensionHost() {
       const abs = safeResolve(root, rel)
       const stat = await fsp.stat(abs)
       if (!stat.isFile()) throw new Error('not a file')
-      if (stat.size > MAX_READ_BYTES) throw new Error('file too large')
+      if (stat.size > MAX_OPEN_BYTES) throw new Error('file too large')
       return fsp.readFile(abs, 'utf-8')
     },
 

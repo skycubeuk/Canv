@@ -16,7 +16,7 @@ import { tabKey, SETTINGS_TAB_KEY, DIFF_TAB_KEY_PREFIX, EXTENSION_TAB_KEY_PREFIX
 const SCHEMA_VERSION = '2'
 const SCHEMA_KEY = 'canv:schemaVersion'
 const LAST_WS_KEY = 'canv:lastWorkspace'
-const SAVE_DEBOUNCE_MS = 1000
+const SAVE_DEBOUNCE_MS = 5000
 const TREE_REFRESH_DEBOUNCE_MS = 200
 // How long to remember our own writes before evicting them from the
 // recentWrites map. Suppression itself doesn't depend on age — it matches by
@@ -96,6 +96,10 @@ export interface WorkspaceApi {
   /** Union of every tab key across every group — used for sidebar "open" indication. */
   allOpenKeys: Set<string>
   dirtySet: Set<string>
+  /** Files for which a debounced write is currently in flight on disk.
+   * Distinct from `dirtySet`, which is true the moment the user types.
+   * UIs that display a "Saving…" indicator should key on this, not dirtySet. */
+  writingSet: Set<string>
   pinned: PinnedEntry[]
   pickWorkspace: () => Promise<boolean>
   openRemote: (raw: string) => Promise<boolean>
@@ -151,6 +155,9 @@ export interface WorkspaceApi {
 interface OnQuotaErrorOptions {
   onConflict?: (rel: string) => void
   onToast?: (msg: string) => void
+  /** Override the autosave debounce window (ms). Defaults to SAVE_DEBOUNCE_MS.
+   * Exposed primarily so tests can drive the save path without a 5s wait. */
+  saveDebounceMs?: number
 }
 
 // ---------------------------------------------------------------------------
@@ -177,6 +184,7 @@ function tabKeysFor(group: EditorGroupState): string[] {
 
 export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
   const available = isElectron()
+  const saveDebounceMs = opts.saveDebounceMs ?? SAVE_DEBOUNCE_MS
 
   const [root, setRoot] = useState<string | null>(null)
   const [kind, setKind] = useState<WorkspaceKind | null>(null)
@@ -188,7 +196,19 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
   const [activeGroupId, setActiveGroupIdState] = useState<EditorGroupId>('g1')
   const [pinned, setPinned] = useState<PinnedEntry[]>([])
   const [dirtySet, setDirtySet] = useState<Set<string>>(new Set())
+  const [writingSet, setWritingSet] = useState<Set<string>>(new Set())
   const [conflict, setConflict] = useState<ConflictNotice | null>(null)
+
+  const setWriting = useCallback((rel: string, writing: boolean) => {
+    setWritingSet((prev) => {
+      const has = prev.has(rel)
+      if (writing ? has : !has) return prev
+      const next = new Set(prev)
+      if (writing) next.add(rel)
+      else next.delete(rel)
+      return next
+    })
+  }, [])
   // No-op when running outside Electron — start in a "ready" state so the
   // boot effect doesn't have to flip it from inside the effect body.
   const [ready, setReady] = useState(() => !isElectron())
@@ -264,9 +284,25 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
     })
   }, [])
 
+  // Look up a markdown tab's EOL/BOM from the open-groups ref. Used by every
+  // write path so a CRLF/BOM file round-trips losslessly. Returns (lf, no-bom)
+  // as a safe default when no markdown tab is open for `rel` (e.g. tool-driven
+  // writes to a file that isn't currently open).
+  const getTabEolBom = useCallback((rel: string): { eol: 'lf' | 'crlf'; bom: boolean } => {
+    for (const g of editorGroupsRef.current) {
+      const t = g.openTabs.find((x) => isMarkdownTab(x) && x.relPath === rel)
+      if (t && t.kind === 'markdown') {
+        return { eol: t.eol, bom: t.bom }
+      }
+    }
+    return { eol: 'lf', bom: false }
+  }, [])
+
   const writeFileCoalesced = useCallback(async (rel: string, markdown: string, sourceGroupId?: EditorGroupId) => {
+    setWriting(rel, true)
     try {
-      const { mtimeMs } = await getFs().writeFile(rel, markdown)
+      const { eol, bom } = getTabEolBom(rel)
+      const { mtimeMs } = await getFs().writeFile(rel, markdown, undefined, { eol, bom })
       recentWrites.current.set(rel, { mtimeMs, ts: Date.now(), content: markdown })
       // Update mtimeMs on every group; refresh loadedMarkdown on every OTHER group so their
       // CodeMirror instances re-sync via Canvas's lastLoadedRef effect. The source group's
@@ -289,8 +325,10 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
       } else if (onToast) {
         onToast(`Failed to save ${rel}: ${err instanceof Error ? err.message : String(err)}`)
       }
+    } finally {
+      setWriting(rel, false)
     }
-  }, [setDirty, onToast])
+  }, [setDirty, setWriting, onToast, getTabEolBom])
 
   const writeFileFromTool = useCallback(async (
     rel: string,
@@ -308,7 +346,8 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
     pendingMarkdown.current.delete(rel)
     lastWriterGroupRef.current.delete(rel)
 
-    const result = await getFs().writeFile(rel, content, expectedMtimeMs)
+    const { eol, bom } = getTabEolBom(rel)
+    const result = await getFs().writeFile(rel, content, expectedMtimeMs, { eol, bom })
     // Mark this mtime as "our own write" so the chokidar 'change' event that
     // follows is suppressed in the watcher subscription below.
     recentWrites.current.set(rel, { mtimeMs: result.mtimeMs, ts: Date.now(), content })
@@ -324,7 +363,7 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
     )
     setDirty(rel, false)
     return result
-  }, [setDirty])
+  }, [setDirty, getTabEolBom])
 
   const noteOwnDiskWrite = useCallback((rel: string, mtimeMs: number) => {
     recentWrites.current.set(rel, { mtimeMs, ts: Date.now(), content: null })
@@ -344,9 +383,9 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
       const writer = lastWriterGroupRef.current.get(rel)
       lastWriterGroupRef.current.delete(rel)
       writeFileCoalesced(rel, pending, writer)
-    }, SAVE_DEBOUNCE_MS)
+    }, saveDebounceMs)
     saveTimers.current.set(rel, t)
-  }, [setDirty, writeFileCoalesced])
+  }, [setDirty, writeFileCoalesced, saveDebounceMs])
 
   const flushAll = useCallback(async () => {
     const tasks: Promise<void>[] = []
@@ -382,17 +421,31 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
       setActiveGroupIdState(targetGroup)
       return
     }
-    let content: string
-    let mtimeMs: number
+    let r
     try {
-      const r = await getFs().readFile(rel)
-      content = r.content
-      mtimeMs = r.mtimeMs
+      r = await getFs().readFile(rel)
     } catch (err) {
       if (onToast) onToast(`Couldn't open ${rel}: ${err instanceof Error ? err.message : String(err)}`)
       return
     }
-    const tab: OpenTab = { kind: 'markdown', relPath: rel, loadedMarkdown: content, mtimeMs }
+    if (!r.ok) {
+      const name = rel.split('/').pop() || rel
+      if (r.error === 'too-large') {
+        const mb = (r.size / (1024 * 1024)).toFixed(1)
+        if (onToast) onToast(`${name} is too large to open (${mb} MB).`)
+      } else {
+        if (onToast) onToast(`${name} is not UTF-8 encoded. Opening would lose data.`)
+      }
+      return
+    }
+    const tab: OpenTab = {
+      kind: 'markdown',
+      relPath: rel,
+      loadedMarkdown: r.content,
+      mtimeMs: r.mtimeMs,
+      eol: r.eol,
+      bom: r.bom,
+    }
     setEditorGroups((prev) => {
       const next = withGroupUpdate(prev, targetGroup, (g) => ({
         ...g,
@@ -686,12 +739,14 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
     const groups = editorGroupsRef.current
     if (!groups.some((g) => g.openTabs.some((t) => t.kind === 'markdown' && t.relPath === rel))) return
     try {
-      const { content, mtimeMs } = await getFs().readFile(rel)
+      const r = await getFs().readFile(rel)
+      if (!r.ok) return
+      const { content, mtimeMs, eol, bom } = r
       setEditorGroups((prev) =>
         prev.map((g) => ({
           ...g,
           openTabs: g.openTabs.map((t) =>
-            t.kind === 'markdown' && t.relPath === rel ? { ...t, loadedMarkdown: content, mtimeMs } : t,
+            t.kind === 'markdown' && t.relPath === rel ? { ...t, loadedMarkdown: content, mtimeMs, eol, bom } : t,
           ),
         })),
       )
@@ -714,7 +769,7 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
     let mtimeMs = 0
     try {
       const stat = await getFs().readFile(rel)
-      mtimeMs = stat.mtimeMs
+      if (stat.ok) mtimeMs = stat.mtimeMs
     } catch {
       // file may have just been deleted
     }
@@ -825,6 +880,7 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
     const savedGroups = readJson<PersistedGroups | null>(wsKey(rt, 'groups'), null)
     let restoredGroups: EditorGroupState[]
     let restoredActiveGroupId: EditorGroupId
+    const droppedTabs: { rel: string; reason: 'not-utf8' | 'too-large' }[] = []
 
     if (savedGroups && savedGroups.version === 1) {
       restoredGroups = []
@@ -870,8 +926,19 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
           }
           const rel = stored.startsWith('markdown:') ? stored.slice('markdown:'.length) : stored
           try {
-            const { content, mtimeMs } = await getFs().readFile(rel)
-            tabs.push({ kind: 'markdown', relPath: rel, loadedMarkdown: content, mtimeMs })
+            const r = await getFs().readFile(rel)
+            if (!r.ok) {
+              droppedTabs.push({ rel, reason: r.error })
+              continue
+            }
+            tabs.push({
+              kind: 'markdown',
+              relPath: rel,
+              loadedMarkdown: r.content,
+              mtimeMs: r.mtimeMs,
+              eol: r.eol,
+              bom: r.bom,
+            })
           } catch {
             // file deleted externally — skip
           }
@@ -934,8 +1001,19 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
         }
         const rel = stored.startsWith('markdown:') ? stored.slice('markdown:'.length) : stored
         try {
-          const { content, mtimeMs } = await getFs().readFile(rel)
-          tabs.push({ kind: 'markdown', relPath: rel, loadedMarkdown: content, mtimeMs })
+          const r = await getFs().readFile(rel)
+          if (!r.ok) {
+            droppedTabs.push({ rel, reason: r.error })
+            continue
+          }
+          tabs.push({
+            kind: 'markdown',
+            relPath: rel,
+            loadedMarkdown: r.content,
+            mtimeMs: r.mtimeMs,
+            eol: r.eol,
+            bom: r.bom,
+          })
         } catch {
           // file deleted externally — skip
         }
@@ -958,6 +1036,7 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
       const rel = typeof p === 'string' ? p : p.rel
       try {
         const file = await getFs().readFile(rel)
+        if (!file.ok) continue
         restoredPinned.push({ relPath: rel, mtimeMs: file.mtimeMs })
       } catch {
         // skip missing
@@ -970,7 +1049,12 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
     // Canonicalise persisted state (especially after a backward-compat migration).
     persistGroups(rt, restoredGroups, restoredActiveGroupId)
     persistPinnedRels(rt, restoredPinned)
-  }, [persistGroups, persistPinnedRels])
+
+    if (droppedTabs.length > 0 && onToast) {
+      const lines = droppedTabs.map((d) => `${d.rel} (${d.reason})`).join('; ')
+      onToast(`${droppedTabs.length} file(s) couldn't be reopened: ${lines}`)
+    }
+  }, [persistGroups, persistPinnedRels, onToast])
 
   const pickWorkspace = useCallback(async () => {
     if (!available) return false
@@ -1105,7 +1189,12 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
         // user can't act on a popup that hasn't appeared yet.
         void (async () => {
           try {
-            const { content: diskContent, mtimeMs: statMtime } = await getFs().readFile(relPath)
+            const r = await getFs().readFile(relPath)
+            if (!r.ok) {
+              setConflict({ relPath, diskMtimeMs: mtimeMs })
+              return
+            }
+            const { content: diskContent, mtimeMs: statMtime } = r
             const recordedContent = recent?.content ?? null
             if (recordedContent !== null && diskContent === recordedContent) {
               // Disk matches what we wrote — keep the recentWrites entry
@@ -1154,14 +1243,18 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
     const handler = () => {
       for (const [rel, markdown] of pendingMarkdown.current.entries()) {
         try {
+          // Thread the open tab's EOL/BOM so a CRLF/BOM file with unsaved edits
+          // at app exit doesn't get silently re-encoded to LF/no-BOM. Defaults
+          // to (lf, no-bom) when no markdown tab is open for `rel`.
+          const { eol, bom } = getTabEolBom(rel)
           // best-effort sync write; the IPC is async so this is fire-and-forget
-          getFs().writeFile(rel, markdown).catch(() => { /* ignore */ })
+          getFs().writeFile(rel, markdown, undefined, { eol, bom }).catch(() => { /* ignore */ })
         } catch { /* ignore */ }
       }
     }
     window.addEventListener('beforeunload', handler)
     return () => window.removeEventListener('beforeunload', handler)
-  }, [])
+  }, [getTabEolBom])
 
   // ---------------------------------------------------------------------------
   // Derived selectors
@@ -1201,6 +1294,7 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
     activeMarkdownRel,
     allOpenKeys,
     dirtySet,
+    writingSet,
     pinned,
     pickWorkspace,
     openRemote,
@@ -1232,5 +1326,5 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
     reloadTabFromDisk,
     remoteStatus,
     reconnect,
-  }), [ready, available, root, kind, tree, treeTruncated, editorGroups, activeGroupId, activeTabKey, activeMarkdownRel, allOpenKeys, dirtySet, pinned, pickWorkspace, openRemote, closeWorkspace, openTab, closeTab, setActiveTab, openSettingsTab, openDiffTab, openExtensionTab, closeTabByKey, setActiveTabByKey, splitRight, moveTab, setActiveGroupId, saveTab, writeFileFromTool, noteOwnDiskWrite, flushAll, pin, unpin, createFile, createFolder, renameOp, remove, refreshTree, conflict, resolveConflict, reloadTabFromDisk, remoteStatus, reconnect])
+  }), [ready, available, root, kind, tree, treeTruncated, editorGroups, activeGroupId, activeTabKey, activeMarkdownRel, allOpenKeys, dirtySet, writingSet, pinned, pickWorkspace, openRemote, closeWorkspace, openTab, closeTab, setActiveTab, openSettingsTab, openDiffTab, openExtensionTab, closeTabByKey, setActiveTabByKey, splitRight, moveTab, setActiveGroupId, saveTab, writeFileFromTool, noteOwnDiskWrite, flushAll, pin, unpin, createFile, createFolder, renameOp, remove, refreshTree, conflict, resolveConflict, reloadTabFromDisk, remoteStatus, reconnect])
 }
