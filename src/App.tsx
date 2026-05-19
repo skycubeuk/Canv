@@ -37,7 +37,6 @@ import { TopBar } from './components/ide/TopBar'
 import { useChatSessions } from './hooks/useChatSessions'
 import { useAppCommands } from './hooks/useAppCommands'
 import { useDockBridgeMain } from './hooks/useDockBridgeMain'
-import { useIdleAutosnapshot } from './hooks/useIdleAutosnapshot'
 import type { ChatProvider } from './components/ChatPanel'
 import { getAdapter, configuredProviders } from './adapters'
 import type { Provider } from './adapters'
@@ -52,6 +51,7 @@ import { Contributions } from './contributions'
 import './contributions/theme.contribution'
 import './contributions/ollama.contribution'
 import './contributions/quota-error.contribution'
+import './contributions/idle-snapshot.contribution'
 
 function basename(rel: string): string {
   const i = rel.lastIndexOf('/')
@@ -233,12 +233,6 @@ function AppInner() {
   }, [ideLayout])
 
   const raEnabled = setup.config?.revisionArchaeology.enabled === true
-
-  useIdleAutosnapshot({
-    enabled: raEnabled,
-    idleMs: 10 * 60 * 1000,
-    history: raEnabled ? getCanvHistory() : null,
-  })
 
   const [restoreTarget, setRestoreTarget] = useState<{ snapshotId: string; relPath: string } | null>(null)
   const [fileHistoryTarget, setFileHistoryTarget] = useState<string | null>(null)
