@@ -44,6 +44,7 @@ import { getAdapter, configuredProviders } from './adapters'
 import type { Provider } from './adapters'
 import { ollamaAdapter } from './adapters/ollama'
 import { ServicesProvider } from './services'
+import { Contributions } from './contributions'
 
 function basename(rel: string): string {
   const i = rel.lastIndexOf('/')
@@ -56,6 +57,7 @@ export default function App() {
   // later tasks; this commit just mounts the provider so they can.
   return (
     <ServicesProvider>
+      <Contributions />
       <AppInner />
     </ServicesProvider>
   )
