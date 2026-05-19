@@ -389,6 +389,15 @@ export default function App() {
     [activeProfile],
   )
 
+  // Same filter as WorkspaceShell uses to build extensionBottomTabs; projected
+  // to a primitive-only shape so it can ride the dock IPC bridge to the pop-out.
+  const bottomDockExtensionPanels = useMemo(
+    () => contributions.panels
+      .filter((p) => p.location === 'bottom-dock')
+      .map((p) => ({ extensionId: p.extensionId, id: p.id, title: p.title })),
+    [contributions.panels],
+  )
+
   useDockBridgeMain({
     ideLayout,
     modes,
@@ -438,6 +447,7 @@ export default function App() {
     onOpenFileHistory: openFileHistory,
     onFileHistoryOpenDiff: (r) => handleOpenDiff(r.relPath, r.commitSha, r.baseLabel),
     onFileHistoryRestore: (snapshotId, relPath) => setRestoreTarget({ snapshotId, relPath }),
+    bottomDockExtensionPanels,
   })
 
   const openRels = useMemo(() => {

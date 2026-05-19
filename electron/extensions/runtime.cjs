@@ -180,6 +180,38 @@ class ExtensionRuntime {
     e.view.setBounds(bounds)
   }
 
+  // Move a spawned extension's WebContentsView from one BrowserWindow to
+  // another. Called when a slot in a different window than the view's current
+  // host requests showPanelInSlot — e.g. the bottom dock is popped out and the
+  // pop-out window first mounts an extension panel. No-op when the view is
+  // already attached to newHost. Bounds are NOT changed here; the caller
+  // follows up with setBounds in the new window's coordinate space.
+  reparent(extensionId, newHost) {
+    const e = this._byId.get(extensionId)
+    if (!e || !newHost || !e.view) return
+    if (e.view._hostWindow === newHost) return
+    try {
+      if (e.view._hostWindow && !e.view._hostWindow.isDestroyed()) {
+        e.view._hostWindow.contentView.removeChildView(e.view)
+      }
+    } catch { /* ignore */ }
+    try { newHost.contentView.addChildView(e.view) } catch { /* ignore */ }
+    e.view._hostWindow = newHost
+  }
+
+  // Enumerate extensions whose view is currently parented to `win`. Used by
+  // main to clean up when a host window (the pop-out) closes — destroying the
+  // extension is the simplest reliable cleanup; the main-window slot will
+  // respawn on next mount via the normal showPanelInSlot path.
+  idsHostedBy(win) {
+    const out = []
+    if (!win) return out
+    for (const [id, e] of this._byId) {
+      if (e && e.view && e.view._hostWindow === win) out.push(id)
+    }
+    return out
+  }
+
   // --- Test affordances. Real `spawn`/`destroy` land in Task 15. ---
   _registerForTest({ id, manifest, extensionDir, webContentsId, view = null, storageFile = null }) {
     const storage = storageFile ? new PersistentStorage(storageFile) : new InMemoryStorage()

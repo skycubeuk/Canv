@@ -73,6 +73,11 @@ export interface UseDockBridgeMainArgs {
   onOpenFileHistory: (rel: string) => void
   onFileHistoryOpenDiff: (r: { kind: 'fileHistory'; relPath: string; snapshotId: string; commitSha: string; baseLabel: string }) => void
   onFileHistoryRestore: (snapshotId: string, relPath: string) => void
+  // Extension-contributed bottom-dock panels. Filtered + projected by App.tsx
+  // from the live contributions registry so the pop-out can mirror the main
+  // window's tab list. Keep the shape primitive-only — this rides the IPC
+  // structured-clone path along with the rest of DockState.
+  bottomDockExtensionPanels: Array<{ extensionId: string; id: string; title: string }>
 }
 
 export function useDockBridgeMain(args: UseDockBridgeMainArgs): void {
@@ -125,6 +130,7 @@ export function useDockBridgeMain(args: UseDockBridgeMainArgs): void {
     onOpenFileHistory,
     onFileHistoryOpenDiff,
     onFileHistoryRestore,
+    bottomDockExtensionPanels,
   } = args
 
   // Parse each run on the main side so the popout can render Notes / Rewrite / Diff
@@ -177,6 +183,7 @@ export function useDockBridgeMain(args: UseDockBridgeMainArgs): void {
       problems,
       lintScanState,
       lintScanError,
+      bottomDockExtensionPanels,
       streamingRunId,
       ui: {
         theme: settings.theme,
@@ -213,6 +220,7 @@ export function useDockBridgeMain(args: UseDockBridgeMainArgs): void {
     settings.chatFontSize,
     pricingOverrides,
     activeProfile,
+    bottomDockExtensionPanels,
   ])
 
   const dockBridge = useDockBridge({ mode: 'main' })
