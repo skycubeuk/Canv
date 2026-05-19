@@ -34,7 +34,6 @@ import { useSelectionAgent } from './hooks/useSelectionAgent'
 import { buildChatSystemPreamble } from './lib/buildChatSystemPreamble'
 import { TopBar } from './components/ide/TopBar'
 import { useChatSessions } from './hooks/useChatSessions'
-import { useDockBridgeMain } from './hooks/useDockBridgeMain'
 import type { ChatProvider } from './components/ChatPanel'
 import { getAdapter, configuredProviders } from './adapters'
 import type { Provider } from './adapters'
@@ -52,6 +51,7 @@ import './contributions/quota-error.contribution'
 import './contributions/idle-snapshot.contribution'
 import './contributions/extension-keybindings.contribution'
 import './contributions/commands.contribution'
+import './contributions/dock-bridge.contribution'
 
 function basename(rel: string): string {
   const i = rel.lastIndexOf('/')
@@ -285,7 +285,7 @@ function AppInner() {
     sendChat, retryFromAnchor, editAndRetry, undoRetry,
     stopChat, clearChat,
     onApprovalDecide,
-    sessions, allSessions, activeId, createSession, selectSession, closeSession, setActiveSessionProviderModel,
+    sessions, activeId, createSession, selectSession, closeSession, setActiveSessionProviderModel,
     getSession,
   } = chatSession
 
@@ -347,66 +347,47 @@ function AppInner() {
     [activeProfile],
   )
 
-  // Same filter as WorkspaceShell uses to build extensionBottomTabs; projected
-  // to a primitive-only shape so it can ride the dock IPC bridge to the pop-out.
-  const bottomDockExtensionPanels = useMemo(
-    () => contributions.panels
-      .filter((p) => p.location === 'bottom-dock')
-      .map((p) => ({ extensionId: p.extensionId, id: p.id, title: p.title })),
-    [contributions.panels],
-  )
+  // Bridge App-local state into dock-bridge.contribution. The contribution
+  // reads everything else (runs, chat, lint, layout, etc.) from services; only
+  // file-history target/nonce and the RA flag still live in AppInner state.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('canv:dockBridge:appProps', {
+      detail: {
+        fileHistoryTarget,
+        fileHistoryNonce,
+        revisionArchaeologyEnabled: raEnabled,
+      },
+    }))
+  }, [fileHistoryTarget, fileHistoryNonce, raEnabled])
 
-  useDockBridgeMain({
-    ideLayout,
-    modes,
-    defaultModeId,
-    activeProfile,
-    runs,
-    activeTabId,
-    setActiveTabId,
-    handleRerun,
-    handleCloseTab,
-    handleApply,
-    refineRun,
-    chatMessages,
-    chatProvider,
-    chatModel,
-    chatBusy,
-    pendingApprovals,
-    followLatest,
-    contextFileName: workspace.activeMarkdownRel ? basename(workspace.activeMarkdownRel) : null,
-    sessions,
-    chatSessionsFull: allSessions,
-    chatSystemPreamble,
-    activeSessionId: activeId,
-    availableModels,
-    sendChat,
-    clearChat,
-    stopChat,
-    retryFromAnchor,
-    editAndRetry,
-    onApprovalDecide,
-    setFollowLatest,
-    createSession,
-    selectSession,
-    closeSession,
-    setActiveSessionProviderModel,
-    problems: lintIssuesApi.issues,
-    lintScanState: lintIssuesApi.scanState,
-    lintScanError: lintIssuesApi.scanError,
-    scanProblems: () => { void lintIssuesApi.scanWorkspace() },
-    clearProblems: lintIssuesApi.clearWorkspaceIssues,
-    jumpToProblem,
-    settings,
-    pricingOverrides: settings.pricingOverrides,
-    revisionArchaeologyEnabled: raEnabled,
-    fileHistoryTarget,
-    fileHistoryNonce,
-    onOpenFileHistory: openFileHistory,
-    onFileHistoryOpenDiff: (r) => handleOpenDiff(r.relPath, r.commitSha, r.baseLabel),
-    onFileHistoryRestore: (snapshotId, relPath) => setRestoreTarget({ snapshotId, relPath }),
-    bottomDockExtensionPanels,
-  })
+  // Listen for file-history actions originating from the pop-out (routed
+  // through dock-bridge.contribution → window.dispatchEvent). These update
+  // App-local state the same way the original useDockBridgeMain config did.
+  useEffect(() => {
+    const onOpen = (e: Event) => {
+      const detail = (e as CustomEvent<{ relPath: string }>).detail
+      if (!detail) return
+      openFileHistory(detail.relPath)
+    }
+    const onOpenDiff = (e: Event) => {
+      const detail = (e as CustomEvent<{ req: { kind: 'fileHistory'; relPath: string; snapshotId: string; commitSha: string; baseLabel: string } }>).detail
+      if (!detail) return
+      handleOpenDiff(detail.req.relPath, detail.req.commitSha, detail.req.baseLabel)
+    }
+    const onRestore = (e: Event) => {
+      const detail = (e as CustomEvent<{ snapshotId: string; relPath: string }>).detail
+      if (!detail) return
+      setRestoreTarget({ snapshotId: detail.snapshotId, relPath: detail.relPath })
+    }
+    window.addEventListener('canv:fileHistory:openRequest', onOpen)
+    window.addEventListener('canv:fileHistory:openDiff', onOpenDiff)
+    window.addEventListener('canv:fileHistory:restore', onRestore)
+    return () => {
+      window.removeEventListener('canv:fileHistory:openRequest', onOpen)
+      window.removeEventListener('canv:fileHistory:openDiff', onOpenDiff)
+      window.removeEventListener('canv:fileHistory:restore', onRestore)
+    }
+  }, [openFileHistory, handleOpenDiff])
 
   const openRels = useMemo(() => {
     const out = new Set<string>()
