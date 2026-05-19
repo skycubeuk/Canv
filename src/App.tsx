@@ -687,11 +687,7 @@ function AppInner() {
         />
       )}
 
-      <FloatingToolbar
-        view={activeEditor}
-        profile={activeProfile}
-        onAgent={handleAgentFromToolbar}
-      />
+      <FloatingToolbar onAgent={handleAgentFromToolbar} />
 
       <AppOverlays
         profilePicker={profilePicker}
