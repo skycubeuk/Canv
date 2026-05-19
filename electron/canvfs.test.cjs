@@ -130,4 +130,64 @@ describe('canvFS read/write round-trip', () => {
     const after = await fsp.readFile(path.join(root, 'lf.md'))
     expect(after.equals(Buffer.from('one\nTHREE\n', 'utf8'))).toBe(true)
   })
+
+  it('rejects files with disallowed extension', async () => {
+    await fsp.writeFile(path.join(root, 'a.bin'), 'binary-content')
+    const blockAllDeps = { safeResolve, isAllowedExt: () => false }
+    await expect(canvFSReadFile(root, 'a.bin', blockAllDeps))
+      .rejects.toThrow(/binary or unsupported file type/)
+  })
+
+  it('refuses to write when expectedMtimeMs is stale', async () => {
+    await fsp.writeFile(path.join(root, 'a.md'), 'one\n', 'utf8')
+    const r = await canvFSReadFile(root, 'a.md', deps)
+    expect(r.ok).toBe(true)
+
+    // Touch the file externally so its mtime moves on.
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    await fsp.writeFile(path.join(root, 'a.md'), 'one\nexternal\n', 'utf8')
+
+    // Now attempt to write with the OLD mtime.
+    await expect(
+      canvFSWriteFile(root, 'a.md', 'modified\n', r.mtimeMs, { eol: 'lf', bom: false }, deps),
+    ).rejects.toMatchObject({ code: 'STALE' })
+  })
+
+  it('accepts a file exactly at MAX_OPEN_BYTES', async () => {
+    const { MAX_OPEN_BYTES } = require('./services/fs-limits.cjs')
+    const p = path.join(root, 'at-limit.md')
+    const fd = await fsp.open(p, 'w')
+    try {
+      await fd.truncate(MAX_OPEN_BYTES)
+    } finally {
+      await fd.close()
+    }
+    // A sparse 10 MB file reads as 10 MB of NUL bytes, which is valid UTF-8.
+    const r = await canvFSReadFile(root, 'at-limit.md', deps)
+    expect(r.ok).toBe(true)
+    expect(r.size).toBe(MAX_OPEN_BYTES)
+  })
+
+  it('round-trips a BOM+LF file with exact byte preservation', async () => {
+    const original = Buffer.concat([
+      Buffer.from([0xEF, 0xBB, 0xBF]),
+      Buffer.from('alpha\nbeta\n', 'utf8'),
+    ])
+    await fsp.writeFile(path.join(root, 'bom-lf.md'), original)
+
+    const r = await canvFSReadFile(root, 'bom-lf.md', deps)
+    expect(r.ok).toBe(true)
+    expect(r.bom).toBe(true)
+    expect(r.eol).toBe('lf')
+    expect(r.content).toBe('alpha\nbeta\n')
+
+    await canvFSWriteFile(root, 'bom-lf.md', 'gamma\nbeta\n', r.mtimeMs, { eol: 'lf', bom: true }, deps)
+
+    const after = await fsp.readFile(path.join(root, 'bom-lf.md'))
+    const expected = Buffer.concat([
+      Buffer.from([0xEF, 0xBB, 0xBF]),
+      Buffer.from('gamma\nbeta\n', 'utf8'),
+    ])
+    expect(after.equals(expected)).toBe(true)
+  })
 })
