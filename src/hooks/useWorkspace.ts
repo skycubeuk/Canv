@@ -264,20 +264,23 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
     })
   }, [])
 
+  // Look up a markdown tab's EOL/BOM from the open-groups ref. Used by every
+  // write path so a CRLF/BOM file round-trips losslessly. Returns (lf, no-bom)
+  // as a safe default when no markdown tab is open for `rel` (e.g. tool-driven
+  // writes to a file that isn't currently open).
+  const getTabEolBom = useCallback((rel: string): { eol: 'lf' | 'crlf'; bom: boolean } => {
+    for (const g of editorGroupsRef.current) {
+      const t = g.openTabs.find((x) => isMarkdownTab(x) && x.relPath === rel)
+      if (t && t.kind === 'markdown') {
+        return { eol: t.eol, bom: t.bom }
+      }
+    }
+    return { eol: 'lf', bom: false }
+  }, [])
+
   const writeFileCoalesced = useCallback(async (rel: string, markdown: string, sourceGroupId?: EditorGroupId) => {
     try {
-      // Thread the file's EOL + BOM from the tab record so save round-trips
-      // losslessly. Default to (lf, no-bom) if no markdown tab is open for rel.
-      let eol: 'lf' | 'crlf' = 'lf'
-      let bom = false
-      for (const g of editorGroupsRef.current) {
-        const t = g.openTabs.find((x) => isMarkdownTab(x) && x.relPath === rel)
-        if (t && t.kind === 'markdown') {
-          eol = t.eol
-          bom = t.bom
-          break
-        }
-      }
+      const { eol, bom } = getTabEolBom(rel)
       const { mtimeMs } = await getFs().writeFile(rel, markdown, undefined, { eol, bom })
       recentWrites.current.set(rel, { mtimeMs, ts: Date.now(), content: markdown })
       // Update mtimeMs on every group; refresh loadedMarkdown on every OTHER group so their
@@ -302,7 +305,7 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
         onToast(`Failed to save ${rel}: ${err instanceof Error ? err.message : String(err)}`)
       }
     }
-  }, [setDirty, onToast])
+  }, [setDirty, onToast, getTabEolBom])
 
   const writeFileFromTool = useCallback(async (
     rel: string,
@@ -320,17 +323,7 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
     pendingMarkdown.current.delete(rel)
     lastWriterGroupRef.current.delete(rel)
 
-    // Thread the file's EOL + BOM from the tab record if it's open.
-    let eol: 'lf' | 'crlf' = 'lf'
-    let bom = false
-    for (const g of editorGroupsRef.current) {
-      const t = g.openTabs.find((x) => isMarkdownTab(x) && x.relPath === rel)
-      if (t && t.kind === 'markdown') {
-        eol = t.eol
-        bom = t.bom
-        break
-      }
-    }
+    const { eol, bom } = getTabEolBom(rel)
     const result = await getFs().writeFile(rel, content, expectedMtimeMs, { eol, bom })
     // Mark this mtime as "our own write" so the chokidar 'change' event that
     // follows is suppressed in the watcher subscription below.
@@ -347,7 +340,7 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
     )
     setDirty(rel, false)
     return result
-  }, [setDirty])
+  }, [setDirty, getTabEolBom])
 
   const noteOwnDiskWrite = useCallback((rel: string, mtimeMs: number) => {
     recentWrites.current.set(rel, { mtimeMs, ts: Date.now(), content: null })
@@ -1227,14 +1220,18 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
     const handler = () => {
       for (const [rel, markdown] of pendingMarkdown.current.entries()) {
         try {
+          // Thread the open tab's EOL/BOM so a CRLF/BOM file with unsaved edits
+          // at app exit doesn't get silently re-encoded to LF/no-BOM. Defaults
+          // to (lf, no-bom) when no markdown tab is open for `rel`.
+          const { eol, bom } = getTabEolBom(rel)
           // best-effort sync write; the IPC is async so this is fire-and-forget
-          getFs().writeFile(rel, markdown).catch(() => { /* ignore */ })
+          getFs().writeFile(rel, markdown, undefined, { eol, bom }).catch(() => { /* ignore */ })
         } catch { /* ignore */ }
       }
     }
     window.addEventListener('beforeunload', handler)
     return () => window.removeEventListener('beforeunload', handler)
-  }, [])
+  }, [getTabEolBom])
 
   // ---------------------------------------------------------------------------
   // Derived selectors

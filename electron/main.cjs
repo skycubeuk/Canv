@@ -370,6 +370,8 @@ function registerFsHandlers() {
   })
 
   ipcMain.handle('canvFS:readFile', async (_e, rel) => {
+    // Remote backend returns the legacy { content, mtimeMs } shape; we synthesise
+    // eol/bom defaults at this boundary. Updating the remote contract is a future task.
     if (isRemote()) {
       const { content, mtimeMs } = await WORKSPACE.backend.readFile(rel)
       return {
@@ -404,7 +406,9 @@ function registerFsHandlers() {
       return { ok: false, error: 'not-utf8', size: stat.size, mtimeMs: stat.mtimeMs }
     }
 
-    const scan = content.length > 65536 ? content.slice(0, 65536) : content
+    // Scan up to the first 64K decoded chars for CRLF. Lone-\r (classic Mac)
+    // line endings are not detected — out of scope.
+    const scan = content.slice(0, 65536)
     const eol = scan.includes('\r\n') ? 'crlf' : 'lf'
     const normalised = eol === 'crlf' ? content.replace(/\r\n/g, '\n') : content
 
@@ -412,6 +416,8 @@ function registerFsHandlers() {
   })
 
   ipcMain.handle('canvFS:writeFile', async (_e, rel, content, expectedMtimeMs, opts) => {
+    // TODO(remote-fs): SSH backend does not yet honour { eol, bom };
+    // CRLF/BOM files saved to a remote workspace currently re-encode to LF/no-BOM.
     if (isRemote()) return WORKSPACE.backend.writeFile(rel, content, expectedMtimeMs)
     const root = requireWorkspace()
     const abs = safeResolve(root, rel)
