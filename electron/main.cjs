@@ -958,6 +958,16 @@ function registerDockHandlers() {
     }
 
     win.on('closed', () => {
+      // Tear down any extension WebContentsViews that were reparented into the
+      // pop-out. The next mount in main triggers a fresh spawn via the normal
+      // showPanelInSlot path — simpler than reparenting back to main here,
+      // and avoids guessing bounds when the main-window slot isn't mounted.
+      if (extensionRuntime) {
+        const hosted = extensionRuntime.idsHostedBy(win)
+        for (const id of hosted) {
+          try { extensionRuntime.destroy(id, { reason: 'host-window-closed' }) } catch { /* ignore */ }
+        }
+      }
       if (popoutWindow === win) popoutWindow = null
       broadcastToMainWindow('canvDock:popoutClosed')
     })
@@ -1167,8 +1177,12 @@ function registerExtensionHandlers() {
     // hidden (zero-rect). The slot's ResizeObserver reports real bounds the
     // moment the user opens the panel's tab; floating corner placement is gone.
     const bounds = opts.bounds ?? { x: 0, y: 0, width: 0, height: 0 }
+    // opts.hostWindow lets a slot in the pop-out be the initial host for the
+    // WebContentsView. When unset (activation events, command invocation,
+    // cold-start auto-spawn), fall back to mainWindow.
+    const hostWindow = opts.hostWindow && !opts.hostWindow.isDestroyed() ? opts.hostWindow : mainWindow
     await extensionRuntime.spawn({
-      extensionDir: dir, manifest, hostWindow: mainWindow, bounds,
+      extensionDir: dir, manifest, hostWindow, bounds,
       entryRel: opts.entryRel,
     })
     return { ok: true }
@@ -1529,16 +1543,22 @@ function registerExtensionHandlers() {
     }
   })
 
-  ipcMain.handle('canvExtensions:showPanelInSlot', async (_e, slotId, bounds) => {
+  ipcMain.handle('canvExtensions:showPanelInSlot', async (e, slotId, bounds) => {
     if (!extensionRuntime || !workspaceRegistry) return { ok: false, error: 'no runtime' }
     const m = /^ext:([^:]+):([^:]+)$/.exec(slotId)
     if (!m) return { ok: false, error: 'malformed slotId' }
     const [, extensionId] = m
+    // The slot lives in whichever BrowserWindow's renderer invoked us — main
+    // for an in-window dock, popout for a popped-out dock. Bounds are in that
+    // window's coordinate space, so the WebContentsView must be attached
+    // there.
+    const hostWindow = BrowserWindow.fromWebContents(e.sender) || mainWindow
     if (extensionRuntime.manifestFor(extensionId)) {
+      extensionRuntime.reparent(extensionId, hostWindow)
       extensionRuntime.setBounds(extensionId, bounds)
       return { ok: true }
     }
-    return await spawnInstalled(extensionId, { bounds })
+    return await spawnInstalled(extensionId, { bounds, hostWindow })
   })
 
   ipcMain.handle('canvExtensions:hidePanelInSlot', async (_e, slotId) => {

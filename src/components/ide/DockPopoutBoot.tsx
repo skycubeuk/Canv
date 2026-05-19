@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { BottomPanel } from './BottomPanel'
+import { Puzzle } from 'lucide-react'
+import { BottomPanel, type BottomPanelTabDef } from './BottomPanel'
 import { DockPlacementMenu } from './DockPlacementMenu'
 import { buildBottomPanelTabs, type BottomPanelTabsAdapter } from './bottomPanelTabs'
+import { BottomExtensionPanelSlot } from '../extensions/BottomExtensionPanelSlot'
 import { useDockBridge } from '../../hooks/useDockBridge'
 import { useModesState } from '../../hooks/useModes'
 import type { DockState, UserAction } from '../../lib/dockTypes'
@@ -124,7 +126,20 @@ export function DockPopoutBoot() {
     }
   }, [state, bridge, pendingApprovalsMap])
 
-  const tabs = useMemo(() => (adapter ? buildBottomPanelTabs(adapter) : []), [adapter])
+  const tabs = useMemo<BottomPanelTabDef[]>(() => {
+    if (!adapter) return []
+    const builtin = buildBottomPanelTabs(adapter)
+    // Mirror WorkspaceShell.tsx's extensionBottomTabs mapping. Bounds reported
+    // by BottomExtensionPanelSlot are window-local; main reparents the
+    // WebContentsView to this popout window when it first sees a slot here.
+    const ext = (state?.bottomDockExtensionPanels ?? []).map((p) => ({
+      id: `ext:${p.extensionId}:${p.id}`,
+      label: p.title,
+      icon: Puzzle,
+      render: () => <BottomExtensionPanelSlot slotId={`ext:${p.extensionId}:${p.id}`} />,
+    }))
+    return [...builtin, ...ext]
+  }, [adapter, state?.bottomDockExtensionPanels])
 
   // Modes config not yet ready (cold-load race) — show a placeholder. Same
   // gate the main window applies; without it RunsTab's useModes() would throw.
