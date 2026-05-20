@@ -26,11 +26,12 @@ function abortableApproval(
 export type ApprovalDecision = 'approve' | 'deny' | 'approve-rest'
 
 function buildTools(): Promise<import('../adapters/types').ToolSchema[]> | import('../adapters/types').ToolSchema[] {
-  // Fast path: when the MCP bridge is absent (which is also the case in unit
-  // tests), return the native schemas synchronously so we don't burn an extra
-  // microtask waiting on an async function. The chatRunner's abort-during-
-  // streaming tests rely on the very first await happening inside
-  // adapter.complete.
+  // Sync return when the MCP bridge is absent (the default — and the case in
+  // every unit test). `await` on a non-thenable still ticks the microtask
+  // queue once, but skipping the async-wrapper avoids the listTools round-
+  // trip and the extra promise allocations that would otherwise push the
+  // first real `await` inside `runChatTurnInner` further out — which the
+  // abort-during-streaming tests rely on landing inside `adapter.complete`.
   if (typeof window === 'undefined' || !window.canvMcp) return toolSchemas()
   return (async () => {
     const mcp = await getMcpToolDefs()

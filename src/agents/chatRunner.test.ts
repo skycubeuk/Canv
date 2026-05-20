@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { runChatTurn, pathIsAutoApproved, type ApprovalDecision } from './chatRunner'
 import type { LLMAdapter, CompleteParams, CompleteResult, Message } from '../adapters/types'
 import type { ChatMessage } from '../components/ChatPanel'
@@ -982,6 +982,12 @@ describe('chatRunner — history brackets', () => {
 })
 
 describe('chatRunner — MCP integration', () => {
+  afterEach(() => {
+    // Always clear the bridge between tests — if an assertion above throws,
+    // the inline cleanup wouldn't run and the next test would see stale state.
+    ;(window as unknown as { canvMcp?: unknown }).canvMcp = undefined
+  })
+
   it('routes <server>::<tool> names to callMcpTool and requires approval', async () => {
     const callTool = vi.fn().mockResolvedValue({ ok: true, result: { msg: 'ok' } })
     ;(window as unknown as { canvMcp: unknown }).canvMcp = {
@@ -1018,6 +1024,5 @@ describe('chatRunner — MCP integration', () => {
     })
     expect(approvalCalls).toEqual(['srv::t'])
     expect(callTool).toHaveBeenCalledWith('srv::t', { a: 1 })
-    ;(window as unknown as { canvMcp?: unknown }).canvMcp = undefined
   })
 })
