@@ -11,7 +11,7 @@ const AdmZip = require('adm-zip')
 const { __test__ } = require('./services/extensions/index.cjs')
 const { unpackCanvext } = __test__
 
-describe('canvext install is offline-only', () => {
+describe('canvext unpack is offline-only', () => {
   let dnsSpy, httpSpy, httpsSpy
 
   beforeEach(() => {

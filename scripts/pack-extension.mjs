@@ -57,7 +57,7 @@ export async function packExtension({ folder, output }) {
 }
 
 // CLI entry
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const args = process.argv.slice(2)
   const folder = args[0]
   if (!folder) {
