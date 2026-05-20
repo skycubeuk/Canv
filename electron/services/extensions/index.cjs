@@ -691,10 +691,11 @@ function registerIpcHandlers(ipcMain, deps) {
 
   ipcMain.handle('canvExtensions:pickInstallFolder', async () => {
     const mainWindow = getMainWindow()
-    if (!mainWindow) return null
+    if (!mainWindow || mainWindow.isDestroyed()) return null
     const result = await dialog.showOpenDialog(mainWindow, {
-      title: 'Pick extension folder to install',
-      properties: ['openDirectory'],
+      title: 'Choose an extension folder or .canvext to install',
+      properties: ['openFile', 'openDirectory'],
+      filters: [{ name: 'Canv Extension', extensions: ['canvext'] }],
     })
     if (result.canceled || !result.filePaths[0]) return null
     return result.filePaths[0]
