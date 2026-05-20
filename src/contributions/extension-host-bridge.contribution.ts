@@ -21,6 +21,15 @@ export const extensionHostBridge: Contribution = {
     const dev = window.canvExtensionsDev
     if (!dev) return store   // no bridge available (e.g. unit tests, missing preload)
 
+    // Notifications: extensions calling canv.ui.notify(message) fire through
+    // the host as a notification event; surface as a toast.
+    if (typeof dev.onNotification === 'function') {
+      const offN = dev.onNotification((n) => {
+        services.notifications.showToast(`${n.extensionId}: ${n.message}`)
+      })
+      store.add(toDisposable(offN))
+    }
+
     const offR = dev.onHostRequest((reqId, method, args) => {
       try {
         const view = services.editorRegistry.getActiveEditor()

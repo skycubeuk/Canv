@@ -63,7 +63,7 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
 
   // Editor registry + everything that consumes it.
   const editorRegistryRaw = useEditorRegistry({ workspace })
-  const onActiveEditorUpdate = useExtensionEventBridge()
+  const onActiveEditorUpdate = useExtensionEventBridge(workspace.activeMarkdownRel)
   const editorRegistry = useMemo(
     () => ({ ...editorRegistryRaw, onActiveEditorUpdate }),
     [editorRegistryRaw, onActiveEditorUpdate],
