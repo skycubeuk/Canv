@@ -49,6 +49,7 @@ const { createAiHandlers } = require('../../extensions/handlers/ai.cjs')
 const { createNetHandlers } = require('../../extensions/handlers/net.cjs')
 const { createUiPromptHandlers } = require('../../extensions/handlers/ui-prompt.cjs')
 const { createStatusBarHandlers } = require('../../extensions/handlers/statusBar.cjs')
+const { createMcpHandlers } = require('../../extensions/handlers/mcp.cjs')
 const activity = require('../../extensions/activity.cjs')
 const { buildAllContributions, EMPTY: EMPTY_CONTRIBS } = require('../../extensions/contributions.cjs')
 const { readDefaults: readFileHandlerDefaults, writeDefault: writeFileHandlerDefault } = require('../../extensions/file-handler-defaults.cjs')
@@ -445,6 +446,7 @@ function registerIpcHandlers(ipcMain, deps) {
     ...createNetHandlers({ runtime: extensionRuntime, onRequest: (id) => activity.recordNet(id) }),
     ...createUiPromptHandlers({ runtime: extensionRuntime, host }),
     ...createStatusBarHandlers({ runtime: extensionRuntime, host }),
+    ...createMcpHandlers({ runtime: extensionRuntime, getMcpService: () => (typeof deps.getMcpService === 'function' ? deps.getMcpService() : null) }),
   }
   for (const [channel, fn] of Object.entries(allHandlers)) {
     ipcMain.handle(channel, fn)
