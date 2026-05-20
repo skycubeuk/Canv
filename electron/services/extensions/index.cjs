@@ -489,27 +489,52 @@ function registerIpcHandlers(ipcMain, deps) {
     }
   })
 
-  ipcMain.handle('canvExtensions:install', async (_e, sourceFolderAbsPath) => {
+  ipcMain.handle('canvExtensions:install', async (_e, sourcePath) => {
     const WORKSPACE = getWorkspace()
     const workspaceRegistry = getWorkspaceRegistry()
     if (!workspaceRegistry) throw new Error('no workspace open')
     if (!WORKSPACE || WORKSPACE.kind !== 'local') throw new Error('extensions require local workspace')
-    if (typeof sourceFolderAbsPath !== 'string' || !sourceFolderAbsPath) {
-      return { ok: false, errors: ['invalid source folder'] }
+    if (typeof sourcePath !== 'string' || !sourcePath) {
+      return { ok: false, errors: ['invalid source path'] }
     }
-    const srcManifestPath = path.join(sourceFolderAbsPath, 'manifest.json')
-    let raw
-    try { raw = JSON.parse(await fsp.readFile(srcManifestPath, 'utf-8')) }
-    catch (e) { return { ok: false, errors: [`manifest read/parse failed: ${e.message}`] } }
-    const v = validateManifest(raw)
-    if (!v.ok) return { ok: false, errors: v.errors }
-    const id = v.manifest.id
-    const targetDir = path.join(WORKSPACE.root, '.canv', 'extensions', id)
-    await copyExtensionTree(sourceFolderAbsPath, targetDir)
-    const hash = await hashExtensionDir(targetDir)
-    workspaceRegistry.install(v.manifest, hash)
-    onRegistryChanged()
-    return { ok: true, id }
+
+    let folder = sourcePath
+    let tempUnpack = null
+    const srcStat = await fsp.stat(sourcePath).catch(() => null)
+    if (!srcStat) return { ok: false, errors: [`source not found: ${sourcePath}`] }
+    if (srcStat.isFile()) {
+      if (!sourcePath.endsWith('.canvext')) {
+        return { ok: false, errors: ['source file must be a .canvext zip'] }
+      }
+      tempUnpack = await fsp.mkdtemp(path.join(os.tmpdir(), 'canvext-'))
+      try {
+        unpackCanvext(sourcePath, tempUnpack)
+      } catch (e) {
+        await fsp.rm(tempUnpack, { recursive: true, force: true })
+        return { ok: false, errors: [`canvext unpack failed: ${e.message}`] }
+      }
+      folder = tempUnpack
+    } else if (!srcStat.isDirectory()) {
+      return { ok: false, errors: ['source must be a folder or .canvext file'] }
+    }
+
+    try {
+      const srcManifestPath = path.join(folder, 'manifest.json')
+      let raw
+      try { raw = JSON.parse(await fsp.readFile(srcManifestPath, 'utf-8')) }
+      catch (e) { return { ok: false, errors: [`manifest read/parse failed: ${e.message}`] } }
+      const v = validateManifest(raw)
+      if (!v.ok) return { ok: false, errors: v.errors }
+      const id = v.manifest.id
+      const targetDir = path.join(WORKSPACE.root, '.canv', 'extensions', id)
+      await copyExtensionTree(folder, targetDir)
+      const hash = await hashExtensionDir(targetDir)
+      workspaceRegistry.install(v.manifest, hash)
+      onRegistryChanged()
+      return { ok: true, id }
+    } finally {
+      if (tempUnpack) await fsp.rm(tempUnpack, { recursive: true, force: true })
+    }
   })
 
   ipcMain.handle('canvExtensions:uninstall', async (_e, id) => {
