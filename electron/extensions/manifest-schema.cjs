@@ -138,6 +138,14 @@ const EnginesSchema = z.object({
   ),
 })
 
+const McpToolName = z.string().regex(/^[a-z][a-z0-9_-]*::[a-z][a-z0-9_-]*$/, {
+  message: 'mcp tool name must be "<server>::<tool>" (lowercase, hyphens or underscores)',
+})
+
+const McpSchema = z.object({
+  tools: z.array(McpToolName).default([]),
+})
+
 const ManifestSchema = z.object({
   id: z.string().regex(ID_RE),
   name: z.string().min(1).max(80),
@@ -158,6 +166,7 @@ const ManifestSchema = z.object({
   activationEvents: z.array(ActivationEvent).default([]),
   migrations: z.array(MigrationStep).default([]).optional(),
   contributions: z.array(Contribution).min(1, 'manifest must declare at least one contribution'),
+  mcp: McpSchema.optional(),
 })
 
 function validateManifest(input) {
@@ -172,6 +181,11 @@ function validateManifest(input) {
       errors: [
         `engines.canv "${r.data.engines.canv}" is not compatible with host API ${CANV_API_VERSION}`,
       ],
+    }
+  }
+  if (r.data.capabilities && r.data.capabilities.includes('mcp.call')) {
+    if (!r.data.mcp || !Array.isArray(r.data.mcp.tools) || r.data.mcp.tools.length === 0) {
+      return { ok: false, errors: ['capability "mcp.call" requires manifest.mcp.tools to be a non-empty allowlist'] }
     }
   }
   return { ok: true, manifest: r.data }

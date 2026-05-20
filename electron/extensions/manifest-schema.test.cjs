@@ -382,3 +382,27 @@ describe('validateManifest', () => {
     })
   })
 })
+
+describe('mcp manifest field', () => {
+  const base = {
+    id: 'mcp-test', name: 'M', version: '1.0.0',
+    engines: { canv: '^1.0.0' },
+    contributions: [{ type: 'panel', id: 'p', title: 'P', icon: 'info', location: 'left-sidebar', entry: 'index.html' }],
+  }
+
+  it('accepts mcp.tools with a fully-qualified name', () => {
+    const r = validateManifest({ ...base, capabilities: ['mcp.call'], mcp: { tools: ['fs::read_file'] } })
+    expect(r.ok).toBe(true)
+  })
+
+  it('refuses mcp.call capability without an allowlist', () => {
+    const r = validateManifest({ ...base, capabilities: ['mcp.call'] })
+    expect(r.ok).toBe(false)
+    expect(r.errors.join(' ')).toMatch(/mcp\.tools/)
+  })
+
+  it('refuses an mcp.tools entry without "::"', () => {
+    const r = validateManifest({ ...base, capabilities: ['mcp.call'], mcp: { tools: ['notqualified'] } })
+    expect(r.ok).toBe(false)
+  })
+})

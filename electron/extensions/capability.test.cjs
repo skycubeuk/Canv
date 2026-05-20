@@ -16,6 +16,9 @@ describe('isKnownCapability', () => {
     expect(isKnownCapability('net')).toBe(true)
     expect(ALL_CAPABILITIES).toContain('net')
   })
+  it('recognises mcp.call as a known capability', () => {
+    expect(isKnownCapability('mcp.call')).toBe(true)
+  })
 })
 
 describe('requireCapability', () => {
