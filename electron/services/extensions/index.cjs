@@ -765,10 +765,13 @@ function registerIpcHandlers(ipcMain, deps) {
   ipcMain.handle('canvExtensions:pickInstallFolder', async () => {
     const mainWindow = getMainWindow()
     if (!mainWindow || mainWindow.isDestroyed()) return null
+    // No `filters` here. On Linux/GTK, combining ['openFile','openDirectory']
+    // with a file-type filter wedges the dialog into file-only mode so the
+    // user can't switch to folder picking. The install handler validates by
+    // stat + suffix so the filter isn't load-bearing.
     const result = await dialog.showOpenDialog(mainWindow, {
       title: 'Choose an extension folder or .canvext to install',
       properties: ['openFile', 'openDirectory'],
-      filters: [{ name: 'Canv Extension', extensions: ['canvext'] }],
     })
     if (result.canceled || !result.filePaths[0]) return null
     return result.filePaths[0]
