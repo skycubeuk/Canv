@@ -53,6 +53,13 @@ function matches(eventStr, trigger) {
   if (eventStr.startsWith('onMenuOpen:') && trigger.kind === 'menuOpen') {
     return eventStr.slice('onMenuOpen:'.length) === trigger.menu
   }
+  if (eventStr.startsWith('workspaceContains:') && trigger.kind === 'workspaceContains') {
+    return eventStr.slice('workspaceContains:'.length) === trigger.glob
+  }
+  if (eventStr.startsWith('onUri:') && trigger.kind === 'uri') {
+    const evtUri = eventStr.slice('onUri:'.length)
+    return trigger.uri === evtUri || trigger.uri.startsWith(evtUri + '/')
+  }
   return false
 }
 
