@@ -17,6 +17,7 @@ import type { ToolCall, ToolResult } from '../adapters/types'
 import type { WritePreview, ApprovalDecision } from '../agents/chatRunner'
 import { ChatToolChip } from './ChatToolChip'
 import { ChatApprovalCard, type ApprovalState } from './ChatApprovalCard'
+import { isMcpToolName } from '../agents/mcp'
 import { ChatTodoCard } from './ChatTodoCard'
 import { ChatRetryActions, type RetryActionKind } from './ChatRetryActions'
 import { getTool } from '../tools/registry'
@@ -508,7 +509,10 @@ export function Bubble({
               if (call.name === 'set_todos') {
                 return <ChatTodoCard key={call.id} resultJson={result?.content} />
               }
-              if (tool?.mutating && pending && onApprovalDecide) {
+              // MCP tools aren't in the native registry (separate surface) but
+              // they always need approval — render the same approval card for
+              // either a mutating native tool or any MCP call.
+              if ((tool?.mutating || isMcpToolName(call.name)) && pending && onApprovalDecide) {
                 return (
                   <ChatApprovalCard
                     key={call.id}
