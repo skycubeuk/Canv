@@ -116,6 +116,8 @@ const ActivationEvent = z.string().refine((s) => {
   if (s === 'onStartup') return true
   if (/^onCommand:[a-zA-Z0-9._-]+$/.test(s)) return true
   if (/^onPanelOpen:(left-sidebar|bottom-dock):[a-zA-Z0-9._-]+$/.test(s)) return true
+  if (/^workspaceContains:[^\s]+$/.test(s)) return true
+  if (/^onUri:canv:\/\/[a-z][a-z0-9-]{0,63}(\/.*)?$/.test(s)) return true
   return false
 }, { message: 'unknown activation event' })
 

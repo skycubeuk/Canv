@@ -331,6 +331,36 @@ describe('validateManifest', () => {
     })
   })
 
+  describe('activation events: workspaceContains and onUri', () => {
+    const base = {
+      id: 'evt', name: 'E', version: '1.0.0',
+      engines: { canv: '^1.0.0' },
+      contributions: [{ type: 'panel', id: 'p', title: 'P', icon: 'info', location: 'left-sidebar', entry: 'index.html' }],
+    }
+
+    it('accepts workspaceContains:<glob>', () => {
+      const r = validateManifest({ ...base, activationEvents: ['workspaceContains:daily-notes/*.md'] })
+      expect(r.ok).toBe(true)
+    })
+
+    it('refuses a workspaceContains with whitespace in the glob', () => {
+      const r = validateManifest({ ...base, activationEvents: ['workspaceContains:foo bar/*.md'] })
+      expect(r.ok).toBe(false)
+    })
+
+    it('accepts onUri:canv://<id>[/<path>]', () => {
+      const r1 = validateManifest({ ...base, activationEvents: ['onUri:canv://my-ext'] })
+      expect(r1.ok).toBe(true)
+      const r2 = validateManifest({ ...base, activationEvents: ['onUri:canv://my-ext/open'] })
+      expect(r2.ok).toBe(true)
+    })
+
+    it('refuses onUri with a non-canv scheme', () => {
+      const r = validateManifest({ ...base, activationEvents: ['onUri:http://my-ext'] })
+      expect(r.ok).toBe(false)
+    })
+  })
+
   describe('panel location migration', () => {
     it('rejects right-sidebar (dropped in Phase 5)', () => {
       const r = validateManifest(valid({
