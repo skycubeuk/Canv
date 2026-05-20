@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useAllServices } from '../services/useService'
-import { loadContributions } from './index'
+import { loadContributions, notifyServicesChange } from './index'
 import type { ICanvServices } from '../services'
 
 /** Side-effect component. Mount once near the top of the tree, inside
@@ -47,6 +47,14 @@ export function Contributions() {
     const handle = loadContributions(stableServices)
     return () => handle.dispose()
   }, [stableServices])
+
+  // Fire on every services identity change. Contributions that need to react
+  // to state changes (dock-bridge, etc.) subscribe via subscribeServicesChange.
+  // This intentionally runs on the mount tick too — the dock-bridge's initial
+  // broadcast happens via this path, not inside register().
+  useEffect(() => {
+    notifyServicesChange()
+  }, [services])
 
   return null
 }
