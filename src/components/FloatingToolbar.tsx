@@ -1,12 +1,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react'
-import { EditorView } from '@codemirror/view'
 import { Zap } from 'lucide-react'
-import type { Action, Mode as ModeConfig } from '../config/types'
+import type { Action } from '../config/types'
 import { useContextMenu } from '../lib/contextMenu'
+import { useService } from '../services/useService'
 
 interface Props {
-  view: EditorView | null
-  profile: ModeConfig
   onAgent: (agent: Action, range: { from: number; to: number }, text: string, instruction?: string) => void
 }
 
@@ -18,7 +16,14 @@ interface Pos {
 type Mode = { kind: 'idle' } | { kind: 'presets' } | { kind: 'instruction'; agent: Action }
 
 export function FloatingToolbar(props: Props) {
-  const { view, profile, onAgent } = props
+  const { onAgent } = props
+  const editorRegistry = useService('editorRegistry')
+  const view = editorRegistry.getActiveEditor()
+  const modesSvc = useService('modes')
+  const activeProfileId = modesSvc.profile ?? modesSvc.defaultModeId
+  const profile =
+    modesSvc.modes.find((m) => m.id === activeProfileId) ??
+    modesSvc.modes.find((m) => m.id === modesSvc.defaultModeId)!
   const [pos, setPos] = useState<Pos | null>(null)
   const [selection, setSelection] = useState<{ from: number; to: number; text: string } | null>(null)
   const [mode, setMode] = useState<Mode>({ kind: 'idle' })

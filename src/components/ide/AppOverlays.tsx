@@ -1,65 +1,58 @@
 import { ExtensionPromptModal } from '../extensions/ExtensionPromptModal'
 import { ProfilePicker } from '../ProfilePicker'
 import { MigrationModal } from '../MigrationModal'
-import { CommandPalette, type PaletteMode, type PaletteFile } from './CommandPalette'
+import { CommandPalette, type PaletteMode } from './CommandPalette'
 import OpenRemoteDialog from '../dialogs/OpenRemoteDialog'
 import { DocumentAgentInstructionModal } from '../DocumentAgentInstructionModal'
+import { WorkspaceSetupModal } from '../WorkspaceSetupModal'
+import { RestorePreviewDialog } from './sidebar/RestorePreviewDialog'
+import { getCanvHistory } from '../../lib/history'
+import { getFs } from '../../lib/fs'
 import type { Action as AgentDef } from '../../config/types'
-import type { useWorkspace } from '../../hooks/useWorkspace'
-import type { useProfilePicker } from '../../hooks/useProfilePicker'
-import type { useWorkspaceFileOps } from '../../hooks/useWorkspaceFileOps'
-import type { useNotifications } from '../../hooks/useNotifications'
-import type { useCommands } from '../../hooks/useCommands'
 import { editorMapKey } from '../../hooks/useEditorRegistry'
-import type { EditorView } from '@codemirror/view'
-import type React from 'react'
-import type { CommandRecord } from '../../types/extension-contributions'
-
-type WorkspaceApi = ReturnType<typeof useWorkspace>
-type ProfilePickerApi = ReturnType<typeof useProfilePicker>
-type FileOpsApi = ReturnType<typeof useWorkspaceFileOps>
-type NotificationsApi = ReturnType<typeof useNotifications>
-type CommandsApi = ReturnType<typeof useCommands>
+import { useService } from '../../services/useService'
+import { usePaletteContent } from '../../hooks/usePaletteContent'
 
 export interface AppOverlaysProps {
-  // Profile picker
-  profilePicker: ProfilePickerApi
-  // Migration
+  // Migration (App-local UI state)
   migrationOpen: boolean
   onMigrationComplete: () => void
-  // Workspace conflict
-  workspace: WorkspaceApi
-  editorsRef: React.MutableRefObject<Map<string, EditorView>>
-  // Remote workspace dialog (file ops)
-  fileOps: FileOpsApi
-  // Document-agent instruction
+  // Document-agent instruction (App-local UI state)
   pendingDocAgent: AgentDef | null
   onSubmitDocAgent: (instruction: string) => void
   onCancelDocAgent: () => void
-  // Notifications + retry undo
-  notifications: NotificationsApi
-  onUndoRetry: () => void
-  // Palette
+  // Palette (App-local UI state)
   paletteOpen: boolean
   paletteMode: PaletteMode
-  paletteFiles: PaletteFile[]
-  paletteRecents: PaletteFile[]
   onClosePalette: () => void
-  commands: CommandsApi
-  onOpenFile: (rel: string) => void
-  extensionCommands?: CommandRecord[]
-  onInvokeExtensionCommand?: (commandId: string) => void
+  // File-history restore — App-local UI state, set via dock-bridge events
+  // or the HistoryTab's onRestore prop; cleared when the dialog closes.
+  restoreTarget: { snapshotId: string; relPath: string } | null
+  onCloseRestore: () => void
 }
 
 export function AppOverlays(props: AppOverlaysProps) {
   const {
-    profilePicker, migrationOpen, onMigrationComplete,
-    workspace, editorsRef,
-    fileOps, pendingDocAgent, onSubmitDocAgent, onCancelDocAgent,
-    notifications, onUndoRetry,
-    paletteOpen, paletteMode, paletteFiles, paletteRecents, onClosePalette,
-    commands, onOpenFile, extensionCommands, onInvokeExtensionCommand,
+    migrationOpen, onMigrationComplete,
+    pendingDocAgent, onSubmitDocAgent, onCancelDocAgent,
+    paletteOpen, paletteMode, onClosePalette,
+    restoreTarget, onCloseRestore,
   } = props
+  const { paletteFiles, paletteRecents } = usePaletteContent()
+
+  const profilePicker = useService('profilePicker')
+  const workspace = useService('workspace')
+  const editorRegistry = useService('editorRegistry')
+  const fileOps = useService('workspaceFileOps')
+  const notifications = useService('notifications')
+  const chatSessions = useService('chatSessions')
+  const commands = useService('commands')
+  const contributions = useService('contributions')
+  const setup = useService('setup')
+  const modesSvc = useService('modes')
+  const { showToast } = notifications
+
+  const editorsRef = editorRegistry.editorsRef
 
   return (
     <>
@@ -119,7 +112,7 @@ export function AppOverlays(props: AppOverlaysProps) {
           <button
             type="button"
             className="underline font-medium"
-            onClick={onUndoRetry}
+            onClick={() => chatSessions.undoRetry()}
           >
             Undo
           </button>
@@ -134,10 +127,44 @@ export function AppOverlays(props: AppOverlaysProps) {
         recentFiles={paletteRecents}
         onClose={onClosePalette}
         onRunCommand={(id) => { commands.runById(id) }}
-        onOpenFile={onOpenFile}
-        extensionCommands={extensionCommands}
-        onInvokeExtensionCommand={onInvokeExtensionCommand}
+        onOpenFile={(rel) => { void workspace.openTab(rel) }}
+        extensionCommands={contributions.commands}
+        onInvokeExtensionCommand={(id) => { void window.canvExtensions?.invokeCommand?.(id) }}
       />
+
+      {restoreTarget && getCanvHistory() && (
+        <RestorePreviewDialog
+          history={getCanvHistory()!}
+          snapshotId={restoreTarget.snapshotId}
+          relPath={restoreTarget.relPath}
+          onCancel={onCloseRestore}
+          onRestored={async (rollbackId, mtimeMs) => {
+            const rel = restoreTarget.relPath
+            // Suppress the conflict popup for our own write — must run before the
+            // chokidar 'change' event echoes back from the disk watcher.
+            workspace.noteOwnDiskWrite(rel, mtimeMs)
+            onCloseRestore()
+            showToast(`Restored ${rel}. Safety snapshot: ${rollbackId}`)
+            try { await workspace.reloadTabFromDisk(rel) } catch { /* tab may not be open */ }
+          }}
+          saveDirtyBuffer={async () => { await workspace.flushAll() }}
+        />
+      )}
+
+      {setup.phase === 'needs-setup' && (
+        <WorkspaceSetupModal
+          modes={modesSvc.modes.map((m) => ({ id: m.id, label: m.label }))}
+          defaultProfile={modesSvc.defaultModeId ?? modesSvc.modes[0]?.id ?? 'fiction'}
+          remote={workspace.kind?.kind === 'remote' ? true : false}
+          onConfirm={async (r) => {
+            try { await setup.confirm(r) } catch (e) { showToast(`Setup failed: ${(e as Error).message}`) }
+          }}
+          onCancel={async () => {
+            setup.cancel()
+            try { await getFs().closeWorkspace() } catch { /* ignore */ }
+          }}
+        />
+      )}
 
       <ExtensionPromptModal />
     </>

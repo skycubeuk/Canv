@@ -165,3 +165,11 @@ export function makeCtx(overrides: Partial<ToolCtx> & { fs: CanvFs }): ToolCtx {
     ...overrides,
   }
 }
+
+// ---------------------------------------------------------------------------
+// Services test helpers — JSX lives in services-fixtures.tsx so this file
+// stays .ts. Re-exported here so tests can `import { renderWithServices }
+// from '../test/fixtures'` regardless.
+// ---------------------------------------------------------------------------
+
+export { makeStubServices, renderWithServices } from './services-fixtures'

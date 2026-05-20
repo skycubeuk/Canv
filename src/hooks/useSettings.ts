@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useLocalStorage } from './useLocalStorage'
 import type { Mode } from '../config/types'
 import { adapters, providerForModel } from '../adapters'
@@ -228,10 +228,35 @@ export function useSettings() {
     return action.prompt
   }, [])
 
+  // Listener registry for contributions that live outside React's render tree.
+  // Hook consumers re-render via the `merged` value; non-React code (e.g.
+  // theme.contribution.ts) subscribes and re-reads `settings` on each fire.
+  const listenersRef = useRef<Set<() => void>>(new Set())
+
+  const subscribe = useCallback((cb: () => void): (() => void) => {
+    listenersRef.current.add(cb)
+    return () => { listenersRef.current.delete(cb) }
+  }, [])
+
+  // Fire listeners after commit so they observe the latest merged value.
+  // Skip the initial mount notification — contributions call apply() once
+  // themselves on register and don't need a no-op refresh.
+  const didMountRef = useRef(false)
+  useEffect(() => {
+    if (!didMountRef.current) {
+      didMountRef.current = true
+      return
+    }
+    for (const l of listenersRef.current) {
+      try { l() } catch (e) { console.error('settings listener threw', e) }
+    }
+  }, [merged])
+
   return useMemo(() => ({
     settings: merged,
     update,
     getActionPrompt,
     modelForAgent,
-  }), [merged, update, getActionPrompt, modelForAgent])
+    subscribe,
+  }), [merged, update, getActionPrompt, modelForAgent, subscribe])
 }
