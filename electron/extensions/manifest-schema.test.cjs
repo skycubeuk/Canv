@@ -308,6 +308,16 @@ describe('validateManifest', () => {
       expect(r.errors.join(' ')).toMatch(/engines\.canv.*semver range/i)
     })
 
+    it('refuses an empty engines.canv string', () => {
+      const r = validateManifest({ ...base, engines: { canv: '' } })
+      expect(r.ok).toBe(false)
+    })
+
+    it('refuses a whitespace-only engines.canv string', () => {
+      const r = validateManifest({ ...base, engines: { canv: '   ' } })
+      expect(r.ok).toBe(false)
+    })
+
     it('refuses an engines.canv range that does not satisfy CANV_API_VERSION', () => {
       const r = validateManifest({ ...base, engines: { canv: '^99.0.0' } })
       expect(r.ok).toBe(false)

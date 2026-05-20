@@ -199,9 +199,6 @@ describe('ExtensionRuntime storage backend', () => {
   })
 })
 
-const semver = require('semver')
-const { CANV_API_VERSION } = require('./api-version.cjs')
-
 describe('ExtensionRuntime.spawn engines.canv re-check', () => {
   it('refuses to spawn when engines.canv does not satisfy CANV_API_VERSION', async () => {
     const runtime = new ExtensionRuntime({ electron: null })

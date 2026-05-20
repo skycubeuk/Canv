@@ -126,9 +126,11 @@ const MigrationStep = z.object({
 })
 
 const EnginesSchema = z.object({
-  canv: z.string().refine(
+  canv: z.string().min(1).refine(
     (range) => {
-      try { return semver.validRange(range) !== null } catch { return false }
+      const trimmed = range.trim()
+      if (trimmed.length === 0) return false
+      try { return semver.validRange(trimmed) !== null } catch { return false }
     },
     { message: 'engines.canv must be a valid semver range (e.g. "^1.0.0")' },
   ),
