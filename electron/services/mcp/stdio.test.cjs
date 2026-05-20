@@ -14,9 +14,13 @@ const SERVER_SCRIPT = `
     server.setRequestHandler(ListToolsRequestSchema, async () => ({
       tools: [{ name: 'echo', description: 'echo input', inputSchema: { type: 'object', properties: { msg: { type: 'string' } } } }],
     }))
-    server.setRequestHandler(CallToolRequestSchema, async (req) => ({
-      content: [{ type: 'text', text: 'echo:' + (req.params.arguments && req.params.arguments.msg) }],
-    }))
+    server.setRequestHandler(CallToolRequestSchema, async (req) => {
+      const msg = req.params.arguments && req.params.arguments.msg
+      if (msg === 'err') {
+        return { content: [{ type: 'text', text: 'boom' }], isError: true }
+      }
+      return { content: [{ type: 'text', text: 'echo:' + msg }] }
+    })
     await server.connect(new StdioServerTransport())
   })().catch((e) => { console.error(e); process.exit(1) })
 `
@@ -37,6 +41,24 @@ describe('MCP stdio client', () => {
       const r = await service.callTool('srv::echo', { msg: 'hi' })
       expect(r.ok).toBe(true)
       expect(JSON.stringify(r.result)).toMatch(/echo:hi/)
+    } finally {
+      await service.shutdown()
+    }
+  }, 30000)
+
+  it('promotes a tool-reported isError to ok:false with the text payload', async () => {
+    const service = createMcpService({
+      getConfig: () => [{
+        name: 'srv',
+        transport: 'stdio',
+        command: process.execPath,
+        args: ['-e', SERVER_SCRIPT],
+      }],
+    })
+    try {
+      const r = await service.callTool('srv::echo', { msg: 'err' })
+      expect(r.ok).toBe(false)
+      expect(r.error).toMatch(/boom/)
     } finally {
       await service.shutdown()
     }

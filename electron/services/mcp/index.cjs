@@ -95,6 +95,17 @@ function createMcpService({ getConfig } = {}) {
     if (!h) return { ok: false, error: `server not connected: ${serverName}` }
     try {
       const result = await h.client.callTool({ name: toolName, arguments: args ?? {} })
+      // The SDK resolves with `{ isError: true, content: [...] }` for tool-
+      // reported failures (the transport call succeeded but the tool itself
+      // reported an error). Promote that to ok:false so the chat runner and
+      // extension callers see it as a failure rather than a successful call
+      // returning an error blob.
+      if (result && result.isError === true) {
+        const msg = Array.isArray(result.content)
+          ? result.content.map((c) => (c && typeof c.text === 'string' ? c.text : '')).filter(Boolean).join('\n')
+          : ''
+        return { ok: false, error: msg || 'tool reported an error' }
+      }
       return { ok: true, result }
     } catch (e) {
       return { ok: false, error: e.message }

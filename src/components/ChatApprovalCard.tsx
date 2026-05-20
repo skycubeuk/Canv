@@ -9,13 +9,14 @@ export interface ChatApprovalCardProps {
   onDecide: (d: ApprovalDecision) => void
 }
 
-const HEADERS: Record<WritePreview['kind'], (p: WritePreview) => string> = {
+// MCP previews use an inline ternary in the render path (server + tool name
+// split), so they're intentionally excluded from this map.
+const HEADERS: Record<Exclude<WritePreview['kind'], 'mcp'>, (p: WritePreview) => string> = {
   create: (p) => `Create ${p.path}`,
   edit: (p) => `Edit ${p.path}`,
   delete: (p) => `Delete ${p.path}`,
   rename: (p) => `Rename ${p.path} → ${p.newPath ?? '?'}`,
   mkdir: (p) => `Create folder ${p.path}`,
-  mcp: (p) => `Call MCP tool ${p.path}`,
 }
 
 export function ChatApprovalCard({ preview, state, onDecide }: ChatApprovalCardProps) {
