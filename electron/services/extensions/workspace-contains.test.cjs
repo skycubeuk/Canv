@@ -42,23 +42,48 @@ describe('createWorkspaceContainsEvaluator', () => {
     }
   })
 
-  it('activates on chokidar add when a matching file appears later', () => {
+  it('activates on chokidar add when a matching file appears later (absolute path → relative)', () => {
+    // Chokidar emits absolute paths in production; the evaluator must convert
+    // them to vault-relative POSIX before running globs. Use a realistic
+    // absolute root + abs path to prove the conversion fires.
+    const root = path.join(os.tmpdir(), 'wc-test-vault')
     const installed = [{ id: 'dn', manifest: { activationEvents: ['workspaceContains:daily-notes/*.md'] } }]
     const activated = []
     const runtime = { manifestFor: () => null, activate: (id, t) => activated.push({ id, t }) }
     const watcher = makeFakeWatcher()
     const ev = createWorkspaceContainsEvaluator({
-      getWorkspace: () => ({ root: '/x' }),
+      getWorkspace: () => ({ root }),
       getInstalled: () => installed,
       runtime,
       watcher,
     })
     ev.rebuild()
-    watcher.emit('add', 'daily-notes/2026-05-20.md')
+    watcher.emit('add', path.join(root, 'daily-notes', '2026-05-20.md'))
     expect(activated.length).toBe(1)
+    expect(activated[0].t.kind).toBe('workspaceContains')
+  })
+
+  it('ignores chokidar add events for paths outside the vault root', () => {
+    const root = path.join(os.tmpdir(), 'wc-test-vault')
+    const installed = [{ id: 'dn', manifest: { activationEvents: ['workspaceContains:daily-notes/*.md'] } }]
+    const activated = []
+    const runtime = { manifestFor: () => null, activate: (id, t) => activated.push({ id, t }) }
+    const watcher = makeFakeWatcher()
+    const ev = createWorkspaceContainsEvaluator({
+      getWorkspace: () => ({ root }),
+      getInstalled: () => installed,
+      runtime,
+      watcher,
+    })
+    ev.rebuild()
+    // Sibling-of-root path: would relativise to "../other/..." which the
+    // evaluator must reject before running the matcher.
+    watcher.emit('add', path.join(os.tmpdir(), 'other-vault', 'daily-notes', 'x.md'))
+    expect(activated.length).toBe(0)
   })
 
   it('does not re-activate an already-active extension', () => {
+    const root = path.join(os.tmpdir(), 'wc-test-vault')
     const installed = [{ id: 'dn', manifest: { activationEvents: ['workspaceContains:daily-notes/*.md'] } }]
     const activated = []
     const runtime = {
@@ -67,25 +92,33 @@ describe('createWorkspaceContainsEvaluator', () => {
     }
     const watcher = makeFakeWatcher()
     const ev = createWorkspaceContainsEvaluator({
-      getWorkspace: () => ({ root: '/x' }),
+      getWorkspace: () => ({ root }),
       getInstalled: () => installed,
       runtime,
       watcher,
     })
     ev.rebuild()
-    watcher.emit('add', 'daily-notes/x.md')
+    watcher.emit('add', path.join(root, 'daily-notes', 'x.md'))
     expect(activated.length).toBe(0)
   })
 
   it('dispose unwires the watcher subscription', () => {
+    // Set up an evaluator that WOULD fire on a matching add — then dispose,
+    // then emit. If the listener weren't gone, activated.length would be 1.
+    const root = path.join(os.tmpdir(), 'wc-test-vault')
+    const installed = [{ id: 'dn', manifest: { activationEvents: ['workspaceContains:daily-notes/*.md'] } }]
+    const activated = []
+    const runtime = { manifestFor: () => null, activate: (id, t) => activated.push({ id, t }) }
     const watcher = makeFakeWatcher()
     const ev = createWorkspaceContainsEvaluator({
-      getWorkspace: () => null,
-      getInstalled: () => [],
-      runtime: { manifestFor: () => null, activate: () => {} },
+      getWorkspace: () => ({ root }),
+      getInstalled: () => installed,
+      runtime,
       watcher,
     })
+    ev.rebuild()
     ev.dispose()
-    watcher.emit('add', 'x')   // no throw
+    watcher.emit('add', path.join(root, 'daily-notes', 'x.md'))
+    expect(activated.length).toBe(0)
   })
 })

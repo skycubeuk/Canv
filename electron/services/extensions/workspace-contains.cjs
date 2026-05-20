@@ -72,7 +72,19 @@ function createWorkspaceContainsEvaluator({ getWorkspace, getInstalled, runtime,
     }
   }
 
-  const onAdd = (relPath) => fireIfMatched(relPath)
+  // Chokidar emits absolute paths (services/fs/index.cjs starts the watcher
+  // with an absolute root and no cwd option). Convert to a vault-relative
+  // POSIX path before matching — picomatch globs are written relative to the
+  // workspace root and would never match absolute strings otherwise.
+  const onAdd = (absPath) => {
+    if (typeof absPath !== 'string' || absPath.length === 0) return
+    const ws = getWorkspace()
+    if (!ws || !ws.root) return
+    const relNative = path.relative(ws.root, absPath)
+    if (!relNative || relNative.startsWith('..') || path.isAbsolute(relNative)) return
+    const relPosix = relNative.split(path.sep).join('/')
+    fireIfMatched(relPosix)
+  }
   watcher.on('add', onAdd)
 
   return {
