@@ -5,6 +5,30 @@ const { app, BrowserWindow, dialog } = electron
 const path = require('node:path')
 const fs = require('node:fs')
 const fsp = require('node:fs/promises')
+const os = require('node:os')
+const AdmZip = require('adm-zip')
+
+const MAX_CANVEXT_BYTES = 50 * 1024 * 1024
+
+function unpackCanvext(srcZip, destDir) {
+  const zip = new AdmZip(srcZip)
+  let total = 0
+  for (const entry of zip.getEntries()) {
+    if (entry.isDirectory) continue
+    const norm = path.normalize(entry.entryName)
+    // Zip-slip guard: refuse entries that resolve outside destDir.
+    const abs = path.resolve(destDir, norm)
+    const root = path.resolve(destDir)
+    if (!abs.startsWith(root + path.sep) && abs !== root) {
+      throw new Error(`refused entry escaping destDir: ${entry.entryName}`)
+    }
+    total += entry.header.size
+    if (total > MAX_CANVEXT_BYTES) {
+      throw new Error(`canvext uncompressed size exceeds ${MAX_CANVEXT_BYTES} bytes`)
+    }
+  }
+  zip.extractAllTo(destDir, true)
+}
 
 const { ExtensionRuntime } = require('../../extensions/runtime.cjs')
 const { registerProtocol } = require('../../extensions/protocol.cjs')
@@ -772,4 +796,4 @@ function registerIpcHandlers(ipcMain, deps) {
   })
 }
 
-module.exports = { registerIpcHandlers }
+module.exports = { registerIpcHandlers, __test__: { unpackCanvext, MAX_CANVEXT_BYTES } }
