@@ -2,6 +2,7 @@
   "id": "phase5a-kitchen-sink",
   "name": "Phase 5a Kitchen Sink",
   "version": "1.0.0",
+  "engines": { "canv": "^1.0.0" },
   "description": "Exercises panel (sidebar tab), statusBar, command + palette + keybinding.",
   "capabilities": ["activeDoc.read", "events.docChanged", "ui", "notify"],
   "contributions": [

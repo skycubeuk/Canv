@@ -107,3 +107,36 @@ describe('Phase 5 shouldActivateFor trigger matching', () => {
     expect(shouldActivateFor(m, { kind: 'menuOpen', menu: 'other' })).toBe(false)
   })
 })
+
+describe('matches: workspaceContains', () => {
+  it('matches when trigger glob equals the declared glob', () => {
+    const m = { activationEvents: ['workspaceContains:daily-notes/*.md'] }
+    expect(shouldActivateFor(m, { kind: 'workspaceContains', glob: 'daily-notes/*.md' })).toBe(true)
+  })
+
+  it('does not match a different glob', () => {
+    const m = { activationEvents: ['workspaceContains:daily-notes/*.md'] }
+    expect(shouldActivateFor(m, { kind: 'workspaceContains', glob: 'notes/foo.md' })).toBe(false)
+  })
+})
+
+describe('matches: onUri', () => {
+  const m = { activationEvents: ['onUri:canv://my-ext'] }
+  it('matches the bare prefix', () => {
+    expect(shouldActivateFor(m, { kind: 'uri', uri: 'canv://my-ext' })).toBe(true)
+  })
+  it('matches with a path under the prefix', () => {
+    expect(shouldActivateFor(m, { kind: 'uri', uri: 'canv://my-ext/open' })).toBe(true)
+  })
+  it('does not match a different extension id', () => {
+    expect(shouldActivateFor(m, { kind: 'uri', uri: 'canv://other/open' })).toBe(false)
+  })
+})
+
+describe('effectiveActivationEvents: new events are not inferred', () => {
+  it('does not synthesise workspaceContains from contributions', () => {
+    const m = { contributions: [{ type: 'panel', id: 'p', location: 'left-sidebar' }] }
+    const evts = effectiveActivationEvents(m)
+    expect(evts.some((e) => e.startsWith('workspaceContains:'))).toBe(false)
+  })
+})

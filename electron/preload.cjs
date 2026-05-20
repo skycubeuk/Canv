@@ -186,7 +186,8 @@ if (!isDockPopout()) {
     readFile:          (id, rel) => ipcRenderer.invoke('canvExtensions:readFile', id, rel),
     reload:            (id) => ipcRenderer.invoke('canvExtensions:reload', id),
     pickInstallFolder: () => ipcRenderer.invoke('canvExtensions:pickInstallFolder'),
-    previewInstall:    (folder) => ipcRenderer.invoke('canvExtensions:previewInstall', folder),
+    pickInstallFile:   () => ipcRenderer.invoke('canvExtensions:pickInstallFile'),
+    previewInstall:    (source) => ipcRenderer.invoke('canvExtensions:previewInstall', source),
     requestActivation: (trigger) => ipcRenderer.invoke('canvExtensions:requestActivation', trigger),
     readActivity: (id) => ipcRenderer.invoke('canvExtensions:readActivity', id),
     showPanelInSlot: (slotId, bounds) => ipcRenderer.invoke('canvExtensions:showPanelInSlot', slotId, bounds),
@@ -203,6 +204,11 @@ if (!isDockPopout()) {
       ipcRenderer.on('canvExtensions:crashed', listener)
       return () => ipcRenderer.removeListener('canvExtensions:crashed', listener)
     },
+    onEngineMismatch: (cb) => {
+      const listener = (_e, payload) => { try { cb(payload) } catch { /* ignore */ } }
+      ipcRenderer.on('canvExtensions:engineMismatch', listener)
+      return () => ipcRenderer.removeListener('canvExtensions:engineMismatch', listener)
+    },
     devCrash: (id) => ipcRenderer.invoke('canvExtensions:devCrash', id),
     onPromptRequest: (cb) => {
       const listener = (_e, reqId, req) => { try { cb(reqId, req) } catch { /* ignore */ } }
@@ -218,6 +224,13 @@ if (!isDockPopout()) {
     invokeCommand: (commandId, args) => ipcRenderer.invoke('canvExtensions:invokeCommand', commandId, args),
     getFileHandlerDefaults: () => ipcRenderer.invoke('canvExtensions:getFileHandlerDefaults'),
     setFileHandlerDefault: (ext, extensionId) => ipcRenderer.invoke('canvExtensions:setFileHandlerDefault', ext, extensionId),
+  })
+
+  contextBridge.exposeInMainWorld('canvMcp', {
+    setServers: (cfgs) => ipcRenderer.invoke('canvMcp:setServers', cfgs),
+    listTools:  () => ipcRenderer.invoke('canvMcp:listTools'),
+    callTool:   (name, args) => ipcRenderer.invoke('canvMcp:callTool', name, args),
+    reconnect:  () => ipcRenderer.invoke('canvMcp:reconnect'),
   })
 
   contextBridge.exposeInMainWorld('canvExtensionsDev', {

@@ -1,10 +1,12 @@
 const { validateManifest } = require('./manifest-schema.cjs')
+const { CANV_API_VERSION } = require('./api-version.cjs')
 
 function valid(overrides = {}) {
   return {
     id: 'hello-world',
     name: 'Hello World',
     version: '1.0.0',
+    engines: { canv: '^1.0.0' },
     capabilities: ['activeDoc.read'],
     contributions: [{
       type: 'panel', id: 'main', title: 'Hello',
@@ -286,6 +288,79 @@ describe('validateManifest', () => {
     })
   })
 
+  describe('engines.canv', () => {
+    const base = {
+      id: 'eng-test',
+      name: 'Engines Test',
+      version: '1.0.0',
+      contributions: [{ type: 'panel', id: 'p', title: 'P', icon: 'info', location: 'left-sidebar', entry: 'index.html' }],
+    }
+
+    it('refuses a manifest with no engines field', () => {
+      const r = validateManifest(base)
+      expect(r.ok).toBe(false)
+      expect(r.errors.join(' ')).toMatch(/engines/)
+    })
+
+    it('refuses an engines.canv that is not a valid semver range', () => {
+      const r = validateManifest({ ...base, engines: { canv: 'not-a-range' } })
+      expect(r.ok).toBe(false)
+      expect(r.errors.join(' ')).toMatch(/engines\.canv.*semver range/i)
+    })
+
+    it('refuses an empty engines.canv string', () => {
+      const r = validateManifest({ ...base, engines: { canv: '' } })
+      expect(r.ok).toBe(false)
+    })
+
+    it('refuses a whitespace-only engines.canv string', () => {
+      const r = validateManifest({ ...base, engines: { canv: '   ' } })
+      expect(r.ok).toBe(false)
+    })
+
+    it('refuses an engines.canv range that does not satisfy CANV_API_VERSION', () => {
+      const r = validateManifest({ ...base, engines: { canv: '^99.0.0' } })
+      expect(r.ok).toBe(false)
+      expect(r.errors.join(' ')).toMatch(new RegExp(`not compatible.*${CANV_API_VERSION}`))
+    })
+
+    it('accepts a manifest whose engines.canv range satisfies CANV_API_VERSION', () => {
+      const r = validateManifest({ ...base, engines: { canv: '^1.0.0' } })
+      expect(r.ok).toBe(true)
+      expect(r.manifest.engines.canv).toBe('^1.0.0')
+    })
+  })
+
+  describe('activation events: workspaceContains and onUri', () => {
+    const base = {
+      id: 'evt', name: 'E', version: '1.0.0',
+      engines: { canv: '^1.0.0' },
+      contributions: [{ type: 'panel', id: 'p', title: 'P', icon: 'info', location: 'left-sidebar', entry: 'index.html' }],
+    }
+
+    it('accepts workspaceContains:<glob>', () => {
+      const r = validateManifest({ ...base, activationEvents: ['workspaceContains:daily-notes/*.md'] })
+      expect(r.ok).toBe(true)
+    })
+
+    it('refuses a workspaceContains with whitespace in the glob', () => {
+      const r = validateManifest({ ...base, activationEvents: ['workspaceContains:foo bar/*.md'] })
+      expect(r.ok).toBe(false)
+    })
+
+    it('accepts onUri:canv://<id>[/<path>]', () => {
+      const r1 = validateManifest({ ...base, activationEvents: ['onUri:canv://my-ext'] })
+      expect(r1.ok).toBe(true)
+      const r2 = validateManifest({ ...base, activationEvents: ['onUri:canv://my-ext/open'] })
+      expect(r2.ok).toBe(true)
+    })
+
+    it('refuses onUri with a non-canv scheme', () => {
+      const r = validateManifest({ ...base, activationEvents: ['onUri:http://my-ext'] })
+      expect(r.ok).toBe(false)
+    })
+  })
+
   describe('panel location migration', () => {
     it('rejects right-sidebar (dropped in Phase 5)', () => {
       const r = validateManifest(valid({
@@ -305,5 +380,29 @@ describe('validateManifest', () => {
       }))
       expect(r.ok).toBe(true)
     })
+  })
+})
+
+describe('mcp manifest field', () => {
+  const base = {
+    id: 'mcp-test', name: 'M', version: '1.0.0',
+    engines: { canv: '^1.0.0' },
+    contributions: [{ type: 'panel', id: 'p', title: 'P', icon: 'info', location: 'left-sidebar', entry: 'index.html' }],
+  }
+
+  it('accepts mcp.tools with a fully-qualified name', () => {
+    const r = validateManifest({ ...base, capabilities: ['mcp.call'], mcp: { tools: ['fs__read_file'] } })
+    expect(r.ok).toBe(true)
+  })
+
+  it('refuses mcp.call capability without an allowlist', () => {
+    const r = validateManifest({ ...base, capabilities: ['mcp.call'] })
+    expect(r.ok).toBe(false)
+    expect(r.errors.join(' ')).toMatch(/mcp\.tools/)
+  })
+
+  it('refuses an mcp.tools entry without "__"', () => {
+    const r = validateManifest({ ...base, capabilities: ['mcp.call'], mcp: { tools: ['notqualified'] } })
+    expect(r.ok).toBe(false)
   })
 })

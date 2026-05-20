@@ -1,0 +1,24 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Daily Notes Watcher</title>
+  <style>
+    body { padding: var(--canv-space-4); font-family: var(--canv-font-family); color: var(--canv-text-default); }
+    h1 { font-size: var(--canv-font-size-lg); margin: 0 0 var(--canv-space-3) 0; display: flex; align-items: center; gap: var(--canv-space-2); }
+    pre { background: var(--canv-color-app); padding: var(--canv-space-2); border-radius: var(--canv-radius); margin: 0 0 var(--canv-space-3) 0; font-size: var(--canv-font-size-sm); }
+    p { color: var(--canv-text-muted); font-size: var(--canv-font-size-sm); }
+  </style>
+</head>
+<body>
+  <h1><canv-icon name="info" size="18"></canv-icon> Daily Notes Watcher</h1>
+
+  <p>Activates on <code>workspaceContains:daily-notes/*.md</code>.</p>
+
+  <pre id="status">waiting for activation…</pre>
+
+  <p>If you're reading this, the extension successfully spawned, which means the chokidar add path (or initial vault scan) fired the activation trigger.</p>
+
+  <script src="main.js"></script>
+</body>
+</html>

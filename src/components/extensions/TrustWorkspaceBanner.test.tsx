@@ -18,6 +18,7 @@ beforeEach(() => {
     writeSetting: vi.fn() as never,
     reload: vi.fn() as never,
     pickInstallFolder: vi.fn() as never,
+    pickInstallFile: vi.fn() as never,
     previewInstall: vi.fn() as never,
     readAllContributions: vi.fn().mockResolvedValue({
       panels: [],

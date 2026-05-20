@@ -1,7 +1,9 @@
 'use strict'
 
 const { z } = require('zod')
+const semver = require('semver')
 const { ALL_CAPABILITIES } = require('./capability.cjs')
+const { CANV_API_VERSION } = require('./api-version.cjs')
 
 const ID_RE = /^[a-z][a-z0-9-]{0,63}$/
 const SEMVER_RE = /^\d+\.\d+\.\d+(?:-[\w.]+)?$/
@@ -114,6 +116,8 @@ const ActivationEvent = z.string().refine((s) => {
   if (s === 'onStartup') return true
   if (/^onCommand:[a-zA-Z0-9._-]+$/.test(s)) return true
   if (/^onPanelOpen:(left-sidebar|bottom-dock):[a-zA-Z0-9._-]+$/.test(s)) return true
+  if (/^workspaceContains:[^\s]+$/.test(s)) return true
+  if (/^onUri:canv:\/\/[a-z][a-z0-9-]{0,63}(\/.*)?$/.test(s)) return true
   return false
 }, { message: 'unknown activation event' })
 
@@ -123,10 +127,30 @@ const MigrationStep = z.object({
   drop: z.array(z.string()).optional(),
 })
 
+const EnginesSchema = z.object({
+  canv: z.string().min(1).refine(
+    (range) => {
+      const trimmed = range.trim()
+      if (trimmed.length === 0) return false
+      try { return semver.validRange(trimmed) !== null } catch { return false }
+    },
+    { message: 'engines.canv must be a valid semver range (e.g. "^1.0.0")' },
+  ),
+})
+
+const McpToolName = z.string().regex(/^[a-z][a-z0-9_-]*__[a-z][a-z0-9_-]*$/, {
+  message: 'mcp tool name must be "<server>__<tool>" (lowercase letters/digits/hyphen; double-underscore separator)',
+})
+
+const McpSchema = z.object({
+  tools: z.array(McpToolName).default([]),
+})
+
 const ManifestSchema = z.object({
   id: z.string().regex(ID_RE),
   name: z.string().min(1).max(80),
   version: z.string().regex(SEMVER_RE),
+  engines: EnginesSchema,
   description: z.string().max(2000).optional(),
   author: z.string().max(80).optional(),
   createdAt: z.string().datetime().optional(),
@@ -142,13 +166,29 @@ const ManifestSchema = z.object({
   activationEvents: z.array(ActivationEvent).default([]),
   migrations: z.array(MigrationStep).default([]).optional(),
   contributions: z.array(Contribution).min(1, 'manifest must declare at least one contribution'),
+  mcp: McpSchema.optional(),
 })
 
 function validateManifest(input) {
   const r = ManifestSchema.safeParse(input)
-  if (r.success) return { ok: true, manifest: r.data }
-  const errors = r.error.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`)
-  return { ok: false, errors }
+  if (!r.success) {
+    const errors = r.error.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`)
+    return { ok: false, errors }
+  }
+  if (!semver.satisfies(CANV_API_VERSION, r.data.engines.canv)) {
+    return {
+      ok: false,
+      errors: [
+        `engines.canv "${r.data.engines.canv}" is not compatible with host API ${CANV_API_VERSION}`,
+      ],
+    }
+  }
+  if (r.data.capabilities && r.data.capabilities.includes('mcp.call')) {
+    if (!r.data.mcp || !Array.isArray(r.data.mcp.tools) || r.data.mcp.tools.length === 0) {
+      return { ok: false, errors: ['capability "mcp.call" requires manifest.mcp.tools to be a non-empty allowlist'] }
+    }
+  }
+  return { ok: true, manifest: r.data }
 }
 
 module.exports = { validateManifest, ManifestSchema }

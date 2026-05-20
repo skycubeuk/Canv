@@ -24,6 +24,14 @@ export default defineConfig({
           include: ['electron/**/*.test.cjs'],
         },
       },
+      {
+        test: {
+          name: 'scripts',
+          environment: 'node',
+          globals: true,
+          include: ['scripts/**/*.test.mjs'],
+        },
+      },
     ],
   },
 })

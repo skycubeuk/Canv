@@ -72,6 +72,10 @@ function stopWatcher() {
   }
 }
 
+function getWatcher() {
+  return watcher
+}
+
 function buildSearchPattern(q) {
   const flags = q.caseSensitive ? 'g' : 'gi'
   if (q.regex) return new RegExp(q.query, flags)
@@ -579,4 +583,4 @@ function registerIpcHandlers(ipcMain, deps) {
   })
 }
 
-module.exports = { registerIpcHandlers, startWatcher, stopWatcher }
+module.exports = { registerIpcHandlers, startWatcher, stopWatcher, getWatcher }

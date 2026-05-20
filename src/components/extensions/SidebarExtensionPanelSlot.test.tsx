@@ -25,6 +25,7 @@ beforeEach(() => {
     readManifest: vi.fn().mockResolvedValue({}) as never,
     reload: vi.fn().mockResolvedValue(undefined) as never,
     pickInstallFolder: vi.fn().mockResolvedValue(null) as never,
+    pickInstallFile: vi.fn().mockResolvedValue(null) as never,
     previewInstall: vi.fn().mockResolvedValue({ ok: false, errors: [] }) as never,
     readAllContributions: vi.fn().mockResolvedValue({ panels: [], fileHandlers: [], commands: [], menus: [], statusBarItems: [], languages: [] }) as never,
     onChanged: vi.fn(() => () => {}),

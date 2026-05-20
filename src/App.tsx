@@ -23,8 +23,11 @@ import './contributions/ollama.contribution'
 import './contributions/quota-error.contribution'
 import './contributions/idle-snapshot.contribution'
 import './contributions/extension-keybindings.contribution'
+import './contributions/extension-engine-mismatch.contribution'
 import './contributions/commands.contribution'
 import './contributions/dock-bridge.contribution'
+import './contributions/mcp.contribution'
+import './contributions/extension-host-bridge.contribution'
 
 function basename(rel: string): string {
   const i = rel.lastIndexOf('/')

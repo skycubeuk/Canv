@@ -5,9 +5,35 @@ const { app, BrowserWindow, dialog } = electron
 const path = require('node:path')
 const fs = require('node:fs')
 const fsp = require('node:fs/promises')
+const os = require('node:os')
+const AdmZip = require('adm-zip')
+
+const MAX_CANVEXT_BYTES = 50 * 1024 * 1024
+
+function unpackCanvext(srcZip, destDir) {
+  const zip = new AdmZip(srcZip)
+  let total = 0
+  for (const entry of zip.getEntries()) {
+    if (entry.isDirectory) continue
+    const norm = path.normalize(entry.entryName)
+    // Zip-slip guard: refuse entries that resolve outside destDir.
+    const abs = path.resolve(destDir, norm)
+    const root = path.resolve(destDir)
+    if (!abs.startsWith(root + path.sep) && abs !== root) {
+      throw new Error(`refused entry escaping destDir: ${entry.entryName}`)
+    }
+    total += entry.header.size
+    if (total > MAX_CANVEXT_BYTES) {
+      throw new Error(`canvext uncompressed size exceeds ${MAX_CANVEXT_BYTES} bytes`)
+    }
+  }
+  zip.extractAllTo(destDir, true)
+}
 
 const { ExtensionRuntime } = require('../../extensions/runtime.cjs')
 const { registerProtocol } = require('../../extensions/protocol.cjs')
+const activationEventsLib = require('../../extensions/activation-events.cjs')
+const { createWorkspaceContainsEvaluator } = require('./workspace-contains.cjs')
 const { createActiveDocHandlers } = require('../../extensions/handlers/active-doc.cjs')
 const { createWorkspaceHandlers } = require('../../extensions/handlers/workspace.cjs')
 const { createEventsHandlers } = require('../../extensions/handlers/events.cjs')
@@ -23,6 +49,7 @@ const { createAiHandlers } = require('../../extensions/handlers/ai.cjs')
 const { createNetHandlers } = require('../../extensions/handlers/net.cjs')
 const { createUiPromptHandlers } = require('../../extensions/handlers/ui-prompt.cjs')
 const { createStatusBarHandlers } = require('../../extensions/handlers/statusBar.cjs')
+const { createMcpHandlers } = require('../../extensions/handlers/mcp.cjs')
 const activity = require('../../extensions/activity.cjs')
 const { buildAllContributions, EMPTY: EMPTY_CONTRIBS } = require('../../extensions/contributions.cjs')
 const { readDefaults: readFileHandlerDefaults, writeDefault: writeFileHandlerDefault } = require('../../extensions/file-handler-defaults.cjs')
@@ -228,10 +255,30 @@ function registerIpcHandlers(ipcMain, deps) {
 
   function onRegistryChanged() {
     invalidateExtensionClaimedExts()
+    // Re-evaluate workspaceContains activation: install/uninstall/enable/trust
+    // changes can add or remove extensions whose declared globs should fire.
+    try { setupWorkspaceContains() } catch (e) { console.error('[workspaceContains] setup failed', e) }
     const mainWindow = getMainWindow()
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('canvExtensions:registryChanged')
     }
+  }
+
+  // Read a workspace-installed extension's manifest from disk, validating it
+  // through the same Zod schema used at install time. Returns null if the
+  // workspace is missing, the file can't be parsed, OR the parsed object
+  // fails schema validation (post-install hand-edits, partial upgrades,
+  // etc.). Treating drifted manifests as missing protects shouldActivateFor
+  // / effectiveActivationEvents from malformed input.
+  function readInstalledManifestSync(id) {
+    const WORKSPACE = getWorkspace()
+    if (!WORKSPACE || WORKSPACE.kind !== 'local') return null
+    const file = path.join(WORKSPACE.root, '.canv', 'extensions', id, 'manifest.json')
+    let raw
+    try { raw = JSON.parse(fs.readFileSync(file, 'utf-8')) }
+    catch { return null }
+    const v = validateManifest(raw)
+    return v.ok ? v.manifest : null
   }
 
   // Per-extension in-flight spawn locks. React strict-mode and fast tab
@@ -271,15 +318,77 @@ function registerIpcHandlers(ipcMain, deps) {
     // cold-start auto-spawn), fall back to mainWindow.
     const mainWindow = getMainWindow()
     const hostWindow = opts.hostWindow && !opts.hostWindow.isDestroyed() ? opts.hostWindow : mainWindow
-    await extensionRuntime.spawn({
-      extensionDir: dir, manifest, hostWindow, bounds,
-      entryRel: opts.entryRel,
-    })
+    try {
+      await extensionRuntime.spawn({
+        extensionDir: dir, manifest, hostWindow, bounds,
+        entryRel: opts.entryRel,
+      })
+    } catch (e) {
+      if (e && /engines\.canv/.test(e.message)) {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('canvExtensions:engineMismatch', {
+            id: manifest.id,
+            message: e.message,
+          })
+        }
+        return { ok: false, reason: 'engineMismatch' }
+      }
+      throw e
+    }
     return { ok: true }
     })()
     spawnLocks.set(id, promise)
     try { return await promise }
     finally { spawnLocks.delete(id) }
+  }
+
+  // ------------------------------------------------------------------
+  // Trigger-driven activation (workspaceContains, onUri). The runtime
+  // owns the activate()/activateByUri() entrypoints; we inject the
+  // registry-plus-manifest bridge + the spawn function here so the
+  // runtime stays decoupled from workspace shape.
+  // ------------------------------------------------------------------
+  extensionRuntime.setActivationContext({
+    workspaceRegistry: {
+      get: (id) => {
+        const reg = getWorkspaceRegistry()
+        const entry = reg ? reg.get(id) : null
+        if (!entry) return null
+        const manifest = readInstalledManifestSync(id)
+        return manifest ? { ...entry, manifest } : null
+      },
+    },
+    activationEvents: activationEventsLib,
+    spawnInstalled,
+  })
+
+  let wcEvaluator = null
+  function setupWorkspaceContains() {
+    if (wcEvaluator) { wcEvaluator.dispose(); wcEvaluator = null }
+    const watcher = typeof deps.getWatcher === 'function' ? deps.getWatcher() : null
+    const wsReg = getWorkspaceRegistry()
+    const WORKSPACE = getWorkspace()
+    if (!watcher || !wsReg || !WORKSPACE || WORKSPACE.kind !== 'local') return
+    // Build {id, manifest} for each enabled+trusted entry so the evaluator can
+    // inspect activationEvents without touching disk per file event.
+    const installed = []
+    for (const entry of wsReg.listEntries()) {
+      if (!entry.enabled || entry.trustedAt == null) continue
+      const manifest = readInstalledManifestSync(entry.id)
+      if (manifest) installed.push({ id: entry.id, manifest })
+    }
+    wcEvaluator = createWorkspaceContainsEvaluator({
+      getWorkspace,
+      getInstalled: () => installed,
+      runtime: extensionRuntime,
+      watcher,
+    })
+    wcEvaluator.rebuild()
+    wcEvaluator.evaluateAtOpen().catch((e) => console.error('[workspaceContains] evaluate failed', e))
+  }
+  // Expose for the workspace-change hook in main.cjs (wired below via deps).
+  if (typeof deps.setExtensionWorkspaceContainsRefresh === 'function') {
+    deps.setExtensionWorkspaceContainsRefresh(setupWorkspaceContains)
   }
 
   registerProtocol(electron.protocol, {
@@ -337,6 +446,7 @@ function registerIpcHandlers(ipcMain, deps) {
     ...createNetHandlers({ runtime: extensionRuntime, onRequest: (id) => activity.recordNet(id) }),
     ...createUiPromptHandlers({ runtime: extensionRuntime, host }),
     ...createStatusBarHandlers({ runtime: extensionRuntime, host }),
+    ...createMcpHandlers({ runtime: extensionRuntime, getMcpService: () => (typeof deps.getMcpService === 'function' ? deps.getMcpService() : null) }),
   }
   for (const [channel, fn] of Object.entries(allHandlers)) {
     ipcMain.handle(channel, fn)
@@ -429,50 +539,98 @@ function registerIpcHandlers(ipcMain, deps) {
     return { ...all, statusBarItems }
   })
 
-  ipcMain.handle('canvExtensions:previewInstall', async (_e, folder) => {
-    if (typeof folder !== 'string' || !folder) return { ok: false, errors: ['invalid folder'] }
-    let raw
-    try { raw = JSON.parse(await fsp.readFile(path.join(folder, 'manifest.json'), 'utf-8')) }
-    catch (e) { return { ok: false, errors: [`manifest read/parse failed: ${e.message}`] } }
-    const v = validateManifest(raw)
-    if (!v.ok) return { ok: false, errors: v.errors }
-    return {
-      ok: true,
-      manifest: {
-        id: v.manifest.id,
-        name: v.manifest.name,
-        version: v.manifest.version,
-        description: v.manifest.description,
-        author: v.manifest.author,
-        capabilities: v.manifest.capabilities,
-        network: v.manifest.network ?? [],
-        settings: v.manifest.settings ?? [],
-        contributions: v.manifest.contributions,
-      },
+  ipcMain.handle('canvExtensions:previewInstall', async (_e, sourcePath) => {
+    if (typeof sourcePath !== 'string' || !sourcePath) return { ok: false, errors: ['invalid source path'] }
+    const stat = await fsp.stat(sourcePath).catch(() => null)
+    if (!stat) return { ok: false, errors: [`source not found: ${sourcePath}`] }
+    let folder = sourcePath
+    let tempUnpack = null
+    if (stat.isFile()) {
+      if (!sourcePath.endsWith('.canvext')) {
+        return { ok: false, errors: ['source file must be a .canvext zip'] }
+      }
+      tempUnpack = await fsp.mkdtemp(path.join(os.tmpdir(), 'canvext-preview-'))
+      try {
+        unpackCanvext(sourcePath, tempUnpack)
+      } catch (e) {
+        await fsp.rm(tempUnpack, { recursive: true, force: true })
+        return { ok: false, errors: [`canvext unpack failed: ${e.message}`] }
+      }
+      folder = tempUnpack
+    } else if (!stat.isDirectory()) {
+      return { ok: false, errors: ['source must be a folder or .canvext file'] }
+    }
+    try {
+      let raw
+      try { raw = JSON.parse(await fsp.readFile(path.join(folder, 'manifest.json'), 'utf-8')) }
+      catch (e) { return { ok: false, errors: [`manifest read/parse failed: ${e.message}`] } }
+      const v = validateManifest(raw)
+      if (!v.ok) return { ok: false, errors: v.errors }
+      return {
+        ok: true,
+        manifest: {
+          id: v.manifest.id,
+          name: v.manifest.name,
+          version: v.manifest.version,
+          description: v.manifest.description,
+          author: v.manifest.author,
+          capabilities: v.manifest.capabilities,
+          network: v.manifest.network ?? [],
+          settings: v.manifest.settings ?? [],
+          contributions: v.manifest.contributions,
+        },
+      }
+    } finally {
+      if (tempUnpack) await fsp.rm(tempUnpack, { recursive: true, force: true })
     }
   })
 
-  ipcMain.handle('canvExtensions:install', async (_e, sourceFolderAbsPath) => {
+  ipcMain.handle('canvExtensions:install', async (_e, sourcePath) => {
     const WORKSPACE = getWorkspace()
     const workspaceRegistry = getWorkspaceRegistry()
     if (!workspaceRegistry) throw new Error('no workspace open')
     if (!WORKSPACE || WORKSPACE.kind !== 'local') throw new Error('extensions require local workspace')
-    if (typeof sourceFolderAbsPath !== 'string' || !sourceFolderAbsPath) {
-      return { ok: false, errors: ['invalid source folder'] }
+    if (typeof sourcePath !== 'string' || !sourcePath) {
+      return { ok: false, errors: ['invalid source path'] }
     }
-    const srcManifestPath = path.join(sourceFolderAbsPath, 'manifest.json')
-    let raw
-    try { raw = JSON.parse(await fsp.readFile(srcManifestPath, 'utf-8')) }
-    catch (e) { return { ok: false, errors: [`manifest read/parse failed: ${e.message}`] } }
-    const v = validateManifest(raw)
-    if (!v.ok) return { ok: false, errors: v.errors }
-    const id = v.manifest.id
-    const targetDir = path.join(WORKSPACE.root, '.canv', 'extensions', id)
-    await copyExtensionTree(sourceFolderAbsPath, targetDir)
-    const hash = await hashExtensionDir(targetDir)
-    workspaceRegistry.install(v.manifest, hash)
-    onRegistryChanged()
-    return { ok: true, id }
+
+    let folder = sourcePath
+    let tempUnpack = null
+    const srcStat = await fsp.stat(sourcePath).catch(() => null)
+    if (!srcStat) return { ok: false, errors: [`source not found: ${sourcePath}`] }
+    if (srcStat.isFile()) {
+      if (!sourcePath.endsWith('.canvext')) {
+        return { ok: false, errors: ['source file must be a .canvext zip'] }
+      }
+      tempUnpack = await fsp.mkdtemp(path.join(os.tmpdir(), 'canvext-'))
+      try {
+        unpackCanvext(sourcePath, tempUnpack)
+      } catch (e) {
+        await fsp.rm(tempUnpack, { recursive: true, force: true })
+        return { ok: false, errors: [`canvext unpack failed: ${e.message}`] }
+      }
+      folder = tempUnpack
+    } else if (!srcStat.isDirectory()) {
+      return { ok: false, errors: ['source must be a folder or .canvext file'] }
+    }
+
+    try {
+      const srcManifestPath = path.join(folder, 'manifest.json')
+      let raw
+      try { raw = JSON.parse(await fsp.readFile(srcManifestPath, 'utf-8')) }
+      catch (e) { return { ok: false, errors: [`manifest read/parse failed: ${e.message}`] } }
+      const v = validateManifest(raw)
+      if (!v.ok) return { ok: false, errors: v.errors }
+      const id = v.manifest.id
+      const targetDir = path.join(WORKSPACE.root, '.canv', 'extensions', id)
+      await copyExtensionTree(folder, targetDir)
+      const hash = await hashExtensionDir(targetDir)
+      workspaceRegistry.install(v.manifest, hash)
+      onRegistryChanged()
+      return { ok: true, id }
+    } finally {
+      if (tempUnpack) await fsp.rm(tempUnpack, { recursive: true, force: true })
+    }
   })
 
   ipcMain.handle('canvExtensions:uninstall', async (_e, id) => {
@@ -494,18 +652,31 @@ function registerIpcHandlers(ipcMain, deps) {
     if (!enabled && extensionRuntime?.manifestFor(id)) {
       await extensionRuntime.destroy(id)
     } else if (enabled) {
-      // Toggling on is an explicit "I want this running" signal — spawn now,
-      // bypassing the activation-event lazy-load (which is for installed-but-
-      // unused extensions and waits for real triggers; Phase 5 wires those).
-      // spawnInstalled re-hashes and revokes trust + flips enabled=false if
-      // the on-disk files have drifted since install (tamper detection).
+      // Toggling on doesn't unconditionally spawn anymore. If the manifest
+      // declares ONLY lazy-load activation events (workspaceContains:, onUri:,
+      // onCommand:), respect them and wait for the trigger to fire. Otherwise
+      // (onStartup, inferred panel/statusBar events, or no declared events at
+      // all) spawn immediately so the user sees their newly-enabled extension.
       const entry = workspaceRegistry.get(id)
       const wsTrust = trustStore.stateFor(WORKSPACE?.root || '')
       if (entry && entry.trustedAt != null && wsTrust === 'trusted' && !extensionRuntime.manifestFor(id)) {
-        try {
-          const r = await spawnInstalled(id)
-          if (r && !r.ok) console.warn('spawn refused on enable:', r.reason)
-        } catch (e) { console.error('spawn on enable failed:', e) }
+        const manifest = readInstalledManifestSync(id)
+        const events = manifest ? activationEventsLib.effectiveActivationEvents(manifest) : []
+        const isLazyOnly = events.length > 0 && events.every((e) =>
+          e.startsWith('workspaceContains:') ||
+          e.startsWith('onUri:') ||
+          e.startsWith('onCommand:'),
+        )
+        if (!isLazyOnly) {
+          try {
+            const r = await spawnInstalled(id)
+            if (r && !r.ok) console.warn('spawn refused on enable:', r.reason)
+          } catch (e) { console.error('spawn on enable failed:', e) }
+        } else {
+          // Rebuild the workspaceContains evaluator's matchers + re-walk the
+          // vault so any already-present matching file fires activation now.
+          try { setupWorkspaceContains() } catch (e) { console.error('[workspaceContains] re-eval on enable failed', e) }
+        }
       }
     }
     onRegistryChanged()
@@ -629,10 +800,22 @@ function registerIpcHandlers(ipcMain, deps) {
 
   ipcMain.handle('canvExtensions:pickInstallFolder', async () => {
     const mainWindow = getMainWindow()
-    if (!mainWindow) return null
+    if (!mainWindow || mainWindow.isDestroyed()) return null
     const result = await dialog.showOpenDialog(mainWindow, {
-      title: 'Pick extension folder to install',
+      title: 'Choose an extension folder to install',
       properties: ['openDirectory'],
+    })
+    if (result.canceled || !result.filePaths[0]) return null
+    return result.filePaths[0]
+  })
+
+  ipcMain.handle('canvExtensions:pickInstallFile', async () => {
+    const mainWindow = getMainWindow()
+    if (!mainWindow || mainWindow.isDestroyed()) return null
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: 'Choose a .canvext file to install',
+      properties: ['openFile'],
+      filters: [{ name: 'Canv Extension', extensions: ['canvext'] }],
     })
     if (result.canceled || !result.filePaths[0]) return null
     return result.filePaths[0]
@@ -759,4 +942,4 @@ function registerIpcHandlers(ipcMain, deps) {
   })
 }
 
-module.exports = { registerIpcHandlers }
+module.exports = { registerIpcHandlers, __test__: { unpackCanvext, MAX_CANVEXT_BYTES } }

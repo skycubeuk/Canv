@@ -12,10 +12,13 @@ const sitesService    = require('./services/sites/index.cjs')
 const dockService     = require('./services/dock/index.cjs')
 const extService      = require('./services/extensions/index.cjs')
 const wsService       = require('./services/workspace/index.cjs')
+const mcpService      = require('./services/mcp/index.cjs')
+const uriDispatch     = require('./uri-dispatch.cjs')
 
 let extensionRuntime = null
 let trustStore = null
 let workspaceRegistry = null
+let mcpServiceInstance = null
 
 // Set inside app.whenReady() so lifecycle handlers (window-all-closed,
 // the main window's 'closed' event) can invoke workspace helpers via deps.
@@ -311,7 +314,17 @@ function createWindow() {
       popoutWindow.destroy()
       popoutWindow = null
     }
-    if (DEPS) DEPS.closeWorkspace()
+    if (DEPS) {
+      DEPS.closeWorkspace()
+      // Tear down the workspaceContains evaluator. closeWorkspace nulls out
+      // the watcher + workspaceRegistry, so setupWorkspaceContains hits its
+      // "no watcher → dispose previous, return" branch and unwires the
+      // chokidar 'add' listener + clears compiledGlobsByExt.
+      const refresh = DEPS.getExtensionWorkspaceContainsRefresh?.()
+      if (typeof refresh === 'function') {
+        try { refresh() } catch { /* ignore — shutdown path */ }
+      }
+    }
   })
 }
 
@@ -336,6 +349,12 @@ protocol.registerSchemesAsPrivileged([
   },
 ])
 
+// Set by services/extensions during registerIpcHandlers so the workspace-
+// service can re-evaluate workspaceContains: activation when the user
+// switches vault roots. Lives in main.cjs scope because it's shared
+// between two service modules.
+let extensionWorkspaceContainsRefresh = null
+
 function makeDeps() {
   const deps = {
     // Mutable shared state — exposed as getters so handlers see live values.
@@ -355,6 +374,7 @@ function makeDeps() {
     setWorkspaceRegistry: (r) => { workspaceRegistry = r },
     getRecentRemotes: () => recentRemotes,
     setRecentRemotes: (r) => { recentRemotes = r },
+    getMcpService: () => mcpServiceInstance,
 
     // Shared helpers — passed by reference.
     requireWorkspace, isRemote, safeResolve, isAllowedExt, isAllowedDirEntry,
@@ -363,6 +383,9 @@ function makeDeps() {
     getHistoryService,
     startWatcher: (root) => fsService.startWatcher(root, () => mainWindow, { toRel }),
     stopWatcher: () => fsService.stopWatcher(),
+    getWatcher: () => fsService.getWatcher(),
+    setExtensionWorkspaceContainsRefresh: (fn) => { extensionWorkspaceContainsRefresh = fn },
+    getExtensionWorkspaceContainsRefresh: () => extensionWorkspaceContainsRefresh,
     configureWindowOpenHandler,
     APP_ICON, DEV_URL,
   }
@@ -387,6 +410,15 @@ app.whenReady().then(() => {
       : null,
   )
   recentRemotes = new RecentRemotes(path.join(app.getPath('userData'), 'recent-remotes.json'))
+  // Register canv:// as the OS-level protocol handler before the window is
+  // created. No-op in dev / `electron .` (gated inside the module) so an
+  // installed packaged Canv on the same machine keeps owning the scheme.
+  // If another Canv instance already holds the single-instance lock, the
+  // module calls app.quit() and returns ok:false — bail out of whenReady
+  // immediately so we don't register handlers or create a window during the
+  // brief async window before the process exits.
+  const protocolReg = uriDispatch.registerProtocolHandler({ app, getMainWindow: () => mainWindow })
+  if (protocolReg && protocolReg.ok === false) return
   const deps = makeDeps()
   DEPS = deps
   fsService.registerIpcHandlers(ipcMain, deps)
@@ -396,16 +428,35 @@ app.whenReady().then(() => {
   dockService.registerIpcHandlers(ipcMain, deps)
   extService.registerIpcHandlers(ipcMain, deps)
   wsService.registerIpcHandlers(ipcMain, deps)
+  const { service: mcp } = mcpService.registerIpcHandlers(ipcMain, deps)
+  mcpServiceInstance = mcp
+  // Wire the runtime as the canv:// dispatcher. Now safe — extService has
+  // constructed extensionRuntime and stashed it via deps.setExtensionRuntime.
+  // Any URI queued during startup (Win/Linux first-launch argv) flushes here.
+  uriDispatch.setDispatcher((uri) => {
+    if (extensionRuntime) {
+      extensionRuntime.activateByUri(uri).catch((e) => console.error('activateByUri failed:', e))
+    }
+  })
   registerLegacyServeBroadcast()
   createWindow()
 })
 
 app.on('before-quit', () => {
   serve.stopAll().catch(() => {})
+  if (mcpServiceInstance && typeof mcpServiceInstance.shutdown === 'function') {
+    mcpServiceInstance.shutdown().catch(() => {})
+  }
 })
 
 app.on('window-all-closed', () => {
-  if (DEPS) DEPS.closeWorkspace()
+  if (DEPS) {
+    DEPS.closeWorkspace()
+    const refresh = DEPS.getExtensionWorkspaceContainsRefresh?.()
+    if (typeof refresh === 'function') {
+      try { refresh() } catch { /* ignore — shutdown path */ }
+    }
+  }
   if (process.platform !== 'darwin') app.quit()
 })
 

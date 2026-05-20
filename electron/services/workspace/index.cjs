@@ -44,6 +44,16 @@ function onWorkspaceChangedGlobal(deps) {
     (ws && ws.kind === 'local') ? new Registry(ws.root) : null,
   )
   deps.invalidateExtensionClaimedExts()
+  // Re-evaluate workspaceContains activation against the new vault root /
+  // registry. Hook is wired by services/extensions when its registerIpc
+  // handler runs; absence is fine (workspace switch before extensions
+  // service registered).
+  if (typeof deps.getExtensionWorkspaceContainsRefresh === 'function') {
+    const refresh = deps.getExtensionWorkspaceContainsRefresh()
+    if (typeof refresh === 'function') {
+      try { refresh() } catch (e) { console.error('[workspaceContains] refresh failed', e) }
+    }
+  }
   const mainWindow = deps.getMainWindow()
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send('canvExtensions:registryChanged')

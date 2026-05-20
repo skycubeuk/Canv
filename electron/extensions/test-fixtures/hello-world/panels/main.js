@@ -62,6 +62,7 @@ function log(msg) {
 }
 
 canv.events.on('activeDocChanged', (info) => { log('activeDocChanged: ' + JSON.stringify(info)); refresh() })
+canv.events.on('selectionChanged', (info) => { log('selectionChanged: ' + JSON.stringify(info)); refresh() })
 
 canv.lifecycle.onActivate(() => { log('onActivate'); refresh(); loadCounter() })
 canv.lifecycle.onUnload(() => { log('onUnload') })

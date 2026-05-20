@@ -103,4 +103,7 @@ contextBridge.exposeInMainWorld('canv', {
       return () => ipcRenderer.removeListener('canvExt:commands.invoke', listener)
     },
   },
+  mcp: {
+    call: (name, args) => ipcRenderer.invoke('canvExt:mcp.call', name, args),
+  },
 })

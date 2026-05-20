@@ -6,6 +6,7 @@ import type { ToolCtx } from '../tools/types'
 import { getTool, toolSchemas } from '../tools/registry'
 import { readFileContent } from '../lib/fs'
 import type { CanvHistory } from '../lib/history'
+import { getMcpToolDefs, callMcpTool, isMcpToolName } from './mcp'
 
 function abortableApproval(
   ask: () => Promise<ApprovalDecision>,
@@ -23,6 +24,27 @@ function abortableApproval(
 }
 
 export type ApprovalDecision = 'approve' | 'deny' | 'approve-rest'
+
+function buildTools(): Promise<import('../adapters/types').ToolSchema[]> | import('../adapters/types').ToolSchema[] {
+  // Sync return when the MCP bridge is absent (the default — and the case in
+  // every unit test). `await` on a non-thenable still ticks the microtask
+  // queue once, but skipping the async-wrapper avoids the listTools round-
+  // trip and the extra promise allocations that would otherwise push the
+  // first real `await` inside `runChatTurnInner` further out — which the
+  // abort-during-streaming tests rely on landing inside `adapter.complete`.
+  if (typeof window === 'undefined' || !window.canvMcp) return toolSchemas()
+  return (async () => {
+    const mcp = await getMcpToolDefs()
+    const mcpSchemas = mcp.map((t) => ({
+      name: t.name,
+      description: t.description,
+      inputSchema: (t.inputSchema && typeof t.inputSchema === 'object'
+        ? t.inputSchema
+        : { type: 'object' }) as Record<string, unknown>,
+    }))
+    return [...toolSchemas(), ...mcpSchemas]
+  })()
+}
 
 const FILE_MUTATING_TOOLS = new Set([
   'create_file', 'edit_file', 'create_folder', 'delete_file', 'rename_file',
@@ -46,7 +68,7 @@ export function pathIsAutoApproved(call: { name: string; input: unknown }): bool
 }
 
 export interface WritePreview {
-  kind: 'create' | 'edit' | 'delete' | 'rename' | 'mkdir'
+  kind: 'create' | 'edit' | 'delete' | 'rename' | 'mkdir' | 'mcp'
   path: string
   diff?: { before: string; after: string }
   newPath?: string
@@ -191,6 +213,10 @@ async function runChatTurnInner(p: RunChatTurnParams, messages: ChatMessage[]): 
     }
   }
 
+  // Build the tool list once per turn. Native tools come from the static
+  // registry; MCP tools are fetched from the host so the model sees the same
+  // set the host can dispatch. Concatenated — never merged into the registry.
+  const turnTools = await buildTools()
   try {
   for (let round = 0; round < p.toolBudget; round++) {
     if (p.signal.aborted) return
@@ -206,7 +232,7 @@ async function runChatTurnInner(p: RunChatTurnParams, messages: ChatMessage[]): 
       messages: toAdapterMessages(messages.slice(0, -1)),
       signal: p.signal,
       chunkDelayMs: p.chunkDelayMs,
-      tools: toolSchemas(),
+      tools: turnTools,
       onToken: (chunk) => {
         assistantMsg = { ...assistantMsg, content: assistantMsg.content + chunk }
         messages[messages.length - 1] = assistantMsg
@@ -303,6 +329,53 @@ async function runChatTurnInner(p: RunChatTurnParams, messages: ChatMessage[]): 
       if (p.signal.aborted) {
         toolResults.push({ id: call.id, content: 'Cancelled by user', isError: true })
         cancelledMidLoop = true
+        continue
+      }
+
+      // MCP tool calls — names use the "<server>::<tool>" form. Always
+      // require approval in v1; route to the host MCP service.
+      if (isMcpToolName(call.name)) {
+        let decision: ApprovalDecision
+        if (approveAll) {
+          decision = 'approve'
+        } else {
+          try {
+            decision = await abortableApproval(
+              () => p.requestApproval(call, {
+                kind: 'mcp',
+                path: call.name,
+                contentPreview: typeof call.input === 'string' ? call.input : JSON.stringify(call.input ?? {}),
+              }),
+              p.signal,
+            )
+          } catch (err) {
+            if ((err as Error).name === 'AbortError' || p.signal.aborted) {
+              toolResults.push({ id: call.id, content: 'Cancelled by user', isError: true })
+              cancelledMidLoop = true
+              continue
+            }
+            throw err
+          }
+        }
+        if (decision === 'approve-rest') { approveAll = true; decision = 'approve' }
+        if (decision === 'deny') {
+          toolResults.push({ id: call.id, content: 'User denied this action', isError: true, isUserDenial: true })
+          continue
+        }
+        try {
+          const out = await callMcpTool(call.name, call.input)
+          toolResults.push({ id: call.id, content: JSON.stringify(out) })
+        } catch (e) {
+          // Match the native-tool branch: aborts terminate the loop, real
+          // errors become tool results so the model sees them next round.
+          if ((e as Error).name === 'AbortError' || p.signal.aborted) {
+            toolResults.push({ id: call.id, content: 'Cancelled by user', isError: true })
+            cancelledMidLoop = true
+            continue
+          }
+          const msg = e instanceof Error ? e.message : String(e)
+          toolResults.push({ id: call.id, content: msg, isError: true })
+        }
         continue
       }
 
