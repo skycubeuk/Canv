@@ -366,6 +366,13 @@ async function runChatTurnInner(p: RunChatTurnParams, messages: ChatMessage[]): 
           const out = await callMcpTool(call.name, call.input)
           toolResults.push({ id: call.id, content: JSON.stringify(out) })
         } catch (e) {
+          // Match the native-tool branch: aborts terminate the loop, real
+          // errors become tool results so the model sees them next round.
+          if ((e as Error).name === 'AbortError' || p.signal.aborted) {
+            toolResults.push({ id: call.id, content: 'Cancelled by user', isError: true })
+            cancelledMidLoop = true
+            continue
+          }
           const msg = e instanceof Error ? e.message : String(e)
           toolResults.push({ id: call.id, content: msg, isError: true })
         }

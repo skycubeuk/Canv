@@ -1025,4 +1025,51 @@ describe('chatRunner — MCP integration', () => {
     expect(approvalCalls).toEqual(['srv::t'])
     expect(callTool).toHaveBeenCalledWith('srv::t', { a: 1 })
   })
+
+  it('exits cleanly when signal aborts mid-MCP-call (parity with native tools)', async () => {
+    const ctrl = new AbortController()
+    ;(window as unknown as { canvMcp: unknown }).canvMcp = {
+      setServers: vi.fn(),
+      listTools: vi.fn().mockResolvedValue([
+        { name: 'srv::t', server: 'srv', description: '', inputSchema: { type: 'object' } },
+      ]),
+      // callTool rejects with AbortError as soon as the signal aborts. The
+      // bridge's callTool is invoked while signal is still live; the test
+      // triggers abort inside the call itself.
+      callTool: vi.fn().mockImplementation(() => new Promise<{ ok: false; error: string }>((_resolve, reject) => {
+        ctrl.signal.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
+        // Fire the abort on a macrotask so the runner has time to enter the
+        // MCP catch path mid-await rather than aborting before the adapter
+        // even runs.
+        setTimeout(() => ctrl.abort(), 0)
+      })),
+      reconnect: vi.fn(),
+    }
+    const adapter: LLMAdapter = {
+      id: 'mock', name: 'Mock', models: ['m'],
+      async complete(p: CompleteParams) {
+        if (p.messages.length === 1) {
+          return {
+            text: '', truncated: false, stopReason: 'tool_use',
+            toolCalls: [{ id: 't1', name: 'srv::t', input: {} }],
+          }
+        }
+        // Should never run a second round — abort terminated the loop.
+        throw new Error('adapter called after abort')
+      },
+    }
+    let final: ChatMessage[] = []
+    await runChatTurn({
+      ...baseCtx,
+      adapter,
+      provider: 'anthropic',
+      history: [{ id: 'u1', role: 'user', content: 'use mcp', provider: 'anthropic' }],
+      signal: ctrl.signal,
+      requestApproval: async () => 'approve' as ApprovalDecision,
+      onUpdate: (m) => { final = [...m] },
+    })
+    const asst = final.filter((m) => m.role === 'assistant')[0]
+    expect(asst.failureReason).toBe('cancelled')
+    expect(asst.toolResults).toEqual([{ id: 't1', content: 'Cancelled by user', isError: true }])
+  })
 })
