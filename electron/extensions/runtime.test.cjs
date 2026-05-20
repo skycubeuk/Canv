@@ -219,3 +219,51 @@ describe('ExtensionRuntime.spawn engines.canv re-check', () => {
     })).rejects.toThrow(/engines\.canv.*not compatible/)
   })
 })
+
+describe('ExtensionRuntime.activate / activateByUri', () => {
+  it('activate refuses when manifest is not installed', async () => {
+    const r = new ExtensionRuntime({ electron: null })
+    r.setActivationContext({
+      workspaceRegistry: { get: () => null },
+      activationEvents: { shouldActivateFor: () => false },
+      spawnInstalled: async () => ({ ok: true }),
+    })
+    const out = await r.activate('missing', { kind: 'uri', uri: 'canv://missing' })
+    expect(out.ok).toBe(false)
+    expect(out.reason).toBe('not-installed')
+  })
+
+  it('activate calls spawnInstalled when a manifest matches', async () => {
+    const r = new ExtensionRuntime({ electron: null })
+    const calls = []
+    r.setActivationContext({
+      workspaceRegistry: { get: (id) => ({ manifest: {
+        id,
+        activationEvents: ['onUri:canv://x'],
+      } }) },
+      activationEvents: { shouldActivateFor: (_m, t) => t.kind === 'uri' },
+      spawnInstalled: async (id, opts) => { calls.push({ id, opts }); return { ok: true } },
+    })
+    const out = await r.activate('x', { kind: 'uri', uri: 'canv://x' })
+    expect(out.ok).toBe(true)
+    expect(calls[0].id).toBe('x')
+  })
+
+  it('activateByUri parses canv:// URIs', async () => {
+    const r = new ExtensionRuntime({ electron: null })
+    const triggers = []
+    r.setActivationContext({
+      workspaceRegistry: { get: (id) => ({ manifest: { id, activationEvents: ['onUri:canv://x'] } }) },
+      activationEvents: { shouldActivateFor: (_m, t) => { triggers.push(t); return true } },
+      spawnInstalled: async () => ({ ok: true }),
+    })
+    await r.activateByUri('canv://x/open')
+    expect(triggers[0]).toEqual({ kind: 'uri', uri: 'canv://x/open' })
+  })
+
+  it('activateByUri rejects non-canv URIs', async () => {
+    const r = new ExtensionRuntime({ electron: null })
+    const out = await r.activateByUri('http://x')
+    expect(out.ok).toBe(false)
+  })
+})

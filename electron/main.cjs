@@ -336,6 +336,12 @@ protocol.registerSchemesAsPrivileged([
   },
 ])
 
+// Set by services/extensions during registerIpcHandlers so the workspace-
+// service can re-evaluate workspaceContains: activation when the user
+// switches vault roots. Lives in main.cjs scope because it's shared
+// between two service modules.
+let extensionWorkspaceContainsRefresh = null
+
 function makeDeps() {
   const deps = {
     // Mutable shared state — exposed as getters so handlers see live values.
@@ -363,6 +369,9 @@ function makeDeps() {
     getHistoryService,
     startWatcher: (root) => fsService.startWatcher(root, () => mainWindow, { toRel }),
     stopWatcher: () => fsService.stopWatcher(),
+    getWatcher: () => fsService.getWatcher(),
+    setExtensionWorkspaceContainsRefresh: (fn) => { extensionWorkspaceContainsRefresh = fn },
+    getExtensionWorkspaceContainsRefresh: () => extensionWorkspaceContainsRefresh,
     configureWindowOpenHandler,
     APP_ICON, DEV_URL,
   }

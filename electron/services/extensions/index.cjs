@@ -32,6 +32,8 @@ function unpackCanvext(srcZip, destDir) {
 
 const { ExtensionRuntime } = require('../../extensions/runtime.cjs')
 const { registerProtocol } = require('../../extensions/protocol.cjs')
+const activationEventsLib = require('../../extensions/activation-events.cjs')
+const { createWorkspaceContainsEvaluator } = require('./workspace-contains.cjs')
 const { createActiveDocHandlers } = require('../../extensions/handlers/active-doc.cjs')
 const { createWorkspaceHandlers } = require('../../extensions/handlers/workspace.cjs')
 const { createEventsHandlers } = require('../../extensions/handlers/events.cjs')
@@ -252,10 +254,25 @@ function registerIpcHandlers(ipcMain, deps) {
 
   function onRegistryChanged() {
     invalidateExtensionClaimedExts()
+    // Re-evaluate workspaceContains activation: install/uninstall/enable/trust
+    // changes can add or remove extensions whose declared globs should fire.
+    try { setupWorkspaceContains() } catch (e) { console.error('[workspaceContains] setup failed', e) }
     const mainWindow = getMainWindow()
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('canvExtensions:registryChanged')
     }
+  }
+
+  // Read a workspace-installed extension's manifest from disk. Returns null
+  // if the workspace is missing, the registry entry is absent, or the file
+  // can't be parsed. Used by the activation-context bridge so runtime.activate
+  // can match triggers against the on-disk manifest's activationEvents.
+  function readInstalledManifestSync(id) {
+    const WORKSPACE = getWorkspace()
+    if (!WORKSPACE || WORKSPACE.kind !== 'local') return null
+    const file = path.join(WORKSPACE.root, '.canv', 'extensions', id, 'manifest.json')
+    try { return JSON.parse(fs.readFileSync(file, 'utf-8')) }
+    catch { return null }
   }
 
   // Per-extension in-flight spawn locks. React strict-mode and fast tab
@@ -317,6 +334,55 @@ function registerIpcHandlers(ipcMain, deps) {
     spawnLocks.set(id, promise)
     try { return await promise }
     finally { spawnLocks.delete(id) }
+  }
+
+  // ------------------------------------------------------------------
+  // Trigger-driven activation (workspaceContains, onUri). The runtime
+  // owns the activate()/activateByUri() entrypoints; we inject the
+  // registry-plus-manifest bridge + the spawn function here so the
+  // runtime stays decoupled from workspace shape.
+  // ------------------------------------------------------------------
+  extensionRuntime.setActivationContext({
+    workspaceRegistry: {
+      get: (id) => {
+        const reg = getWorkspaceRegistry()
+        const entry = reg ? reg.get(id) : null
+        if (!entry) return null
+        const manifest = readInstalledManifestSync(id)
+        return manifest ? { ...entry, manifest } : null
+      },
+    },
+    activationEvents: activationEventsLib,
+    spawnInstalled,
+  })
+
+  let wcEvaluator = null
+  function setupWorkspaceContains() {
+    if (wcEvaluator) { wcEvaluator.dispose(); wcEvaluator = null }
+    const watcher = typeof deps.getWatcher === 'function' ? deps.getWatcher() : null
+    const wsReg = getWorkspaceRegistry()
+    const WORKSPACE = getWorkspace()
+    if (!watcher || !wsReg || !WORKSPACE || WORKSPACE.kind !== 'local') return
+    // Build {id, manifest} for each enabled+trusted entry so the evaluator can
+    // inspect activationEvents without touching disk per file event.
+    const installed = []
+    for (const entry of wsReg.listEntries()) {
+      if (!entry.enabled || entry.trustedAt == null) continue
+      const manifest = readInstalledManifestSync(entry.id)
+      if (manifest) installed.push({ id: entry.id, manifest })
+    }
+    wcEvaluator = createWorkspaceContainsEvaluator({
+      getWorkspace,
+      getInstalled: () => installed,
+      runtime: extensionRuntime,
+      watcher,
+    })
+    wcEvaluator.rebuild()
+    wcEvaluator.evaluateAtOpen().catch((e) => console.error('[workspaceContains] evaluate failed', e))
+  }
+  // Expose for the workspace-change hook in main.cjs (wired below via deps).
+  if (typeof deps.setExtensionWorkspaceContainsRefresh === 'function') {
+    deps.setExtensionWorkspaceContainsRefresh(setupWorkspaceContains)
   }
 
   registerProtocol(electron.protocol, {

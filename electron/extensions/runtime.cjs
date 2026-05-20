@@ -220,6 +220,50 @@ class ExtensionRuntime {
     return out
   }
 
+  // ------------------------------------------------------------------
+  // Trigger-driven activation. Phase 3 adds two new activation events
+  // (workspaceContains:, onUri:) that need a single entrypoint to map a
+  // trigger to "is this installed, does its manifest opt in, and if so,
+  // spawn it". setActivationContext injects the registry + matcher +
+  // spawn-installed function from services/extensions so runtime stays
+  // free of workspace-shape knowledge.
+  // ------------------------------------------------------------------
+
+  setActivationContext(ctx) {
+    this._activationContext = ctx
+  }
+
+  async activate(extensionId, trigger) {
+    if (!this._activationContext) {
+      console.warn('[runtime] activate called without _activationContext')
+      return { ok: false, reason: 'no-activation-context' }
+    }
+    const ctx = this._activationContext
+    const entry = ctx.workspaceRegistry.get(extensionId)
+    if (!entry) return { ok: false, reason: 'not-installed' }
+    const manifest = entry.manifest
+    if (!manifest) return { ok: false, reason: 'no-manifest' }
+    const { shouldActivateFor } = ctx.activationEvents
+    if (!shouldActivateFor(manifest, trigger)) return { ok: false, reason: 'no-matching-activation' }
+    if (this._byId.has(extensionId)) {
+      this.dispatchEvent('canvExt:activate', { trigger })
+      return { ok: true, reused: true }
+    }
+    if (typeof ctx.spawnInstalled === 'function') {
+      return await ctx.spawnInstalled(extensionId, { trigger })
+    }
+    return { ok: false, reason: 'no-spawn-installed' }
+  }
+
+  async activateByUri(uri) {
+    if (typeof uri !== 'string' || !uri.startsWith('canv://')) return { ok: false, reason: 'bad-uri' }
+    const rest = uri.slice('canv://'.length)
+    const slash = rest.indexOf('/')
+    const id = slash >= 0 ? rest.slice(0, slash) : rest
+    if (!id) return { ok: false, reason: 'no-id' }
+    return await this.activate(id, { kind: 'uri', uri })
+  }
+
   // --- Test affordances. Real `spawn`/`destroy` land in Task 15. ---
   _registerForTest({ id, manifest, extensionDir, webContentsId, view = null, storageFile = null }) {
     const storage = storageFile ? new PersistentStorage(storageFile) : new InMemoryStorage()
