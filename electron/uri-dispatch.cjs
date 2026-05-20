@@ -39,15 +39,18 @@ function enqueue(uri) {
 function registerProtocolHandler({ app, getMainWindow }) {
   // Skip in dev and when running via `electron .` to avoid stealing canv://
   // links from an installed packaged Canv on the same machine.
-  if (!app.isPackaged) return
-  if (process.defaultApp) return
+  if (!app.isPackaged) return { ok: true, reason: 'dev-skip' }
+  if (process.defaultApp) return { ok: true, reason: 'dev-skip' }
 
   app.setAsDefaultProtocolClient(PROTOCOL)
 
   const gotLock = app.requestSingleInstanceLock()
   if (!gotLock) {
+    // app.quit() is async — the caller must bail out of its whenReady
+    // callback immediately so we don't register IPC handlers or create a
+    // window during the ~ms before the process actually exits.
     app.quit()
-    return
+    return { ok: false, reason: 'no-lock' }
   }
 
   // macOS — open-url fires when the OS hands a deep link to a running instance.
@@ -75,6 +78,8 @@ function registerProtocolHandler({ app, getMainWindow }) {
   // First-launch case (Win/Linux): the URL is on this process's argv.
   const initialUri = process.argv.find((a) => typeof a === 'string' && a.startsWith(`${PROTOCOL}://`))
   if (initialUri) enqueue(initialUri)
+
+  return { ok: true, reason: 'registered' }
 }
 
 module.exports = { registerProtocolHandler, setDispatcher, enqueue, PROTOCOL }

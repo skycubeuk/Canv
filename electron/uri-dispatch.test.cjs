@@ -41,3 +41,59 @@ describe('uri-dispatch queue', () => {
     spy.mockRestore()
   })
 })
+
+describe('uri-dispatch registerProtocolHandler', () => {
+  beforeEach(() => {
+    vi.resetModules()
+  })
+
+  it('returns ok:true with dev-skip reason in unpackaged builds', async () => {
+    const mod = await import('./uri-dispatch.cjs')
+    const fakeApp = {
+      isPackaged: false,
+      setAsDefaultProtocolClient: vi.fn(),
+      requestSingleInstanceLock: vi.fn(),
+      quit: vi.fn(),
+      on: vi.fn(),
+    }
+    const r = mod.registerProtocolHandler({ app: fakeApp, getMainWindow: () => null })
+    expect(r).toEqual({ ok: true, reason: 'dev-skip' })
+    expect(fakeApp.setAsDefaultProtocolClient).not.toHaveBeenCalled()
+    expect(fakeApp.requestSingleInstanceLock).not.toHaveBeenCalled()
+  })
+
+  it('returns ok:false with no-lock reason when the single-instance lock is held', async () => {
+    const mod = await import('./uri-dispatch.cjs')
+    const fakeApp = {
+      isPackaged: true,
+      setAsDefaultProtocolClient: vi.fn(),
+      requestSingleInstanceLock: vi.fn(() => false),
+      quit: vi.fn(),
+      on: vi.fn(),
+    }
+    // process.defaultApp is undefined under vitest, which is the production
+    // case — !process.defaultApp passes, so we reach the lock check.
+    const r = mod.registerProtocolHandler({ app: fakeApp, getMainWindow: () => null })
+    expect(r).toEqual({ ok: false, reason: 'no-lock' })
+    expect(fakeApp.quit).toHaveBeenCalled()
+    // open-url / second-instance must NOT have been wired when the lock failed.
+    expect(fakeApp.on).not.toHaveBeenCalled()
+  })
+
+  it('returns ok:true with registered reason when the lock is acquired', async () => {
+    const mod = await import('./uri-dispatch.cjs')
+    const fakeApp = {
+      isPackaged: true,
+      setAsDefaultProtocolClient: vi.fn(),
+      requestSingleInstanceLock: vi.fn(() => true),
+      quit: vi.fn(),
+      on: vi.fn(),
+    }
+    const r = mod.registerProtocolHandler({ app: fakeApp, getMainWindow: () => null })
+    expect(r).toEqual({ ok: true, reason: 'registered' })
+    expect(fakeApp.setAsDefaultProtocolClient).toHaveBeenCalledWith('canv')
+    // Both 'open-url' and 'second-instance' listeners were registered.
+    const events = fakeApp.on.mock.calls.map((c) => c[0]).sort()
+    expect(events).toEqual(['open-url', 'second-instance'])
+  })
+})

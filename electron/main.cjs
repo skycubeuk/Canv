@@ -312,7 +312,17 @@ function createWindow() {
       popoutWindow.destroy()
       popoutWindow = null
     }
-    if (DEPS) DEPS.closeWorkspace()
+    if (DEPS) {
+      DEPS.closeWorkspace()
+      // Tear down the workspaceContains evaluator. closeWorkspace nulls out
+      // the watcher + workspaceRegistry, so setupWorkspaceContains hits its
+      // "no watcher → dispose previous, return" branch and unwires the
+      // chokidar 'add' listener + clears compiledGlobsByExt.
+      const refresh = DEPS.getExtensionWorkspaceContainsRefresh?.()
+      if (typeof refresh === 'function') {
+        try { refresh() } catch { /* ignore — shutdown path */ }
+      }
+    }
   })
 }
 
@@ -400,7 +410,12 @@ app.whenReady().then(() => {
   // Register canv:// as the OS-level protocol handler before the window is
   // created. No-op in dev / `electron .` (gated inside the module) so an
   // installed packaged Canv on the same machine keeps owning the scheme.
-  uriDispatch.registerProtocolHandler({ app, getMainWindow: () => mainWindow })
+  // If another Canv instance already holds the single-instance lock, the
+  // module calls app.quit() and returns ok:false — bail out of whenReady
+  // immediately so we don't register handlers or create a window during the
+  // brief async window before the process exits.
+  const protocolReg = uriDispatch.registerProtocolHandler({ app, getMainWindow: () => mainWindow })
+  if (protocolReg && protocolReg.ok === false) return
   const deps = makeDeps()
   DEPS = deps
   fsService.registerIpcHandlers(ipcMain, deps)
@@ -427,7 +442,13 @@ app.on('before-quit', () => {
 })
 
 app.on('window-all-closed', () => {
-  if (DEPS) DEPS.closeWorkspace()
+  if (DEPS) {
+    DEPS.closeWorkspace()
+    const refresh = DEPS.getExtensionWorkspaceContainsRefresh?.()
+    if (typeof refresh === 'function') {
+      try { refresh() } catch { /* ignore — shutdown path */ }
+    }
+  }
   if (process.platform !== 'darwin') app.quit()
 })
 

@@ -263,16 +263,21 @@ function registerIpcHandlers(ipcMain, deps) {
     }
   }
 
-  // Read a workspace-installed extension's manifest from disk. Returns null
-  // if the workspace is missing, the registry entry is absent, or the file
-  // can't be parsed. Used by the activation-context bridge so runtime.activate
-  // can match triggers against the on-disk manifest's activationEvents.
+  // Read a workspace-installed extension's manifest from disk, validating it
+  // through the same Zod schema used at install time. Returns null if the
+  // workspace is missing, the file can't be parsed, OR the parsed object
+  // fails schema validation (post-install hand-edits, partial upgrades,
+  // etc.). Treating drifted manifests as missing protects shouldActivateFor
+  // / effectiveActivationEvents from malformed input.
   function readInstalledManifestSync(id) {
     const WORKSPACE = getWorkspace()
     if (!WORKSPACE || WORKSPACE.kind !== 'local') return null
     const file = path.join(WORKSPACE.root, '.canv', 'extensions', id, 'manifest.json')
-    try { return JSON.parse(fs.readFileSync(file, 'utf-8')) }
+    let raw
+    try { raw = JSON.parse(fs.readFileSync(file, 'utf-8')) }
     catch { return null }
+    const v = validateManifest(raw)
+    return v.ok ? v.manifest : null
   }
 
   // Per-extension in-flight spawn locks. React strict-mode and fast tab
