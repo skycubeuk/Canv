@@ -60,7 +60,7 @@ describe('ExtensionRuntime spawn validation', () => {
   it('throws when spawn called without electron binding', async () => {
     const rt = new ExtensionRuntime() // no opts.electron
     await expect(rt.spawn({
-      extensionDir: '/x', manifest: { id: 'a', contributions: [] },
+      extensionDir: '/x', manifest: { id: 'a', engines: { canv: '^1.0.0' }, contributions: [] },
       hostWindow: {},
     })).rejects.toThrow(/not bound to electron/i)
   })
@@ -68,7 +68,7 @@ describe('ExtensionRuntime spawn validation', () => {
     const rt = new ExtensionRuntime({ electron: {}, extensionPreloadPath: '/p' })
     rt._registerForTest({ id: 'a', manifest: { id: 'a' }, extensionDir: '/x', webContentsId: 99 })
     await expect(rt.spawn({
-      extensionDir: '/x', manifest: { id: 'a', contributions: [] },
+      extensionDir: '/x', manifest: { id: 'a', engines: { canv: '^1.0.0' }, contributions: [] },
       hostWindow: {},
     })).rejects.toThrow(/already spawned/)
   })
@@ -196,5 +196,29 @@ describe('ExtensionRuntime storage backend', () => {
     expect(s).toBeInstanceOf(PersistentStorage)
     await s.set('k', 'v')
     expect(JSON.parse(fsMod.readFileSync(file, 'utf-8'))).toEqual({ k: 'v' })
+  })
+})
+
+const semver = require('semver')
+const { CANV_API_VERSION } = require('./api-version.cjs')
+
+describe('ExtensionRuntime.spawn engines.canv re-check', () => {
+  it('refuses to spawn when engines.canv does not satisfy CANV_API_VERSION', async () => {
+    const runtime = new ExtensionRuntime({ electron: null })
+    const manifest = {
+      id: 'incompat',
+      name: 'I',
+      version: '1.0.0',
+      engines: { canv: '^99.0.0' },
+      capabilities: [],
+      activationEvents: [],
+      contributions: [{ type: 'panel', id: 'p', title: 'P', icon: 'info', location: 'left-sidebar', entry: 'index.html' }],
+    }
+    await expect(runtime.spawn({
+      extensionDir: '/tmp/incompat',
+      manifest,
+      hostWindow: null,
+      bounds: { x: 0, y: 0, width: 100, height: 100 },
+    })).rejects.toThrow(/engines\.canv.*not compatible/)
   })
 })

@@ -271,10 +271,23 @@ function registerIpcHandlers(ipcMain, deps) {
     // cold-start auto-spawn), fall back to mainWindow.
     const mainWindow = getMainWindow()
     const hostWindow = opts.hostWindow && !opts.hostWindow.isDestroyed() ? opts.hostWindow : mainWindow
-    await extensionRuntime.spawn({
-      extensionDir: dir, manifest, hostWindow, bounds,
-      entryRel: opts.entryRel,
-    })
+    try {
+      await extensionRuntime.spawn({
+        extensionDir: dir, manifest, hostWindow, bounds,
+        entryRel: opts.entryRel,
+      })
+    } catch (e) {
+      if (e && /engines\.canv/.test(e.message)) {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('canvExtensions:engineMismatch', {
+            id: manifest.id,
+            message: e.message,
+          })
+        }
+        return { ok: false, reason: 'engineMismatch' }
+      }
+      throw e
+    }
     return { ok: true }
     })()
     spawnLocks.set(id, promise)

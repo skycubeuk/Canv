@@ -1,7 +1,9 @@
 'use strict'
 
 const path = require('node:path')
+const semver = require('semver')
 const { PersistentStorage } = require('./storage-file.cjs')
+const { CANV_API_VERSION } = require('./api-version.cjs')
 
 class InMemoryStorage {
   constructor() { this._m = new Map() }
@@ -77,6 +79,12 @@ class ExtensionRuntime {
   // ------------------------------------------------------------------
 
   async spawn({ extensionDir, manifest, hostWindow, bounds, entryRel }) {
+    const engRange = manifest && manifest.engines && manifest.engines.canv
+    if (!engRange || !semver.satisfies(CANV_API_VERSION, engRange)) {
+      throw new Error(
+        `extension "${manifest && manifest.id}" engines.canv "${engRange ?? '<missing>'}" not compatible with host API ${CANV_API_VERSION}`,
+      )
+    }
     if (!this._electron) throw new Error('runtime not bound to electron (constructor opts.electron)')
     if (this._byId.has(manifest.id)) throw new Error(`extension "${manifest.id}" already spawned`)
 
