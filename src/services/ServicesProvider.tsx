@@ -46,7 +46,13 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
   // Independent leaves first.
   const dialogs = useDialogs()
   const notifications = useNotifications()
-  const settingsApi = useSettings()
+  const settingsApi = useSettings({
+    onDropped: (dropped) => {
+      const list = dropped.join(', ')
+      const noun = dropped.length === 1 ? 'setting' : 'settings'
+      notifications.showToast(`${dropped.length} ${noun} reset to defaults: ${list}`)
+    },
+  })
   const modes = useModes()
   const [profile, setProfile] = useLocalStorage<string | null>('canv:profile', null)
 

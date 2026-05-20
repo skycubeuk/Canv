@@ -98,7 +98,11 @@ describe('SettingsSchema', () => {
 
   it('Settings type matches the inferred type (compile-time check)', () => {
     // This test is here to anchor the type alias in the test surface.
-    const sample: Settings = SettingsSchema.parse({})
+    // The schema is intentionally permissive on perAgentModel / pricingOverrides
+    // value types so per-entry salvage can recover legacy entries; postProcess
+    // narrows them back to the curated `Settings` shape. The double cast is
+    // just so the compile-time check stays meaningful.
+    const sample: Settings = SettingsSchema.parse({}) as unknown as Settings
     expect(sample.provider).toBe('anthropic')
   })
 })

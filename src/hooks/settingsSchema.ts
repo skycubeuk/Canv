@@ -70,7 +70,7 @@ const MaxOutputTokens = z.record(Provider, z.number().int().positive()).default(
   openai: 8192,
   ollama: 4096,
 })
-const BaseUrls = z.record(Provider, z.string()).default({ anthropic: '', openai: '', ollama: '' })
+const BaseUrls = z.partialRecord(Provider, z.string()).default({ ollama: '' })
 
 export const SettingsSchema = z.object({
   provider: Provider.default('anthropic').meta({
@@ -79,7 +79,11 @@ export const SettingsSchema = z.object({
   apiKeys: ApiKeys,  // bespoke UI in SettingsTab — no auto-gen
   defaultModel: DefaultModel,  // bespoke UI — model picker grid
   useDefaultModelForAll: z.boolean().default(true),
-  perAgentModel: z.record(z.string(), z.record(z.string(), AgentModelRefSchema)).default({}),
+  // Permissive on purpose — legacy storage may hold inner values as bare model-id
+  // strings, and a single bad entry would otherwise wipe the whole map at salvage
+  // time. The post-salvage `postProcess` pass in `useSettings.ts` does the per-
+  // entry upgrade (string → AgentModelRef) and clamps against live adapter models.
+  perAgentModel: z.record(z.string(), z.record(z.string(), z.unknown())).default({}),
   fontSize: z.number().int().min(12).max(24).default(16).meta({
     ui: 'auto', section: 'appearance', label: 'Editor font size', scope: 'workspace',
   }),
@@ -102,7 +106,10 @@ export const SettingsSchema = z.object({
     ui: 'auto', section: 'chat', label: 'Tool-call budget per turn',
     help: 'Maximum tool calls the assistant may chain in a single response.',
   }),
-  pricingOverrides: z.record(z.string(), ModelPricingSchema).default({}),
+  // Permissive value type for the same reason as `perAgentModel`: a single NaN
+  // entry must not nuke the whole map. `postProcess` filters non-finite numbers
+  // and re-keys bare model-ids to `${provider}/${model}`.
+  pricingOverrides: z.record(z.string(), z.unknown()).default({}),
   streamChunkDelayMs: StreamDelay.default(0).meta({
     ui: 'auto', section: 'chat', label: 'Stream chunk delay (ms)',
   }),
@@ -126,9 +133,17 @@ export const SettingsSchema = z.object({
   }),
 })
 
-export type Settings = z.infer<typeof SettingsSchema>
 export type AgentModelRef = z.infer<typeof AgentModelRefSchema>
 export type ModelPricing = z.infer<typeof ModelPricingSchema>
 export type Theme = z.infer<typeof Theme>
 export type LineWidth = z.infer<typeof LineWidth>
 export type StreamChunkDelayMs = z.infer<typeof StreamDelay>
+
+/** Inferred settings type, with the two permissive record fields tightened
+ *  back to the curated shape that `postProcess` guarantees. Without these
+ *  overrides downstream consumers would see `Record<string, unknown>` and lose
+ *  all the structural typing the rest of the codebase relies on. */
+export type Settings = Omit<z.infer<typeof SettingsSchema>, 'perAgentModel' | 'pricingOverrides'> & {
+  perAgentModel: Record<string, Record<string, AgentModelRef>>
+  pricingOverrides: Record<string, ModelPricing>
+}
