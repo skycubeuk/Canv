@@ -203,6 +203,11 @@ if (!isDockPopout()) {
       ipcRenderer.on('canvExtensions:crashed', listener)
       return () => ipcRenderer.removeListener('canvExtensions:crashed', listener)
     },
+    onEngineMismatch: (cb) => {
+      const listener = (_e, payload) => { try { cb(payload) } catch { /* ignore */ } }
+      ipcRenderer.on('canvExtensions:engineMismatch', listener)
+      return () => ipcRenderer.removeListener('canvExtensions:engineMismatch', listener)
+    },
     devCrash: (id) => ipcRenderer.invoke('canvExtensions:devCrash', id),
     onPromptRequest: (cb) => {
       const listener = (_e, reqId, req) => { try { cb(reqId, req) } catch { /* ignore */ } }

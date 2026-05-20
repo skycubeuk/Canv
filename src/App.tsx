@@ -23,6 +23,7 @@ import './contributions/ollama.contribution'
 import './contributions/quota-error.contribution'
 import './contributions/idle-snapshot.contribution'
 import './contributions/extension-keybindings.contribution'
+import './contributions/extension-engine-mismatch.contribution'
 import './contributions/commands.contribution'
 import './contributions/dock-bridge.contribution'
 
