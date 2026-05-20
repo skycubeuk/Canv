@@ -8,6 +8,8 @@ import type { Provider, Settings } from '../../../hooks/useSettings'
 import { importBackup } from '../../../lib/backup'
 import { useDialogs } from '../../../lib/dialogs'
 import { AppearanceSection } from '../AppearanceSection'
+import { SchemaSettingsForm } from '../../settings/SchemaSettingsForm'
+import { SettingsSchema } from '../../../hooks/settingsSchema'
 
 interface Props {
   settings: Settings
@@ -511,6 +513,23 @@ export function SettingsTab(props: Props) {
             </p>
           </Field>
         </div>
+      ),
+    },
+    {
+      id: 'mcp-servers',
+      title: 'MCP servers',
+      keywords: ['mcp', 'model context protocol', 'tools', 'server', 'integration', 'stdio', 'http'],
+      body: (
+        <SchemaSettingsForm
+          schema={SettingsSchema}
+          value={settings}
+          // `Settings` narrows perAgentModel / pricingOverrides post-process; the
+          // schema's raw inferred shape is wider. The auto-gen form only ever
+          // emits patches for fields with meta.ui === 'auto', which are all in
+          // the structurally compatible subset — cast is safe.
+          onChange={(patch) => onUpdate(patch as Partial<Settings>)}
+          sectionFilter={(section) => section === 'mcp'}
+        />
       ),
     },
     {
