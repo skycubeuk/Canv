@@ -539,26 +539,49 @@ function registerIpcHandlers(ipcMain, deps) {
     return { ...all, statusBarItems }
   })
 
-  ipcMain.handle('canvExtensions:previewInstall', async (_e, folder) => {
-    if (typeof folder !== 'string' || !folder) return { ok: false, errors: ['invalid folder'] }
-    let raw
-    try { raw = JSON.parse(await fsp.readFile(path.join(folder, 'manifest.json'), 'utf-8')) }
-    catch (e) { return { ok: false, errors: [`manifest read/parse failed: ${e.message}`] } }
-    const v = validateManifest(raw)
-    if (!v.ok) return { ok: false, errors: v.errors }
-    return {
-      ok: true,
-      manifest: {
-        id: v.manifest.id,
-        name: v.manifest.name,
-        version: v.manifest.version,
-        description: v.manifest.description,
-        author: v.manifest.author,
-        capabilities: v.manifest.capabilities,
-        network: v.manifest.network ?? [],
-        settings: v.manifest.settings ?? [],
-        contributions: v.manifest.contributions,
-      },
+  ipcMain.handle('canvExtensions:previewInstall', async (_e, sourcePath) => {
+    if (typeof sourcePath !== 'string' || !sourcePath) return { ok: false, errors: ['invalid source path'] }
+    const stat = await fsp.stat(sourcePath).catch(() => null)
+    if (!stat) return { ok: false, errors: [`source not found: ${sourcePath}`] }
+    let folder = sourcePath
+    let tempUnpack = null
+    if (stat.isFile()) {
+      if (!sourcePath.endsWith('.canvext')) {
+        return { ok: false, errors: ['source file must be a .canvext zip'] }
+      }
+      tempUnpack = await fsp.mkdtemp(path.join(os.tmpdir(), 'canvext-preview-'))
+      try {
+        unpackCanvext(sourcePath, tempUnpack)
+      } catch (e) {
+        await fsp.rm(tempUnpack, { recursive: true, force: true })
+        return { ok: false, errors: [`canvext unpack failed: ${e.message}`] }
+      }
+      folder = tempUnpack
+    } else if (!stat.isDirectory()) {
+      return { ok: false, errors: ['source must be a folder or .canvext file'] }
+    }
+    try {
+      let raw
+      try { raw = JSON.parse(await fsp.readFile(path.join(folder, 'manifest.json'), 'utf-8')) }
+      catch (e) { return { ok: false, errors: [`manifest read/parse failed: ${e.message}`] } }
+      const v = validateManifest(raw)
+      if (!v.ok) return { ok: false, errors: v.errors }
+      return {
+        ok: true,
+        manifest: {
+          id: v.manifest.id,
+          name: v.manifest.name,
+          version: v.manifest.version,
+          description: v.manifest.description,
+          author: v.manifest.author,
+          capabilities: v.manifest.capabilities,
+          network: v.manifest.network ?? [],
+          settings: v.manifest.settings ?? [],
+          contributions: v.manifest.contributions,
+        },
+      }
+    } finally {
+      if (tempUnpack) await fsp.rm(tempUnpack, { recursive: true, force: true })
     }
   })
 
@@ -765,13 +788,21 @@ function registerIpcHandlers(ipcMain, deps) {
   ipcMain.handle('canvExtensions:pickInstallFolder', async () => {
     const mainWindow = getMainWindow()
     if (!mainWindow || mainWindow.isDestroyed()) return null
-    // No `filters` here. On Linux/GTK, combining ['openFile','openDirectory']
-    // with a file-type filter wedges the dialog into file-only mode so the
-    // user can't switch to folder picking. The install handler validates by
-    // stat + suffix so the filter isn't load-bearing.
     const result = await dialog.showOpenDialog(mainWindow, {
-      title: 'Choose an extension folder or .canvext to install',
-      properties: ['openFile', 'openDirectory'],
+      title: 'Choose an extension folder to install',
+      properties: ['openDirectory'],
+    })
+    if (result.canceled || !result.filePaths[0]) return null
+    return result.filePaths[0]
+  })
+
+  ipcMain.handle('canvExtensions:pickInstallFile', async () => {
+    const mainWindow = getMainWindow()
+    if (!mainWindow || mainWindow.isDestroyed()) return null
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: 'Choose a .canvext file to install',
+      properties: ['openFile'],
+      filters: [{ name: 'Canv Extension', extensions: ['canvext'] }],
     })
     if (result.canceled || !result.filePaths[0]) return null
     return result.filePaths[0]

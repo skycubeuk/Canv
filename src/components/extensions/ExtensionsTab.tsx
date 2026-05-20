@@ -20,7 +20,8 @@ declare global {
       readManifest: (id: string) => Promise<{ id: string; name: string; version: string; capabilities: string[]; contributions: unknown[]; settings?: Array<{ key: string; type: string; default?: unknown; label?: string; description?: string; options?: string[]; min?: number; max?: number; step?: number }> }>
       reload: (id: string) => Promise<void>
       pickInstallFolder: () => Promise<string | null>
-      previewInstall: (folder: string) => Promise<{ ok: true; manifest: PreviewManifest } | { ok: false; errors: string[] }>
+      pickInstallFile: () => Promise<string | null>
+      previewInstall: (source: string) => Promise<{ ok: true; manifest: PreviewManifest } | { ok: false; errors: string[] }>
       readAllContributions: () => Promise<AllContributions>
       onChanged: (cb: () => void) => () => void
       onCrashed: (cb: (payload: { id: string; reason: string }) => void) => () => void
@@ -111,7 +112,7 @@ export function ExtensionsTab() {
     return () => { off?.() }
   }, [])
 
-  const onInstall = useCallback(async () => {
+  const onInstallFromFolder = useCallback(async () => {
     setInstallError(null)
     const folder = await window.canvExtensions?.pickInstallFolder()
     if (!folder) return
@@ -121,6 +122,18 @@ export function ExtensionsTab() {
       return
     }
     setPendingInstall({ folder, manifest: preview.manifest })
+  }, [])
+
+  const onInstallFromFile = useCallback(async () => {
+    setInstallError(null)
+    const file = await window.canvExtensions?.pickInstallFile()
+    if (!file) return
+    const preview = await window.canvExtensions?.previewInstall(file)
+    if (!preview?.ok) {
+      setInstallError((preview?.errors || ['preview failed']).join('; '))
+      return
+    }
+    setPendingInstall({ folder: file, manifest: preview.manifest })
   }, [])
 
   const onConfirmInstall = useCallback(async () => {
@@ -233,7 +246,8 @@ export function ExtensionsTab() {
           build one. Run <code>npm run skill:install</code> once to enable the author skill.
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button type="button" onClick={() => void onInstall()} style={primaryBtn}>Install from folder…</button>
+          <button type="button" onClick={() => void onInstallFromFolder()} style={primaryBtn}>Install from folder…</button>
+          <button type="button" onClick={() => void onInstallFromFile()} style={primaryBtn}>Install from .canvext…</button>
           {installError && <div style={{ marginTop: 8, color: 'rgb(255 120 120)', fontSize: 11, flexBasis: '100%' }}>{installError}</div>}
         </div>
       </div>
