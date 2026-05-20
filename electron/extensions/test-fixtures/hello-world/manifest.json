@@ -9,7 +9,7 @@
   "capabilities": [
     "activeDoc.read", "activeDoc.write",
     "workspace.list", "workspace.read",
-    "events.docChanged",
+    "events.docChanged", "events.selectionChanged",
     "storage", "notify", "ui"
   ],
   "contributions": [
