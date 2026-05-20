@@ -15,6 +15,7 @@ const HEADERS: Record<WritePreview['kind'], (p: WritePreview) => string> = {
   delete: (p) => `Delete ${p.path}`,
   rename: (p) => `Rename ${p.path} → ${p.newPath ?? '?'}`,
   mkdir: (p) => `Create folder ${p.path}`,
+  mcp: (p) => `Call MCP tool ${p.path}`,
 }
 
 export function ChatApprovalCard({ preview, state, onDecide }: ChatApprovalCardProps) {

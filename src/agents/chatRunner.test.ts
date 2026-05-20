@@ -980,3 +980,44 @@ describe('chatRunner — history brackets', () => {
     expect(await fs.readFile('a.md')).toMatchObject({ content: 'A' })
   })
 })
+
+describe('chatRunner — MCP integration', () => {
+  it('routes <server>::<tool> names to callMcpTool and requires approval', async () => {
+    const callTool = vi.fn().mockResolvedValue({ ok: true, result: { msg: 'ok' } })
+    ;(window as unknown as { canvMcp: unknown }).canvMcp = {
+      setServers: vi.fn(),
+      listTools: vi.fn().mockResolvedValue([
+        { name: 'srv::t', server: 'srv', description: '', inputSchema: { type: 'object' } },
+      ]),
+      callTool,
+      reconnect: vi.fn(),
+    }
+    const approvalCalls: string[] = []
+    const adapter: LLMAdapter = {
+      id: 'mock', name: 'Mock', models: ['m'],
+      async complete(p: CompleteParams) {
+        if (p.messages.length === 1) {
+          return {
+            text: '', truncated: false, stopReason: 'tool_use',
+            toolCalls: [{ id: 't1', name: 'srv::t', input: { a: 1 } }],
+          }
+        }
+        return { text: 'done', truncated: false, stopReason: 'end_turn' }
+      },
+    }
+    await runChatTurn({
+      ...baseCtx,
+      adapter,
+      provider: 'anthropic',
+      history: [{ id: 'u1', role: 'user', content: 'use mcp', provider: 'anthropic' }],
+      onUpdate: () => {},
+      requestApproval: async (call) => {
+        approvalCalls.push(call.name)
+        return 'approve' as ApprovalDecision
+      },
+    })
+    expect(approvalCalls).toEqual(['srv::t'])
+    expect(callTool).toHaveBeenCalledWith('srv::t', { a: 1 })
+    ;(window as unknown as { canvMcp?: unknown }).canvMcp = undefined
+  })
+})
