@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
 import { useSettings } from './useSettings'
 
@@ -208,5 +208,65 @@ describe('useSettings — accent', () => {
     const { result } = renderHook(() => useSettings())
     act(() => { result.current.update({ accent: '#10b981' }) })
     expect(result.current.settings.accent).toBe('#10b981')
+  })
+})
+
+describe('useSettings — boot toast (onDropped) pathway', () => {
+  beforeEach(() => { localStorage.clear() })
+
+  it('calls onDropped exactly once with the list of dropped fields when raw has an invalid value', () => {
+    localStorage.setItem('canv:settings', JSON.stringify({
+      fontSize: 'broken',
+      apiKeys: { anthropic: 'sk-key', openai: '', ollama: '' },
+    }))
+    const onDropped = vi.fn()
+    renderHook(() => useSettings({ onDropped }))
+    expect(onDropped).toHaveBeenCalledTimes(1)
+    const callArg = onDropped.mock.calls[0][0] as string[]
+    expect(callArg).toContain('fontSize')
+    // Valid sibling fields salvage cleanly: apiKey survived the round-trip.
+    const persisted = JSON.parse(localStorage.getItem('canv:settings') ?? '{}')
+    expect(persisted.apiKeys.anthropic).toBe('sk-key')
+  })
+
+  it('does NOT call onDropped when the raw blob is fully valid', () => {
+    localStorage.setItem('canv:settings', JSON.stringify({
+      fontSize: 18,
+      apiKeys: { anthropic: '', openai: '', ollama: '' },
+    }))
+    const onDropped = vi.fn()
+    renderHook(() => useSettings({ onDropped }))
+    expect(onDropped).not.toHaveBeenCalled()
+  })
+
+  it('persists the salvaged shape back to localStorage so the broken value is gone', () => {
+    localStorage.setItem('canv:settings', JSON.stringify({
+      fontSize: 'broken',
+    }))
+    renderHook(() => useSettings())
+    const persisted = JSON.parse(localStorage.getItem('canv:settings') ?? '{}')
+    // The broken value is replaced; the value is now the schema default (16).
+    expect(persisted.fontSize).toBe(16)
+  })
+})
+
+describe('useSettings — legacy-key cleanup on first mount', () => {
+  beforeEach(() => { localStorage.clear() })
+
+  it('strips legacy top-level keys (e.g. `prompts`) silently when the rest of the blob is valid', () => {
+    localStorage.setItem('canv:settings', JSON.stringify({
+      fontSize: 18,
+      prompts: { legacy: true },
+      promptOverrides: { also: 'gone' },
+    }))
+    const onDropped = vi.fn()
+    renderHook(() => useSettings({ onDropped }))
+    // Silent cleanup: no toast fires when nothing was reset.
+    expect(onDropped).not.toHaveBeenCalled()
+    const persisted = JSON.parse(localStorage.getItem('canv:settings') ?? '{}')
+    expect('prompts' in persisted).toBe(false)
+    expect('promptOverrides' in persisted).toBe(false)
+    // Legitimate fields survive.
+    expect(persisted.fontSize).toBe(18)
   })
 })

@@ -125,15 +125,24 @@ export function useSettings(opts: UseSettingsOptions = {}) {
   useEffect(() => {
     if (didReportRef.current) return
     didReportRef.current = true
-    if (dropped.length === 0) return
-    // Persist the salvaged + post-processed shape so the broken blob doesn't
-    // re-trigger on next boot. This also has the nice side effect of stripping
-    // legacy keys that the schema doesn't include (e.g. `prompts`,
-    // `promptOverrides`) — they go away on re-serialise.
+    // Two reasons to persist back on first mount:
+    //  1. Salvage dropped fields (broken values replaced by defaults) — surface
+    //     the toast so the user knows.
+    //  2. Raw shape carries legacy top-level keys the schema doesn't know
+    //     about (e.g. `prompts`, `promptOverrides`). Without an active cleanup
+    //     these stick around forever because `update()` spreads from `prev`,
+    //     not the post-processed `settings`. Strip them silently — they were
+    //     never "reset", they just no longer exist.
+    const rawObj = (raw && typeof raw === 'object' && !Array.isArray(raw))
+      ? (raw as Record<string, unknown>)
+      : {}
+    const knownKeys = SettingsSchema.shape
+    const hasLegacyKeys = Object.keys(rawObj).some((k) => !(k in knownKeys))
+    if (dropped.length === 0 && !hasLegacyKeys) return
     setRaw(settings)
-    const cb = onDroppedRef.current
-    if (cb) {
-      cb(dropped)
+    if (dropped.length > 0) {
+      const cb = onDroppedRef.current
+      if (cb) cb(dropped)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
