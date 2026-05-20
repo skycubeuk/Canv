@@ -55,7 +55,7 @@ export function ExtensionRow({ entry, manifest, running, crashed, expanded, onTo
           onClick={() => onToggleEnabled(!entry.enabled)}
           style={{
             padding: '4px 10px', borderRadius: 4, cursor: needsTrust ? 'not-allowed' : 'pointer',
-            background: entry.enabled ? 'rgb(99 102 241)' : 'var(--color-elev)',
+            background: entry.enabled ? 'rgb(var(--accent))' : 'var(--color-elev)',
             color: entry.enabled ? 'white' : 'var(--text-color-muted)',
             border: '1px solid var(--border-color-default)', font: 'inherit', opacity: needsTrust ? 0.5 : 1,
           }}

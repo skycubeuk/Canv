@@ -91,6 +91,14 @@
     --accent-hover: color-mix(in oklab, rgb(var(--accent)) 80%, white 20%);
   }
 
+  /* Native form controls — pick up the user-selected accent so sliders,
+   * checkboxes, etc. don't fall back to the browser default blue. */
+  input[type='range'],
+  input[type='checkbox'],
+  input[type='radio'] {
+    accent-color: rgb(var(--accent));
+  }
+
   [data-theme='dark'] {
     --bg-app: 10 11 13; /* #0a0b0d */
     --bg-panel: 16 18 22; /* #101216 */

@@ -5,7 +5,7 @@ import { buildChatSystemPreamble } from '../lib/buildChatSystemPreamble'
 import { getAdapter, configuredProviders, type Provider } from '../adapters'
 import type { ChatProvider, PendingApproval } from '../components/ChatPanel'
 import type { DockRun, DockState, UserAction } from '../lib/dockTypes'
-import { registerContribution, type Contribution } from './index'
+import { registerContribution, subscribeServicesChange, type Contribution } from './index'
 
 /**
  * Replaces useDockBridgeMain.
@@ -359,24 +359,33 @@ export const dockBridge: Contribution = {
     store.add(toDisposable(offClosed))
 
     // ---- Open / close pop-out based on placement + visibility ----
-    // The legacy hook only re-fired when placement/visible changed (its
-    // useEffect deps). Services identity changes far more often, so we
-    // de-dup against the last value to avoid spamming openPopout() (which
-    // focuses the window) on every chat-token render.
-    const { placement: bottomPlacement, visible: bottomVisible } = services.ideLayout.layout.bottom
-    const shouldOpen = bottomPlacement === 'popout' && bottomVisible
-    if (lastActedPopoutOpen !== shouldOpen) {
-      lastActedPopoutOpen = shouldOpen
-      if (shouldOpen) {
-        void bridge.openPopout()
-      } else {
-        void bridge.closePopout()
+    // Re-evaluated on every services-change tick. De-duped against the last
+    // acted value so openPopout() (which focuses the window) doesn't spam.
+    const evaluatePopoutOpen = () => {
+      const { placement: bottomPlacement, visible: bottomVisible } = services.ideLayout.layout.bottom
+      const shouldOpen = bottomPlacement === 'popout' && bottomVisible
+      if (lastActedPopoutOpen !== shouldOpen) {
+        lastActedPopoutOpen = shouldOpen
+        if (shouldOpen) {
+          void bridge.openPopout()
+        } else {
+          void bridge.closePopout()
+        }
       }
     }
+    evaluatePopoutOpen()
+
+    // ---- React to services identity changes ----
+    // Contributions register once (see Contributions.tsx). To keep the broadcast
+    // cadence the legacy useEffect(broadcast, [dockState]) provided, we
+    // subscribe to the services-change event and re-broadcast + re-evaluate
+    // pop-out open/close on each tick.
+    store.add(subscribeServicesChange(() => {
+      evaluatePopoutOpen()
+      pushNow()
+    }))
 
     // ---- Initial broadcast on register ----
-    // Mirrors the legacy useEffect(() => broadcastState(dockState), [dockState]).
-    // Services identity change → register() runs → snapshot broadcast.
     pushNow()
 
     return store
