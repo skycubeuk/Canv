@@ -5,7 +5,12 @@ const fsp = require('node:fs/promises')
 const crypto = require('node:crypto')
 
 const SKIP_DIR_NAMES = new Set(['log'])
-const SKIP_FILE_NAMES = new Set(['settings.json'])
+// settings.json — user customisations via canv.settings.set
+// storage.json — extension runtime state via canv.storage.set (created on first
+//   write by the spawned WebContentsView). Both are written after install and
+//   must not contribute to the integrity hash, or the next spawn fails with
+//   tamper-detected and the extension gets disabled.
+const SKIP_FILE_NAMES = new Set(['settings.json', 'storage.json'])
 
 async function walk(root, relDir, out) {
   const abs = relDir ? path.join(root, relDir) : root

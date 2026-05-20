@@ -42,6 +42,17 @@ describe('hashExtensionDir', () => {
     expect(after).toBe(before)
   })
 
+  it('ignores storage.json so first canv.storage.set does not trip tamper-detected', async () => {
+    const d = makeDir()
+    fs.writeFileSync(path.join(d, 'manifest.json'), '{"id":"x"}')
+    fs.writeFileSync(path.join(d, 'panels.html'), 'p')
+    const installHash = await hashExtensionDir(d)
+    // Simulate the extension's runtime writing storage.json post-install.
+    fs.writeFileSync(path.join(d, 'storage.json'), '{"counter":1}')
+    const reSpawnHash = await hashExtensionDir(d)
+    expect(reSpawnHash).toBe(installHash)
+  })
+
   it('is sensitive to file path AND contents (not just contents)', async () => {
     const d1 = makeDir()
     fs.writeFileSync(path.join(d1, 'manifest.json'), '{}')
