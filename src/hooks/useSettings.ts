@@ -11,6 +11,10 @@ export type StreamChunkDelayMs = (typeof ALLOWED_DELAYS)[number]
 
 export type { Provider }
 
+export type McpServerConfig =
+  | { name: string; transport: 'stdio'; command: string; args?: string[]; env?: Record<string, string> }
+  | { name: string; transport: 'http'; url: string; headers?: Record<string, string> }
+
 /**
  * Per-action model overrides store the provider explicitly so a future
  * adapter that lists the same model id (e.g. AWS Bedrock exposing a Claude
@@ -57,6 +61,7 @@ export interface Settings {
     deadImages: boolean
   }
   accent: string
+  mcpServers?: McpServerConfig[]
 }
 
 const SETTINGS_KEY = 'canv:settings'
