@@ -12,6 +12,7 @@ const sitesService    = require('./services/sites/index.cjs')
 const dockService     = require('./services/dock/index.cjs')
 const extService      = require('./services/extensions/index.cjs')
 const wsService       = require('./services/workspace/index.cjs')
+const uriDispatch     = require('./uri-dispatch.cjs')
 
 let extensionRuntime = null
 let trustStore = null
@@ -396,6 +397,10 @@ app.whenReady().then(() => {
       : null,
   )
   recentRemotes = new RecentRemotes(path.join(app.getPath('userData'), 'recent-remotes.json'))
+  // Register canv:// as the OS-level protocol handler before the window is
+  // created. No-op in dev / `electron .` (gated inside the module) so an
+  // installed packaged Canv on the same machine keeps owning the scheme.
+  uriDispatch.registerProtocolHandler({ app, getMainWindow: () => mainWindow })
   const deps = makeDeps()
   DEPS = deps
   fsService.registerIpcHandlers(ipcMain, deps)
@@ -405,6 +410,14 @@ app.whenReady().then(() => {
   dockService.registerIpcHandlers(ipcMain, deps)
   extService.registerIpcHandlers(ipcMain, deps)
   wsService.registerIpcHandlers(ipcMain, deps)
+  // Wire the runtime as the canv:// dispatcher. Now safe — extService has
+  // constructed extensionRuntime and stashed it via deps.setExtensionRuntime.
+  // Any URI queued during startup (Win/Linux first-launch argv) flushes here.
+  uriDispatch.setDispatcher((uri) => {
+    if (extensionRuntime) {
+      extensionRuntime.activateByUri(uri).catch((e) => console.error('activateByUri failed:', e))
+    }
+  })
   registerLegacyServeBroadcast()
   createWindow()
 })
