@@ -225,6 +225,13 @@ if (!isDockPopout()) {
     setFileHandlerDefault: (ext, extensionId) => ipcRenderer.invoke('canvExtensions:setFileHandlerDefault', ext, extensionId),
   })
 
+  contextBridge.exposeInMainWorld('canvMcp', {
+    setServers: (cfgs) => ipcRenderer.invoke('canvMcp:setServers', cfgs),
+    listTools:  () => ipcRenderer.invoke('canvMcp:listTools'),
+    callTool:   (name, args) => ipcRenderer.invoke('canvMcp:callTool', name, args),
+    reconnect:  () => ipcRenderer.invoke('canvMcp:reconnect'),
+  })
+
   contextBridge.exposeInMainWorld('canvExtensionsDev', {
     spawnTest:   (fixtureName, bounds) => ipcRenderer.invoke('canvExtDev:spawnTest', fixtureName, bounds),
     destroyTest: (id) => ipcRenderer.invoke('canvExtDev:destroyTest', id),
