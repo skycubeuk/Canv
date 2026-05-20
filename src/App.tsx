@@ -27,6 +27,7 @@ import './contributions/extension-engine-mismatch.contribution'
 import './contributions/commands.contribution'
 import './contributions/dock-bridge.contribution'
 import './contributions/mcp.contribution'
+import './contributions/extension-host-bridge.contribution'
 
 function basename(rel: string): string {
   const i = rel.lastIndexOf('/')
