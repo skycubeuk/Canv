@@ -242,7 +242,7 @@ export function ExtensionsTab() {
 }
 
 const primaryBtn: React.CSSProperties = {
-  background: 'rgb(99 102 241)', color: 'white', border: 'none',
+  background: 'rgb(var(--accent))', color: 'white', border: 'none',
   borderRadius: 4, padding: '6px 10px', cursor: 'pointer', font: 'inherit', fontSize: 12,
 }
 const secondaryBtn: React.CSSProperties = {

@@ -110,7 +110,7 @@ function QuickPick({ req, inputText, setInputText, highlight, setHighlight, onCh
             onMouseEnter={() => setHighlight(i)}
             style={{
               padding: '6px 10px', cursor: 'pointer',
-              background: i === highlight ? 'rgb(99 102 241 / 25%)' : 'transparent',
+              background: i === highlight ? 'rgb(var(--accent) / 25%)' : 'transparent',
               borderRadius: 4, fontSize: 13,
             }}
           >
@@ -166,7 +166,7 @@ const inputStyle: React.CSSProperties = {
   padding: '6px 10px', font: 'inherit',
 }
 const primaryBtn: React.CSSProperties = {
-  background: 'rgb(99 102 241)', color: 'white', border: 'none',
+  background: 'rgb(var(--accent))', color: 'white', border: 'none',
   borderRadius: 4, padding: '6px 12px', cursor: 'pointer', font: 'inherit', fontSize: 12,
 }
 const secondaryBtn: React.CSSProperties = {
