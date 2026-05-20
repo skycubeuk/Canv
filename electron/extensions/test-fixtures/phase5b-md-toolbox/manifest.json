@@ -2,6 +2,7 @@
   "id": "phase5b-md-toolbox",
   "name": "Phase 5b MD Toolbox",
   "version": "1.0.0",
+  "engines": { "canv": "^1.0.0" },
   "description": "Adds 'Count words of this file' to the file-tree right-click on .md files.",
   "capabilities": ["workspace.read", "ui", "notify"],
   "contributions": [

@@ -2,6 +2,7 @@
   "id": "hello-world-phase3",
   "name": "Hello World Phase 3",
   "version": "1.0.0",
+  "engines": { "canv": "^1.0.0" },
   "description": "Phase 3 fixture exercising ai.ask, net.fetch, ui.quickPick, ui.input",
   "author": "canv-internal",
   "createdAt": "2026-05-17T00:00:00Z",

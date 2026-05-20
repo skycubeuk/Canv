@@ -2,6 +2,7 @@
   "id": "hello-world",
   "name": "Hello World",
   "version": "1.0.0",
+  "engines": { "canv": "^1.0.0" },
   "description": "Phase 1 test fixture — exercises every canv.* API method.",
   "author": "canv-internal",
   "createdAt": "2026-05-17T00:00:00Z",

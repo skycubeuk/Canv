@@ -2,6 +2,7 @@
   "id": "phase5b-tex-language",
   "name": "Phase 5b TeX Highlighting",
   "version": "1.0.0",
+  "engines": { "canv": "^1.0.0" },
   "description": "Adds basic TeX/LaTeX syntax highlighting for .tex files.",
   "capabilities": [],
   "contributions": [

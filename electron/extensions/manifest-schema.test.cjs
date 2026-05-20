@@ -1,10 +1,12 @@
 const { validateManifest } = require('./manifest-schema.cjs')
+const { CANV_API_VERSION } = require('./api-version.cjs')
 
 function valid(overrides = {}) {
   return {
     id: 'hello-world',
     name: 'Hello World',
     version: '1.0.0',
+    engines: { canv: '^1.0.0' },
     capabilities: ['activeDoc.read'],
     contributions: [{
       type: 'panel', id: 'main', title: 'Hello',
@@ -283,6 +285,39 @@ describe('validateManifest', () => {
         contributions: [{ type: 'language', extensions: [], entry: 'language/tex.js' }],
       }))
       expect(r.ok).toBe(false)
+    })
+  })
+
+  describe('engines.canv', () => {
+    const base = {
+      id: 'eng-test',
+      name: 'Engines Test',
+      version: '1.0.0',
+      contributions: [{ type: 'panel', id: 'p', title: 'P', icon: 'info', location: 'left-sidebar', entry: 'index.html' }],
+    }
+
+    it('refuses a manifest with no engines field', () => {
+      const r = validateManifest(base)
+      expect(r.ok).toBe(false)
+      expect(r.errors.join(' ')).toMatch(/engines/)
+    })
+
+    it('refuses an engines.canv that is not a valid semver range', () => {
+      const r = validateManifest({ ...base, engines: { canv: 'not-a-range' } })
+      expect(r.ok).toBe(false)
+      expect(r.errors.join(' ')).toMatch(/engines\.canv.*semver range/i)
+    })
+
+    it('refuses an engines.canv range that does not satisfy CANV_API_VERSION', () => {
+      const r = validateManifest({ ...base, engines: { canv: '^99.0.0' } })
+      expect(r.ok).toBe(false)
+      expect(r.errors.join(' ')).toMatch(new RegExp(`not compatible.*${CANV_API_VERSION}`))
+    })
+
+    it('accepts a manifest whose engines.canv range satisfies CANV_API_VERSION', () => {
+      const r = validateManifest({ ...base, engines: { canv: '^1.0.0' } })
+      expect(r.ok).toBe(true)
+      expect(r.manifest.engines.canv).toBe('^1.0.0')
     })
   })
 
