@@ -12,11 +12,13 @@ const sitesService    = require('./services/sites/index.cjs')
 const dockService     = require('./services/dock/index.cjs')
 const extService      = require('./services/extensions/index.cjs')
 const wsService       = require('./services/workspace/index.cjs')
+const mcpService      = require('./services/mcp/index.cjs')
 const uriDispatch     = require('./uri-dispatch.cjs')
 
 let extensionRuntime = null
 let trustStore = null
 let workspaceRegistry = null
+let mcpServiceInstance = null
 
 // Set inside app.whenReady() so lifecycle handlers (window-all-closed,
 // the main window's 'closed' event) can invoke workspace helpers via deps.
@@ -372,6 +374,7 @@ function makeDeps() {
     setWorkspaceRegistry: (r) => { workspaceRegistry = r },
     getRecentRemotes: () => recentRemotes,
     setRecentRemotes: (r) => { recentRemotes = r },
+    getMcpService: () => mcpServiceInstance,
 
     // Shared helpers — passed by reference.
     requireWorkspace, isRemote, safeResolve, isAllowedExt, isAllowedDirEntry,
@@ -425,6 +428,8 @@ app.whenReady().then(() => {
   dockService.registerIpcHandlers(ipcMain, deps)
   extService.registerIpcHandlers(ipcMain, deps)
   wsService.registerIpcHandlers(ipcMain, deps)
+  const { service: mcp } = mcpService.registerIpcHandlers(ipcMain, deps)
+  mcpServiceInstance = mcp
   // Wire the runtime as the canv:// dispatcher. Now safe — extService has
   // constructed extensionRuntime and stashed it via deps.setExtensionRuntime.
   // Any URI queued during startup (Win/Linux first-launch argv) flushes here.
@@ -439,6 +444,9 @@ app.whenReady().then(() => {
 
 app.on('before-quit', () => {
   serve.stopAll().catch(() => {})
+  if (mcpServiceInstance && typeof mcpServiceInstance.shutdown === 'function') {
+    mcpServiceInstance.shutdown().catch(() => {})
+  }
 })
 
 app.on('window-all-closed', () => {
