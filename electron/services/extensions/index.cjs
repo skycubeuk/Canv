@@ -652,18 +652,31 @@ function registerIpcHandlers(ipcMain, deps) {
     if (!enabled && extensionRuntime?.manifestFor(id)) {
       await extensionRuntime.destroy(id)
     } else if (enabled) {
-      // Toggling on is an explicit "I want this running" signal — spawn now,
-      // bypassing the activation-event lazy-load (which is for installed-but-
-      // unused extensions and waits for real triggers; Phase 5 wires those).
-      // spawnInstalled re-hashes and revokes trust + flips enabled=false if
-      // the on-disk files have drifted since install (tamper detection).
+      // Toggling on doesn't unconditionally spawn anymore. If the manifest
+      // declares ONLY lazy-load activation events (workspaceContains:, onUri:,
+      // onCommand:), respect them and wait for the trigger to fire. Otherwise
+      // (onStartup, inferred panel/statusBar events, or no declared events at
+      // all) spawn immediately so the user sees their newly-enabled extension.
       const entry = workspaceRegistry.get(id)
       const wsTrust = trustStore.stateFor(WORKSPACE?.root || '')
       if (entry && entry.trustedAt != null && wsTrust === 'trusted' && !extensionRuntime.manifestFor(id)) {
-        try {
-          const r = await spawnInstalled(id)
-          if (r && !r.ok) console.warn('spawn refused on enable:', r.reason)
-        } catch (e) { console.error('spawn on enable failed:', e) }
+        const manifest = readInstalledManifestSync(id)
+        const events = manifest ? activationEventsLib.effectiveActivationEvents(manifest) : []
+        const isLazyOnly = events.length > 0 && events.every((e) =>
+          e.startsWith('workspaceContains:') ||
+          e.startsWith('onUri:') ||
+          e.startsWith('onCommand:'),
+        )
+        if (!isLazyOnly) {
+          try {
+            const r = await spawnInstalled(id)
+            if (r && !r.ok) console.warn('spawn refused on enable:', r.reason)
+          } catch (e) { console.error('spawn on enable failed:', e) }
+        } else {
+          // Rebuild the workspaceContains evaluator's matchers + re-walk the
+          // vault so any already-present matching file fires activation now.
+          try { setupWorkspaceContains() } catch (e) { console.error('[workspaceContains] re-eval on enable failed', e) }
+        }
       }
     }
     onRegistryChanged()
