@@ -62,4 +62,17 @@ describe('extension-engine-mismatch contribution', () => {
     expect(() => disposable.dispose()).not.toThrow()
     expect(showToast).not.toHaveBeenCalled()
   })
+
+  it('is a no-op when canvExtensions exists but onEngineMismatch is missing', async () => {
+    ;(window as unknown as { canvExtensions: CanvExtensionsWindowApi }).canvExtensions = {}
+    const { extensionEngineMismatch } = await import('./extension-engine-mismatch.contribution')
+    const showToast = vi.fn()
+    const services = { notifications: { showToast } } as unknown as ICanvServices
+
+    const disposable = extensionEngineMismatch.register(services)
+    expect(disposable).toBeDefined()
+    expect(typeof disposable.dispose).toBe('function')
+    expect(() => disposable.dispose()).not.toThrow()
+    expect(showToast).not.toHaveBeenCalled()
+  })
 })
