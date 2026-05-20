@@ -12,12 +12,12 @@ describe('mcp adapter', () => {
 
   it('forwards to the bridge', async () => {
     ;(window as unknown as { canvMcp: unknown }).canvMcp = {
-      listTools: vi.fn().mockResolvedValue([{ name: 's::t', server: 's', description: '', inputSchema: {} }]),
+      listTools: vi.fn().mockResolvedValue([{ name: 's__t', server: 's', description: '', inputSchema: {} }]),
       callTool: vi.fn().mockResolvedValue({ ok: true, result: 42 }),
     }
     const tools = await getMcpToolDefs()
     expect(tools).toHaveLength(1)
-    const r = await callMcpTool('s::t', {})
+    const r = await callMcpTool('s__t', {})
     expect(r).toBe(42)
   })
 
@@ -26,11 +26,11 @@ describe('mcp adapter', () => {
       listTools: vi.fn(),
       callTool: vi.fn().mockResolvedValue({ ok: false, error: 'nope' }),
     }
-    await expect(callMcpTool('s::t', {})).rejects.toThrow(/nope/)
+    await expect(callMcpTool('s__t', {})).rejects.toThrow(/nope/)
   })
 
-  it('isMcpToolName uses the :: separator', () => {
-    expect(isMcpToolName('foo::bar')).toBe(true)
+  it('isMcpToolName uses the __ separator', () => {
+    expect(isMcpToolName('foo__bar')).toBe(true)
     expect(isMcpToolName('readFile')).toBe(false)
   })
 })

@@ -25,11 +25,11 @@ export function ChatApprovalCard({ preview, state, onDecide }: ChatApprovalCardP
     : state === 'approved'
       ? 'border-emerald-700/60 bg-emerald-950/40'
       : 'border-amber-700/60 bg-amber-950/40'
-  const mcpServer = preview.kind === 'mcp' && preview.path.includes('::')
-    ? preview.path.slice(0, preview.path.indexOf('::'))
+  const mcpServer = preview.kind === 'mcp' && preview.path.includes('__')
+    ? preview.path.slice(0, preview.path.indexOf('__'))
     : null
-  const mcpToolLabel = preview.kind === 'mcp' && preview.path.includes('::')
-    ? preview.path.slice(preview.path.indexOf('::') + 2)
+  const mcpToolLabel = preview.kind === 'mcp' && preview.path.includes('__')
+    ? preview.path.slice(preview.path.indexOf('__') + 2)
     : preview.path
   return (
     <div className={`my-2 rounded-md border px-3 py-2 text-[1em] ${tone}`}>

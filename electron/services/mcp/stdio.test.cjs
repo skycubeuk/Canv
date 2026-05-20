@@ -37,8 +37,8 @@ describe('MCP stdio client', () => {
     })
     try {
       const tools = await service.listTools()
-      expect(tools.find((t) => t.name === 'srv::echo')).toBeTruthy()
-      const r = await service.callTool('srv::echo', { msg: 'hi' })
+      expect(tools.find((t) => t.name === 'srv__echo')).toBeTruthy()
+      const r = await service.callTool('srv__echo', { msg: 'hi' })
       expect(r.ok).toBe(true)
       expect(JSON.stringify(r.result)).toMatch(/echo:hi/)
     } finally {
@@ -56,7 +56,7 @@ describe('MCP stdio client', () => {
       }],
     })
     try {
-      const r = await service.callTool('srv::echo', { msg: 'err' })
+      const r = await service.callTool('srv__echo', { msg: 'err' })
       expect(r.ok).toBe(false)
       expect(r.error).toMatch(/boom/)
     } finally {

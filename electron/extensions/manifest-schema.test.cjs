@@ -391,7 +391,7 @@ describe('mcp manifest field', () => {
   }
 
   it('accepts mcp.tools with a fully-qualified name', () => {
-    const r = validateManifest({ ...base, capabilities: ['mcp.call'], mcp: { tools: ['fs::read_file'] } })
+    const r = validateManifest({ ...base, capabilities: ['mcp.call'], mcp: { tools: ['fs__read_file'] } })
     expect(r.ok).toBe(true)
   })
 
@@ -401,7 +401,7 @@ describe('mcp manifest field', () => {
     expect(r.errors.join(' ')).toMatch(/mcp\.tools/)
   })
 
-  it('refuses an mcp.tools entry without "::"', () => {
+  it('refuses an mcp.tools entry without "__"', () => {
     const r = validateManifest({ ...base, capabilities: ['mcp.call'], mcp: { tools: ['notqualified'] } })
     expect(r.ok).toBe(false)
   })

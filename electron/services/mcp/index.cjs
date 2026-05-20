@@ -79,7 +79,7 @@ function createMcpService({ getConfig } = {}) {
     const out = []
     for (const [name, h] of handles) {
       for (const t of h.tools) {
-        out.push({ ...t, name: `${name}::${t.name}`, server: name })
+        out.push({ ...t, name: `${name}__${t.name}`, server: name })
       }
     }
     return out
@@ -87,7 +87,7 @@ function createMcpService({ getConfig } = {}) {
 
   async function callTool(qualifiedName, args) {
     await ensureConnected()
-    const sep = qualifiedName.indexOf('::')
+    const sep = qualifiedName.indexOf('__')
     if (sep < 0) return { ok: false, error: `bad tool name: ${qualifiedName}` }
     const serverName = qualifiedName.slice(0, sep)
     const toolName = qualifiedName.slice(sep + 2)

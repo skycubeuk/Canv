@@ -988,12 +988,12 @@ describe('chatRunner — MCP integration', () => {
     ;(window as unknown as { canvMcp?: unknown }).canvMcp = undefined
   })
 
-  it('routes <server>::<tool> names to callMcpTool and requires approval', async () => {
+  it('routes <server>__<tool> names to callMcpTool and requires approval', async () => {
     const callTool = vi.fn().mockResolvedValue({ ok: true, result: { msg: 'ok' } })
     ;(window as unknown as { canvMcp: unknown }).canvMcp = {
       setServers: vi.fn(),
       listTools: vi.fn().mockResolvedValue([
-        { name: 'srv::t', server: 'srv', description: '', inputSchema: { type: 'object' } },
+        { name: 'srv__t', server: 'srv', description: '', inputSchema: { type: 'object' } },
       ]),
       callTool,
       reconnect: vi.fn(),
@@ -1005,7 +1005,7 @@ describe('chatRunner — MCP integration', () => {
         if (p.messages.length === 1) {
           return {
             text: '', truncated: false, stopReason: 'tool_use',
-            toolCalls: [{ id: 't1', name: 'srv::t', input: { a: 1 } }],
+            toolCalls: [{ id: 't1', name: 'srv__t', input: { a: 1 } }],
           }
         }
         return { text: 'done', truncated: false, stopReason: 'end_turn' }
@@ -1022,8 +1022,8 @@ describe('chatRunner — MCP integration', () => {
         return 'approve' as ApprovalDecision
       },
     })
-    expect(approvalCalls).toEqual(['srv::t'])
-    expect(callTool).toHaveBeenCalledWith('srv::t', { a: 1 })
+    expect(approvalCalls).toEqual(['srv__t'])
+    expect(callTool).toHaveBeenCalledWith('srv__t', { a: 1 })
   })
 
   it('exits cleanly when signal aborts mid-MCP-call (parity with native tools)', async () => {
@@ -1031,7 +1031,7 @@ describe('chatRunner — MCP integration', () => {
     ;(window as unknown as { canvMcp: unknown }).canvMcp = {
       setServers: vi.fn(),
       listTools: vi.fn().mockResolvedValue([
-        { name: 'srv::t', server: 'srv', description: '', inputSchema: { type: 'object' } },
+        { name: 'srv__t', server: 'srv', description: '', inputSchema: { type: 'object' } },
       ]),
       // callTool rejects with AbortError as soon as the signal aborts. The
       // bridge's callTool is invoked while signal is still live; the test
@@ -1051,7 +1051,7 @@ describe('chatRunner — MCP integration', () => {
         if (p.messages.length === 1) {
           return {
             text: '', truncated: false, stopReason: 'tool_use',
-            toolCalls: [{ id: 't1', name: 'srv::t', input: {} }],
+            toolCalls: [{ id: 't1', name: 'srv__t', input: {} }],
           }
         }
         // Should never run a second round — abort terminated the loop.

@@ -1,5 +1,5 @@
 export interface McpToolDef {
-  name: string            // fully-qualified: "<server>::<tool>"
+  name: string            // fully-qualified: "<server>__<tool>"
   server: string
   description: string
   inputSchema: unknown    // JSON Schema
@@ -34,5 +34,5 @@ export async function callMcpTool(name: string, args: unknown): Promise<unknown>
 }
 
 export function isMcpToolName(name: string): boolean {
-  return name.includes('::')
+  return name.includes('__')
 }

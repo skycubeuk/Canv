@@ -138,8 +138,8 @@ const EnginesSchema = z.object({
   ),
 })
 
-const McpToolName = z.string().regex(/^[a-z][a-z0-9_-]*::[a-z][a-z0-9_-]*$/, {
-  message: 'mcp tool name must be "<server>::<tool>" (lowercase, hyphens or underscores)',
+const McpToolName = z.string().regex(/^[a-z][a-z0-9_-]*__[a-z][a-z0-9_-]*$/, {
+  message: 'mcp tool name must be "<server>__<tool>" (lowercase letters/digits/hyphen; double-underscore separator)',
 })
 
 const McpSchema = z.object({
