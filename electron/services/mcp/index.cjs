@@ -173,6 +173,8 @@ function registerIpcHandlers(ipcMain, _deps) {
     await service.ensureConnected()
     return { ok: true }
   })
+  ipcMain.handle('canvMcp:testServer', async (_e, name) => service.testServer(name))
+  ipcMain.handle('canvMcp:reconnectServer', async (_e, name) => service.reconnectServer(name))
 
   return { service }
 }

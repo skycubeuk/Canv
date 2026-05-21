@@ -12,6 +12,16 @@ declare global {
       listTools: () => Promise<McpToolDef[]>
       callTool: (name: string, args: unknown) => Promise<{ ok: true; result: unknown } | { ok: false; error: string }>
       reconnect: () => Promise<{ ok: boolean }>
+      /** Connect (if not already) and return tools for one server, or the connect error. */
+      testServer: (name: string) => Promise<
+        | { ok: true; tools: McpToolDef[] }
+        | { ok: false; error: string }
+      >
+      /** Disconnect then reconnect one server. Returns the same shape as testServer. */
+      reconnectServer: (name: string) => Promise<
+        | { ok: true; tools: McpToolDef[] }
+        | { ok: false; error: string }
+      >
     }
   }
 }
