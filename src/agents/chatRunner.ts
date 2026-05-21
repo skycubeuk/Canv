@@ -47,7 +47,7 @@ function buildTools(): Promise<import('../adapters/types').ToolSchema[]> | impor
 }
 
 const FILE_MUTATING_TOOLS = new Set([
-  'create_file', 'edit_file', 'create_folder', 'delete_file', 'rename_file',
+  'create_file', 'edit_file', 'apply_edits', 'create_folder', 'delete_file', 'rename_file',
 ])
 const REGISTRY_TOOLS = new Set(['site_register', 'site_update'])
 
@@ -67,14 +67,27 @@ export function pathIsAutoApproved(call: { name: string; input: unknown }): bool
   return pathInSitesSandbox(input.path)
 }
 
-export interface WritePreview {
-  kind: 'create' | 'edit' | 'delete' | 'rename' | 'mkdir' | 'mcp'
-  path: string
-  diff?: { before: string; after: string }
-  newPath?: string
-  size?: number
-  contentPreview?: string
-}
+/**
+ * Discriminated union of preview shapes shown in the chat approval card.
+ *
+ * Most variants are file-mutating; `mcp` is a tool-call preview, and
+ * `apply_edits` is a multi-file anchor-based preview that needs a richer
+ * per-edit shape than the single-`path` mutating variants.
+ */
+export type WritePreview =
+  | {
+      kind: 'create' | 'edit' | 'delete' | 'rename' | 'mkdir' | 'mcp'
+      path: string
+      diff?: { before: string; after: string }
+      newPath?: string
+      size?: number
+      contentPreview?: string
+    }
+  | {
+      kind: 'apply_edits'
+      /** Per-edit summary — one row per anchor, multiple rows can target the same file. */
+      edits: Array<{ path: string; oldText: string; newText: string }>
+    }
 
 export interface RunChatTurnParams {
   adapter: LLMAdapter
@@ -114,6 +127,14 @@ function affectedPathsForCall(call: { name: string; input: unknown }): string[] 
       return typeof i.path === 'string' ? [i.path] : []
     case 'rename_file':
       return [i.from, i.to].filter((p): p is string => typeof p === 'string')
+    case 'apply_edits': {
+      const edits = Array.isArray(i.edits) ? i.edits as Array<{ path?: unknown }> : []
+      const paths = new Set<string>()
+      for (const e of edits) {
+        if (e && typeof e.path === 'string') paths.add(e.path)
+      }
+      return [...paths]
+    }
     case 'site_register':
     case 'site_update':
       return typeof i.folder === 'string' ? [i.folder] : []
@@ -537,6 +558,15 @@ async function buildWritePreview(call: ToolCall, ctx: ToolCtx): Promise<WritePre
         }
       } catch { before = '' }
       return { kind: 'edit', path, diff: { before, after: newContent } }
+    }
+    case 'apply_edits': {
+      const rawEdits = Array.isArray(input.edits) ? input.edits as Array<Record<string, unknown>> : []
+      const edits = rawEdits.map((e) => ({
+        path: typeof e.path === 'string' ? e.path : '',
+        oldText: typeof e.oldText === 'string' ? e.oldText : '',
+        newText: typeof e.newText === 'string' ? e.newText : '',
+      }))
+      return { kind: 'apply_edits', edits }
     }
     case 'delete_file':
       return { kind: 'delete', path }
