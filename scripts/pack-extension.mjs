@@ -10,7 +10,7 @@ const SKIP_DIRS = new Set(['node_modules', '.git'])
 const SKIP_FILE_RE = /(^\.|\.test\.[a-zA-Z0-9]+$)/   // hidden files OR *.test.*
 
 async function loadValidator() {
-  // manifest-schema.cjs is CJS — dynamic-imported from this ESM script.
+  // manifest-schema.cjs is CJS -- dynamic-imported from this ESM script.
   const mod = await import(pathToFileURL(path.resolve('electron/extensions/manifest-schema.cjs')).href)
   return mod.validateManifest
 }
@@ -44,7 +44,7 @@ export async function packExtension({ folder, output }) {
     const abs = path.join(folder, rel)
     const s = await stat(abs)
     if (s.size > MAX_ENTRY_BYTES) {
-      throw new Error(`entry "${rel}" is ${s.size} bytes — too large (max ${MAX_ENTRY_BYTES})`)
+      throw new Error(`entry "${rel}" is ${s.size} bytes -- too large (max ${MAX_ENTRY_BYTES})`)
     }
     zip.addLocalFile(abs, path.dirname(rel) === '.' ? '' : path.dirname(rel))
   }
