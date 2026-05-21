@@ -59,17 +59,30 @@ const LintRules = z.object({
   deadImages: z.boolean().default(true),
 }).default({ brokenLinks: true, frontMatter: true, headingSkip: true, deadImages: true })
 
-const ApiKeys = z.record(Provider, z.string()).default({ anthropic: '', openai: '', ollama: '' })
-const DefaultModel = z.record(Provider, z.string()).default({
-  anthropic: 'claude-sonnet-4-6',
-  openai: 'gpt-5.5',
-  ollama: 'llama3.1',
-})
-const MaxOutputTokens = z.record(Provider, z.number().int().positive()).default({
-  anthropic: 8192,
-  openai: 8192,
-  ollama: 4096,
-})
+// Per-provider records use z.object(...) rather than z.record(Provider, ...)
+// because Zod 4's record-with-enum-key requires EVERY enum value to be present
+// on parse. A user who has only configured one provider (the common case)
+// would otherwise fail parse → field reset to default → key lost on salvage.
+// The z.object form lets each provider field default independently and accepts
+// partial input. Output shape is unchanged — all three keys always present.
+const ApiKeys = z.object({
+  anthropic: z.string().default(''),
+  openai: z.string().default(''),
+  ollama: z.string().default(''),
+}).default({ anthropic: '', openai: '', ollama: '' })
+
+const DefaultModel = z.object({
+  anthropic: z.string().default('claude-sonnet-4-6'),
+  openai: z.string().default('gpt-5.5'),
+  ollama: z.string().default('llama3.1'),
+}).default({ anthropic: 'claude-sonnet-4-6', openai: 'gpt-5.5', ollama: 'llama3.1' })
+
+const MaxOutputTokens = z.object({
+  anthropic: z.number().int().positive().default(8192),
+  openai: z.number().int().positive().default(8192),
+  ollama: z.number().int().positive().default(4096),
+}).default({ anthropic: 8192, openai: 8192, ollama: 4096 })
+
 const BaseUrls = z.partialRecord(Provider, z.string()).default({ ollama: '' })
 
 export const SettingsSchema = z.object({

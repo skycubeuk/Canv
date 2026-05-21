@@ -19,6 +19,37 @@ describe('SettingsSchema', () => {
     expect(r.success).toBe(false)
   })
 
+  it('preserves a single-provider apiKeys entry and fills missing providers with defaults', () => {
+    // Regression: Zod 4's z.record(enum, ...) requires every enum key to be
+    // present, so a user with only one configured provider used to lose all
+    // their keys at salvage. The per-provider z.object shape accepts partial
+    // input and defaults the rest to empty strings.
+    const r = SettingsSchema.safeParse({ apiKeys: { anthropic: 'sk-real-key' } })
+    expect(r.success).toBe(true)
+    if (!r.success) return
+    expect(r.data.apiKeys.anthropic).toBe('sk-real-key')
+    expect(r.data.apiKeys.openai).toBe('')
+    expect(r.data.apiKeys.ollama).toBe('')
+  })
+
+  it('preserves a single-provider defaultModel entry and fills the rest with defaults', () => {
+    const r = SettingsSchema.safeParse({ defaultModel: { openai: 'gpt-custom' } })
+    expect(r.success).toBe(true)
+    if (!r.success) return
+    expect(r.data.defaultModel.openai).toBe('gpt-custom')
+    expect(r.data.defaultModel.anthropic).toBe('claude-sonnet-4-6')
+    expect(r.data.defaultModel.ollama).toBe('llama3.1')
+  })
+
+  it('preserves a single-provider maxOutputTokens entry and fills the rest with defaults', () => {
+    const r = SettingsSchema.safeParse({ maxOutputTokens: { anthropic: 16384 } })
+    expect(r.success).toBe(true)
+    if (!r.success) return
+    expect(r.data.maxOutputTokens.anthropic).toBe(16384)
+    expect(r.data.maxOutputTokens.openai).toBe(8192)
+    expect(r.data.maxOutputTokens.ollama).toBe(4096)
+  })
+
   it('clamps fontSize via the integer range refinement', () => {
     expect(SettingsSchema.safeParse({ fontSize: 11 }).success).toBe(false)
     expect(SettingsSchema.safeParse({ fontSize: 25 }).success).toBe(false)
