@@ -7,7 +7,10 @@ import { EnumControl } from './controls/EnumControl'
 import { ArrayOfObjectsControl } from './controls/ArrayOfObjectsControl'
 import { DiscriminatedUnionControl } from './controls/DiscriminatedUnionControl'
 import { JsonValueControl } from './controls/JsonValueControl'
-import { MCPRowExtras } from './mcp/MCPRowExtras'
+import { MCPRowExtrasHeader } from './mcp/MCPRowExtrasHeader'
+import { MCPRowExtrasPanel } from './mcp/MCPRowExtrasPanel'
+import { useMcpServerStatus } from './mcp/useMcpServerStatus'
+import type { RowExtrasConfig } from './controls/ArrayOfObjectsControl'
 import type { SettingsFieldMeta } from '../../hooks/settingsSchema'
 
 interface Props<T extends z.ZodObject<z.ZodRawShape>> {
@@ -307,11 +310,7 @@ function renderField(
     }
     const arr = (Array.isArray(value) ? value : []) as unknown[]
     const itemPath = `${path}[]`
-    const rowExtrasRenderer = meta.rowExtras === 'mcp'
-      ? (item: unknown, idx: number, helpers: { isExpanded: boolean; onCollapsed: (cb: () => void) => () => void }) => (
-          <MCPRowExtras item={item} idx={idx} helpers={helpers} />
-        )
-      : undefined
+    const rowExtrasConfig = meta.rowExtras === 'mcp' ? MCP_ROW_EXTRAS : undefined
     return (
       <ArrayOfObjectsControl
         key={key}
@@ -323,7 +322,7 @@ function renderField(
         itemLabel={meta.itemLabel}
         createItem={() => makeDefault(elem)}
         renderItemForm={(itemSchema, item, onItemChange) => renderItem(itemSchema, item, onItemChange, itemPath)}
-        renderRowExtras={rowExtrasRenderer}
+        renderRowExtras={rowExtrasConfig}
       />
     )
   }
@@ -380,6 +379,18 @@ function renderItem(
 
   console.warn(`[SchemaSettingsForm] no control for "${path}" (zod type: non-object item ${defOf(inner)?.type}). Deferred.`)
   return null
+}
+
+// Stable module-scope reference so the ArrayOfObjectsControl's row-extras
+// config prop doesn't change identity on every render. The state type is
+// `unknown` at the slot boundary; we cast back inside the renderers.
+type McpRowState = ReturnType<typeof useMcpServerStatus>
+const MCP_ROW_EXTRAS: RowExtrasConfig<unknown> = {
+  useRowState: (item, _idx, helpers) => useMcpServerStatus(item, helpers.onCollapsed),
+  header: (state, helpers) => (
+    <MCPRowExtrasHeader state={state as McpRowState} isExpanded={helpers.isExpanded} />
+  ),
+  panel: (state) => <MCPRowExtrasPanel state={state as McpRowState} />,
 }
 
 function makeDefault(schema: z.ZodTypeAny): unknown {

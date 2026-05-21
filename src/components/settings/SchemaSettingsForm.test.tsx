@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { z } from 'zod'
 import { SchemaSettingsForm } from './SchemaSettingsForm'
 import { SettingsSchema } from '../../hooks/settingsSchema'
@@ -147,5 +147,23 @@ describe('SchemaSettingsForm — mcpServers rowExtras', () => {
     // Status dot has data-role="mcp-row-status-dot"
     const dot = document.querySelector('[data-role="mcp-row-status-dot"]')
     expect(dot).not.toBeNull()
+  })
+
+  // Regression: the slot was previously rendered TWICE per row (once in the
+  // header, once in the expanded panel). When the renderer was a component
+  // that called useMcpServerStatus, that meant two hook calls per row → two
+  // testServer IPCs per row → 4 under StrictMode. The structural fix lifts
+  // the hook into a per-row RowExtrasContext.Provider so it runs exactly once.
+  it('only calls testServer ONCE per mcpServers row (no dual-render duplicate IPC)', async () => {
+    const testServerSpy = vi.fn().mockResolvedValue({ ok: true, tools: [] })
+    ;(window as unknown as { canvMcp: { testServer: typeof testServerSpy; reconnectServer: typeof testServerSpy } }).canvMcp = {
+      testServer: testServerSpy,
+      reconnectServer: vi.fn().mockResolvedValue({ ok: true, tools: [] }),
+    }
+    const value = SettingsSchema.parse({
+      mcpServers: [{ name: 'a', transport: 'stdio', command: 'echo' }],
+    })
+    render(<SchemaSettingsForm schema={SettingsSchema} value={value} onChange={() => {}} sectionFilter={(s) => s === 'mcp'} />)
+    await waitFor(() => expect(testServerSpy).toHaveBeenCalledTimes(1))
   })
 })

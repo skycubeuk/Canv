@@ -1,5 +1,21 @@
-import { useRef, useState, type ReactNode } from 'react'
+import { createContext, useContext, useRef, useState, type ReactNode } from 'react'
 import type { z } from 'zod'
+
+/** Config for the per-row extras slot. `useRowState` is called exactly ONCE
+ *  per row (inside a small Provider component) and its return value is shared
+ *  with both renderers through a per-row React context — no duplicate hook
+ *  calls, no duplicate IPC, no duplicate DOM. */
+export interface RowExtrasConfig<T> {
+  useRowState: (
+    item: T,
+    idx: number,
+    helpers: { onCollapsed: (cb: () => void) => () => void },
+  ) => unknown
+  /** Rendered inside the row header strip, regardless of expand state. */
+  header: (state: unknown, helpers: { isExpanded: boolean }) => ReactNode
+  /** Rendered inside the expanded form panel, only when `isExpanded`. */
+  panel: (state: unknown) => ReactNode
+}
 
 interface Props<T> {
   value: T[]
@@ -14,17 +30,54 @@ interface Props<T> {
   /** Factory for a fresh item; the parent supplies this so it can pick a
    *  discriminator variant if the item schema is a discriminated union. */
   createItem: () => T
-  /** Optional bespoke content rendered alongside each row. The slot consumer
-   *  receives the item, its index, and helpers it can use to coordinate with
-   *  the row's expand state (e.g. fire a test on collapse). The returned node
-   *  is rendered in BOTH the collapsed header (next to the row buttons) AND
-   *  inside the expanded panel (below `renderItemForm`); the consumer uses
-   *  `helpers.isExpanded` to decide which portion to show in each slot. */
-  renderRowExtras?: (item: T, idx: number, helpers: {
-    isExpanded: boolean
-    /** Subscribe to row-collapse events. Returns an unsubscribe function. */
-    onCollapsed: (cb: () => void) => () => void
-  }) => ReactNode
+  /** Bespoke per-row content rendered in TWO positions: a header slot (always
+   *  visible alongside the row's action buttons) and a panel slot (visible
+   *  only when the row is expanded, rendered below the form fields). Per-row
+   *  state (e.g. an async status hook) is lifted by `useRowState` — called
+   *  ONCE per row — and threaded into both renderers via a per-row React
+   *  context. */
+  renderRowExtras?: RowExtrasConfig<T>
+}
+
+// Per-row context. The value is intentionally `unknown` because each consumer
+// owns the shape returned by its `useRowState`; the consumer casts inside its
+// renderers.
+const RowExtrasContext = createContext<unknown>(null)
+
+/** Wraps a single row and calls its `useRowState` hook exactly once. The
+ *  returned state is exposed through `RowExtrasContext` to both the header
+ *  and panel consumers. */
+function RowExtrasProvider<T>({
+  item,
+  idx,
+  onCollapsed,
+  useRowState,
+  children,
+}: {
+  item: T
+  idx: number
+  onCollapsed: (cb: () => void) => () => void
+  useRowState: RowExtrasConfig<T>['useRowState']
+  children: ReactNode
+}) {
+  const state = useRowState(item, idx, { onCollapsed })
+  return <RowExtrasContext.Provider value={state}>{children}</RowExtrasContext.Provider>
+}
+
+function HeaderConsumer({
+  render,
+  isExpanded,
+}: {
+  render: RowExtrasConfig<unknown>['header']
+  isExpanded: boolean
+}) {
+  const state = useContext(RowExtrasContext)
+  return <>{render(state, { isExpanded })}</>
+}
+
+function PanelConsumer({ render }: { render: RowExtrasConfig<unknown>['panel'] }) {
+  const state = useContext(RowExtrasContext)
+  return <>{render(state)}</>
 }
 
 export function ArrayOfObjectsControl<T>({
@@ -91,6 +144,86 @@ export function ArrayOfObjectsControl<T>({
     setExpandedIdx(nextIdx)
   }
 
+  // The row body — extracted so we can conditionally wrap it in a
+  // RowExtrasProvider when a `renderRowExtras` config is supplied. The
+  // header / panel slots inside read from RowExtrasContext, so wrapping the
+  // whole `<li>` lets both slots see the same state from a single hook call.
+  const renderRow = (item: T, idx: number) => {
+    const expanded = expandedIdx === idx
+    const body = (
+      <li key={idx} className="rounded border border-default">
+        <div className="flex items-center justify-between px-2 py-1 gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              if (expanded) {
+                // Transitioning expanded → collapsed; fire listeners BEFORE the
+                // state update so a synchronous listener still sees the row as
+                // expanded if it needs to.
+                fireCollapse(idx)
+                setExpandedIdx(null)
+              } else {
+                setExpandedIdx(idx)
+              }
+            }}
+            className="flex-1 text-left text-xs truncate hover:text-default"
+          >
+            {itemLabel ? itemLabel(item) : `Item ${idx + 1}`}
+          </button>
+          <div className="flex items-center gap-1 shrink-0">
+            {renderRowExtras && (
+              <HeaderConsumer render={renderRowExtras.header} isExpanded={expanded} />
+            )}
+            <button
+              type="button"
+              onClick={() => move(idx, -1)}
+              disabled={idx === 0}
+              className="px-1 text-xs disabled:opacity-30"
+              aria-label="Move up"
+            >
+              ↑
+            </button>
+            <button
+              type="button"
+              onClick={() => move(idx, +1)}
+              disabled={idx === value.length - 1}
+              className="px-1 text-xs disabled:opacity-30"
+              aria-label="Move down"
+            >
+              ↓
+            </button>
+            <button
+              type="button"
+              onClick={() => remove(idx)}
+              className="px-1 text-xs text-red-500 hover:text-red-400"
+              aria-label="Remove"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+        {expanded && (
+          <div className="border-t border-default p-2 flex flex-col gap-2">
+            {renderItemForm(itemSchema, item, (next) => update(idx, next))}
+            {renderRowExtras && <PanelConsumer render={renderRowExtras.panel} />}
+          </div>
+        )}
+      </li>
+    )
+    if (!renderRowExtras) return body
+    return (
+      <RowExtrasProvider
+        key={idx}
+        item={item}
+        idx={idx}
+        onCollapsed={(cb) => subscribeCollapse(idx, cb)}
+        useRowState={renderRowExtras.useRowState}
+      >
+        {body}
+      </RowExtrasProvider>
+    )
+  }
+
   return (
     <section className="flex flex-col gap-2 text-sm">
       <header className="flex items-baseline justify-between">
@@ -106,73 +239,7 @@ export function ArrayOfObjectsControl<T>({
         <p className="text-xs text-muted italic">None configured.</p>
       ) : (
         <ul className="flex flex-col gap-1">
-          {value.map((item, idx) => {
-            const expanded = expandedIdx === idx
-            const extras = renderRowExtras
-              ? renderRowExtras(item, idx, {
-                  isExpanded: expanded,
-                  onCollapsed: (cb) => subscribeCollapse(idx, cb),
-                })
-              : null
-            return (
-              <li key={idx} className="rounded border border-default">
-                <div className="flex items-center justify-between px-2 py-1 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (expanded) {
-                        // Transitioning expanded → collapsed; fire listeners BEFORE
-                        // the state update so a synchronous listener still sees the
-                        // row as expanded if it needs to.
-                        fireCollapse(idx)
-                        setExpandedIdx(null)
-                      } else {
-                        setExpandedIdx(idx)
-                      }
-                    }}
-                    className="flex-1 text-left text-xs truncate hover:text-default"
-                  >
-                    {itemLabel ? itemLabel(item) : `Item ${idx + 1}`}
-                  </button>
-                  <div className="flex items-center gap-1 shrink-0">
-                    {extras}
-                    <button
-                      type="button"
-                      onClick={() => move(idx, -1)}
-                      disabled={idx === 0}
-                      className="px-1 text-xs disabled:opacity-30"
-                      aria-label="Move up"
-                    >
-                      ↑
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => move(idx, +1)}
-                      disabled={idx === value.length - 1}
-                      className="px-1 text-xs disabled:opacity-30"
-                      aria-label="Move down"
-                    >
-                      ↓
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => remove(idx)}
-                      className="px-1 text-xs text-red-500 hover:text-red-400"
-                      aria-label="Remove"
-                    >
-                      ×
-                    </button>
-                  </div>
-                </div>
-                {expanded && (
-                  <div className="border-t border-default p-2 flex flex-col gap-2">
-                    {renderItemForm(itemSchema, item, (next) => update(idx, next))}
-                    {extras}
-                  </div>
-                )}
-              </li>
-            )
-          })}
+          {value.map((item, idx) => renderRow(item, idx))}
         </ul>
       )}
     </section>
