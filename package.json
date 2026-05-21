@@ -30,7 +30,8 @@
     "skill:install": "node scripts/install-skill.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "test:bench": "vitest bench --run"
   },
   "dependencies": {
     "@codemirror/commands": "^6.10.3",

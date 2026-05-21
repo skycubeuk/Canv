@@ -1,5 +1,24 @@
+/**
+ * Keystroke pipeline benchmark.
+ *
+ * Measures the cost of a single editor keystroke through the Canv live-docs
+ * channel: a CodeMirror transaction (apply a change), then a
+ * `liveDocsChannel.publish(key)`, then a subscriber pulling the current
+ * doc text via the registered getter (`channel.read(key)`).
+ *
+ * The doc is ~2 MB of deterministic markdown so the bench reflects a
+ * worst-case "large notebook" workload rather than a trivial in-memory
+ * string. We deliberately use the headless `EditorState` (not `EditorView`)
+ * so the bench is environment-agnostic — `EditorView` requires a real DOM
+ * container which jsdom can host but adds layout/paint cost orthogonal to
+ * the notification path we want to measure.
+ *
+ * Treat the printed p99 as a regression baseline for the live-doc
+ * notification pipeline.
+ */
 import { bench, describe } from 'vitest'
 import { EditorState } from '@codemirror/state'
+import { createLiveDocsChannel } from './useFocusedDocText'
 
 function makeDoc(targetBytes: number): string {
   const line = 'The quick brown fox jumps over the lazy dog. '
@@ -7,23 +26,25 @@ function makeDoc(targetBytes: number): string {
   return Array.from({ length: lines }, () => line).join('\n')
 }
 
-describe('live-buffer keystroke pipeline', () => {
-  const doc = makeDoc(2 * 1024 * 1024) // 2 MB
+describe('live-buffer keystroke pipeline — 2 MB doc', () => {
+  const doc = makeDoc(2 * 1024 * 1024)
+  const channel = createLiveDocsChannel()
+  let state = EditorState.create({ doc })
+  // Subscriber-pulled sink — registered getter returns the live state's doc.
+  channel.setGetter((_key: string) => state.doc.toString())
+  let sink: string | undefined
+  channel.subscribe((key: string) => {
+    sink = channel.read(key)
+    void sink
+  })
 
   bench(
-    '1000 single-character inserts on 2MB doc',
+    'EditorState.update insert -> channel.publish -> subscriber pulls read()',
     () => {
-      let state = EditorState.create({ doc })
-      for (let i = 0; i < 1000; i++) {
-        const pos = (i * 1024) % state.doc.length
-        const tr = state.update({ changes: { from: pos, insert: 'x' } })
-        state = tr.state
-        // Notification-only — subscribers pull text on demand via the registered
-        // getter (the change in src/hooks/useFocusedDocText.ts that this bench
-        // is the baseline for). Bench measures the pure CodeMirror transaction
-        // cost without the dead-weight string mirror.
-      }
+      const tr = state.update({ changes: { from: 0, insert: 'x' } })
+      state = tr.state
+      channel.publish('bench:key')
     },
-    { iterations: 5 },
+    { iterations: 1000, warmupIterations: 100 },
   )
 })
