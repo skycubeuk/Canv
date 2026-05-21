@@ -1,5 +1,6 @@
 import type { CanvFs } from '../lib/fs'
 import type { ToolSchema } from '../adapters/types'
+import type { AnchorEdit, ApplyEditsResult } from '../services/workspaceEdits'
 
 export type JSONSchema = Record<string, unknown>
 
@@ -11,6 +12,10 @@ export interface ToolCtx {
   getEditorContent: (path: string) => string | null
   /** Replaces the active editor's full document; only valid when `path === activeDocPath`. */
   applyEditorEdit: (path: string, newContent: string) => Promise<void>
+  /** Workspace-service surface for tools that need cross-file primitives. */
+  workspace: {
+    applyEdits: (edits: AnchorEdit[]) => Promise<ApplyEditsResult>
+  }
   signal: AbortSignal
 }
 

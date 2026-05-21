@@ -10,7 +10,8 @@ import { runChatTurn, type WritePreview, type ApprovalDecision } from '../agents
 import { truncateForRetry, truncateForEditAndRetry } from '../agents/retryOrchestrator'
 import { buildInventory, formatInventoryForPrompt } from '../lib/inventory'
 import { buildChatSystemPreamble } from '../lib/buildChatSystemPreamble'
-import { getAdapter } from '../adapters'
+import { getAdapter, configuredProviders } from '../adapters'
+import type { Provider, Settings } from './settingsSchema'
 import { getFs } from '../lib/fs'
 import type { ToolCall } from '../adapters/types'
 import type { CanvHistory } from '../lib/history'
@@ -111,6 +112,44 @@ function readPersisted(): PersistedState | null {
   }
 }
 
+/** Pick the provider+model an empty session should adopt. Chooses the user's
+ *  default provider if it's configured; otherwise the first provider that has
+ *  an API key (or non-empty ollamaModels list). Falls back to the user's
+ *  default if nothing is configured at all so the UI stays self-consistent. */
+function pickDefaultProviderModel(settings: Settings): { provider: ChatProvider; model: string } {
+  const configured = new Set<Provider>(configuredProviders(settings))
+  const provider: Provider = configured.has(settings.provider)
+    ? settings.provider
+    : ((['anthropic', 'openai', 'ollama'] as Provider[]).find((p) => configured.has(p)) ?? settings.provider)
+  const models = provider === 'ollama' ? settings.ollamaModels : (getAdapter(provider).models ?? [])
+  const stored = settings.defaultModel[provider]
+  const model = models.length === 0
+    ? stored
+    : (models.includes(stored) ? stored : models[0])
+  return { provider: provider as ChatProvider, model }
+}
+
+/** An empty session whose provider is no longer configured (e.g. the user
+ *  removed that API key after creating it) becomes impossible to send to —
+ *  it'd hit a "not configured" error. Reseed empty sessions to the current
+ *  effective default at boot so the user isn't stuck looking at an impossible
+ *  provider+model combo in the chat header. Sessions with messages are left
+ *  alone — they're intentionally locked to their original pair. */
+function reseedEmptyStaleSessions(state: PersistedState, settings: Settings): PersistedState {
+  const configured = new Set<Provider>(configuredProviders(settings))
+  if (configured.size === 0) return state  // nothing to reseed against
+  let changed = false
+  const next = state.sessions.map((s) => {
+    if (s.messages.length > 0) return s   // locked — leave alone
+    if (configured.has(s.provider as Provider)) return s   // already on a usable provider
+    changed = true
+    const fresh = pickDefaultProviderModel(settings)
+    return { ...s, provider: fresh.provider, model: fresh.model }
+  })
+  if (!changed) return state
+  return { ...state, sessions: next }
+}
+
 function deriveTitle(session: ChatSession): string {
   const firstUser = session.messages.find((m) => m.role === 'user')
   if (!firstUser) return 'New chat'
@@ -123,10 +162,21 @@ export function useChatSessions(args: UseChatSessionsArgs): UseChatSessionsApi {
 
   const [state, setState] = useState<PersistedState>(() => {
     const persisted = readPersisted()
-    if (persisted) return persisted
-    const seed = makeEmptySession(settings.provider, settings.defaultModel[settings.provider])
-    return { sessions: [seed], activeId: seed.id }
+    if (persisted) return reseedEmptyStaleSessions(persisted, settings)
+    const seed = pickDefaultProviderModel(settings)
+    const session = makeEmptySession(seed.provider, seed.model)
+    return { sessions: [session], activeId: session.id }
   })
+
+  // If the user's API keys change at runtime (added a key, removed a key),
+  // re-evaluate empty sessions so they migrate off any provider that just
+  // became unconfigured. Sessions with messages are intentionally not
+  // touched — they're locked to their original pair.
+  useEffect(() => {
+    setState((prev) => reseedEmptyStaleSessions(prev, settings))
+    // Only react to apiKeys + ollamaModels changes; broader settings shifts
+    // (font size, theme) shouldn't churn the chat session shape.
+  }, [settings.apiKeys, settings.baseUrls, settings.ollamaModels])
 
   useEffect(() => {
     try {
@@ -350,6 +400,7 @@ export function useChatSessions(args: UseChatSessionsArgs): UseChatSessionsApi {
               if (path !== args.workspace.activeMarkdownRel) throw new Error(`Cannot apply editor edit to non-active path: ${path}`)
               v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: newContent } })
             },
+            workspace: { applyEdits: args.workspace.applyEdits },
             signal: rt.abort.signal,
           },
           requestApproval: (call, preview) => requestApproval(sessionId, call, preview),
