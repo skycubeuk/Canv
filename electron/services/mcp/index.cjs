@@ -165,7 +165,9 @@ function createMcpService({ getConfig } = {}) {
 
 function registerIpcHandlers(ipcMain, _deps) {
   let currentConfig = []
-  const service = createMcpService({ getConfig: () => currentConfig })
+  // Route through `module.exports.createMcpService` so tests can `vi.spyOn`
+  // the factory to inject a stub service without spawning real subprocesses.
+  const service = module.exports.createMcpService({ getConfig: () => currentConfig })
 
   ipcMain.handle('canvMcp:setServers', async (_e, cfgs) => {
     currentConfig = Array.isArray(cfgs) ? cfgs : []
