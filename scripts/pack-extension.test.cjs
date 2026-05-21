@@ -1,9 +1,24 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import path from 'node:path'
-import AdmZip from 'adm-zip'
-import { packExtension } from './pack-extension.mjs'
+'use strict'
+
+// CJS test for the ESM pack-extension.mjs script. Kept as .cjs (not .mjs)
+// because vitest's worker-thread loader on Windows fails to parse this file
+// with "SyntaxError: Invalid or unexpected token" (no line/column) when it's
+// .mjs — even though the file is pure ASCII and parses fine on Linux + macOS.
+// The script under test stays ESM; we load it via dynamic import().
+
+const { mkdtemp, rm, writeFile, mkdir } = require('node:fs/promises')
+const { tmpdir } = require('node:os')
+const path = require('node:path')
+const AdmZip = require('adm-zip')
+
+let packExtension
+
+beforeAll(async () => {
+  const mod = await import(require('node:url').pathToFileURL(
+    path.resolve(__dirname, 'pack-extension.mjs'),
+  ).href)
+  packExtension = mod.packExtension
+})
 
 describe('packExtension', () => {
   let dir

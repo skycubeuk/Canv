@@ -39,14 +39,13 @@ export default defineConfig({
           name: 'scripts',
           environment: 'node',
           globals: true,
-          include: ['scripts/**/*.test.mjs'],
-          // Use forks (child processes) instead of the default worker_threads
-          // pool. ESM `.mjs` module resolution inside Node worker_threads has
-          // flaky behaviour on Windows — vitest reports test-file load errors
-          // as "SyntaxError: Invalid or unexpected token" with no line/column,
-          // even when the file is pure ASCII. Forks mirror a normal Node
-          // process and load ESM cleanly across all three OSes.
-          pool: 'forks',
+          // .cjs only. ESM .mjs test files in this project failed to load on
+          // Windows under vitest with "SyntaxError: Invalid or unexpected
+          // token" (no line/column) even when the file was pure ASCII; the
+          // worker pool change to 'forks' didn't help. CJS tests load
+          // cleanly across all three OSes. The scripts being tested can
+          // stay ESM — the .cjs test uses dynamic import() to load them.
+          include: ['scripts/**/*.test.cjs'],
           // Explicitly no benches in this project.
           benchmark: {
             include: [],
