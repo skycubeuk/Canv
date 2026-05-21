@@ -98,3 +98,31 @@ describe('SchemaSettingsForm', () => {
     expect('command' in switched).toBe(false)
   })
 })
+
+describe('SchemaSettingsForm — primitive-array + record dispatch', () => {
+  const PrimitiveSchema = z.object({
+    args: z.array(z.string()).optional().meta({ ui: 'auto', section: 's', label: 'Args' }),
+    env: z.record(z.string(), z.string()).optional().meta({ ui: 'auto', section: 's', label: 'Env' }),
+  })
+
+  it('dispatches z.array(z.string()) to JsonValueControl (textarea, not row-of-rows)', () => {
+    render(<SchemaSettingsForm schema={PrimitiveSchema} value={{ args: ['-y', '/tmp'] }} onChange={() => {}} />)
+    const taArgs = screen.getAllByRole('textbox').find((t) => (t as HTMLTextAreaElement).value.includes('-y'))
+    expect(taArgs).toBeDefined()
+    // No "+ Add" button (that's the ArrayOfObjectsControl signature)
+    expect(screen.queryByText('+ Add')).toBeNull()
+  })
+
+  it('dispatches z.record to JsonValueControl', () => {
+    render(<SchemaSettingsForm schema={PrimitiveSchema} value={{ env: { FOO: 'bar' } }} onChange={() => {}} />)
+    const tas = screen.getAllByRole('textbox') as HTMLTextAreaElement[]
+    expect(tas.some((t) => t.value.includes('"FOO"'))).toBe(true)
+  })
+
+  it('unwraps z.optional so the inner shape decides the control', () => {
+    // `args` is z.array(z.string()).optional() — without the unwrap it would
+    // hit the ZodOptional warn-and-skip branch.
+    const r = render(<SchemaSettingsForm schema={PrimitiveSchema} value={{}} onChange={() => {}} />)
+    expect(r.container.querySelector('textarea')).not.toBeNull()
+  })
+})
