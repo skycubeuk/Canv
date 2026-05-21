@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { z } from 'zod'
 import { SchemaSettingsForm } from './SchemaSettingsForm'
@@ -124,5 +124,28 @@ describe('SchemaSettingsForm — primitive-array + record dispatch', () => {
     // hit the ZodOptional warn-and-skip branch.
     const r = render(<SchemaSettingsForm schema={PrimitiveSchema} value={{}} onChange={() => {}} />)
     expect(r.container.querySelector('textarea')).not.toBeNull()
+  })
+})
+
+describe('SchemaSettingsForm — mcpServers rowExtras', () => {
+  beforeEach(() => {
+    ;(window as unknown as { canvMcp: { testServer: (n: string) => Promise<{ ok: true; tools: [] }>; reconnectServer: (n: string) => Promise<{ ok: true; tools: [] }> } }).canvMcp = {
+      testServer: vi.fn().mockResolvedValue({ ok: true, tools: [] }),
+      reconnectServer: vi.fn().mockResolvedValue({ ok: true, tools: [] }),
+    }
+  })
+
+  afterEach(() => {
+    delete (window as unknown as { canvMcp?: unknown }).canvMcp
+  })
+
+  it('renders an MCPRowExtras status dot next to each mcpServers row', () => {
+    const value = SettingsSchema.parse({
+      mcpServers: [{ name: 'a', transport: 'stdio', command: 'echo' }],
+    })
+    render(<SchemaSettingsForm schema={SettingsSchema} value={value} onChange={() => {}} sectionFilter={(s) => s === 'mcp'} />)
+    // Status dot has data-role="mcp-row-status-dot"
+    const dot = document.querySelector('[data-role="mcp-row-status-dot"]')
+    expect(dot).not.toBeNull()
   })
 })

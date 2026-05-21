@@ -7,6 +7,7 @@ import { EnumControl } from './controls/EnumControl'
 import { ArrayOfObjectsControl } from './controls/ArrayOfObjectsControl'
 import { DiscriminatedUnionControl } from './controls/DiscriminatedUnionControl'
 import { JsonValueControl } from './controls/JsonValueControl'
+import { MCPRowExtras } from './mcp/MCPRowExtras'
 import type { SettingsFieldMeta } from '../../hooks/settingsSchema'
 
 interface Props<T extends z.ZodObject<z.ZodRawShape>> {
@@ -306,6 +307,11 @@ function renderField(
     }
     const arr = (Array.isArray(value) ? value : []) as unknown[]
     const itemPath = `${path}[]`
+    const rowExtrasRenderer = meta.rowExtras === 'mcp'
+      ? (item: unknown, idx: number, helpers: { isExpanded: boolean; onCollapsed: (cb: () => void) => () => void }) => (
+          <MCPRowExtras item={item} idx={idx} helpers={helpers} />
+        )
+      : undefined
     return (
       <ArrayOfObjectsControl
         key={key}
@@ -317,6 +323,7 @@ function renderField(
         itemLabel={meta.itemLabel}
         createItem={() => makeDefault(elem)}
         renderItemForm={(itemSchema, item, onItemChange) => renderItem(itemSchema, item, onItemChange, itemPath)}
+        renderRowExtras={rowExtrasRenderer}
       />
     )
   }

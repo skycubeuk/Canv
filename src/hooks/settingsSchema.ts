@@ -24,6 +24,11 @@ export interface SettingsFieldMeta {
   scope?: 'user' | 'workspace' | 'both'
   /** Hide from auto-gen even if section is set (e.g. dev-only fields). */
   hidden?: boolean
+  /** Mounts a bespoke per-row component (rendered alongside the auto-gen
+   *  form fields) when the renderer dispatches this field to an
+   *  ArrayOfObjectsControl. The renderer's known-keys table maps the
+   *  string to the concrete component. */
+  rowExtras?: 'mcp'
 }
 
 export const Provider = z.enum(['anthropic', 'openai', 'ollama'])
@@ -153,6 +158,7 @@ export const SettingsSchema = z.object({
     ui: 'auto', section: 'mcp', label: 'MCP servers',
     help: 'Model Context Protocol servers available to chat and to gated extensions.',
     itemSchema: McpServerConfigSchema,
+    rowExtras: 'mcp',
     itemLabel: (item: unknown) => {
       const it = item as Partial<McpServerConfig> | undefined
       return it?.name || '(unnamed server)'
