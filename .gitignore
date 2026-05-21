@@ -40,3 +40,6 @@ site/.astro/
 
 # Local-only brainstorming input
 PLAN.md
+
+# Coverage reports
+coverage/
