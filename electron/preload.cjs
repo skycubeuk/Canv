@@ -232,6 +232,8 @@ if (!isDockPopout()) {
     listTools:  () => ipcRenderer.invoke('canvMcp:listTools'),
     callTool:   (name, args) => ipcRenderer.invoke('canvMcp:callTool', name, args),
     reconnect:  () => ipcRenderer.invoke('canvMcp:reconnect'),
+    testServer:      (name) => ipcRenderer.invoke('canvMcp:testServer', name),
+    reconnectServer: (name) => ipcRenderer.invoke('canvMcp:reconnectServer', name),
   })
 
   contextBridge.exposeInMainWorld('canvExtensionsDev', {

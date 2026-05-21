@@ -118,8 +118,49 @@ function createMcpService({ getConfig } = {}) {
     }
   }
 
-  return { listTools, callTool, ensureConnected, shutdown,
-           __test__: { handles, connectOne, disconnectOne } }
+  /**
+   * Connect (if not already) and return the cached tool list for one server.
+   *
+   * **Caveat**: this method is idempotent on the handle — if a previous
+   * connect succeeded but the transport has since died silently (e.g. an stdio
+   * subprocess crashed without closing the SDK client), `testServer` will
+   * report success against the dead handle. Use `reconnectServer` for an
+   * unambiguous fresh handshake. The Phase 4.5 UI surfaces a Retry button
+   * that calls `reconnectServer` to give the user that escape hatch.
+   */
+  async function testServer(name) {
+    const cfgs = (typeof getConfig === 'function' ? getConfig() : []) || []
+    const cfg = cfgs.find((c) => c && c.name === name)
+    if (!cfg) return { ok: false, error: `no server named "${name}"` }
+    try {
+      if (!__test__.handles.has(name)) {
+        await __test__.connectOne(cfg)
+      }
+      const h = __test__.handles.get(name)
+      if (!h) return { ok: false, error: 'connection succeeded but no handle was registered' }
+      return {
+        ok: true,
+        tools: h.tools.map((t) => ({
+          name: t.name,
+          description: t.description ?? '',
+          inputSchema: t.inputSchema ?? { type: 'object' },
+        })),
+      }
+    } catch (e) {
+      return { ok: false, error: (e && e.message) || String(e) }
+    }
+  }
+
+  async function reconnectServer(name) {
+    await __test__.disconnectOne(name)
+    return testServer(name)
+  }
+
+  // Expose the inner refs as an object so tests can spy on them. testServer /
+  // reconnectServer route through this object so the spies actually intercept.
+  const __test__ = { handles, connectOne, disconnectOne }
+
+  return { listTools, callTool, ensureConnected, shutdown, testServer, reconnectServer, __test__ }
 }
 
 function registerIpcHandlers(ipcMain, _deps) {
@@ -139,6 +180,8 @@ function registerIpcHandlers(ipcMain, _deps) {
     await service.ensureConnected()
     return { ok: true }
   })
+  ipcMain.handle('canvMcp:testServer', async (_e, name) => service.testServer(name))
+  ipcMain.handle('canvMcp:reconnectServer', async (_e, name) => service.reconnectServer(name))
 
   return { service }
 }

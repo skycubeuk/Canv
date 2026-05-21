@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { z } from 'zod'
 import { SchemaSettingsForm } from './SchemaSettingsForm'
 import { SettingsSchema } from '../../hooks/settingsSchema'
@@ -96,5 +96,113 @@ describe('SchemaSettingsForm', () => {
     expect(switched.transport).toBe('http')
     expect(switched.name).toBe('fs')
     expect('command' in switched).toBe(false)
+  })
+})
+
+describe('SchemaSettingsForm — primitive-array + record dispatch', () => {
+  const PrimitiveSchema = z.object({
+    args: z.array(z.string()).optional().meta({ ui: 'auto', section: 's', label: 'Args' }),
+    env: z.record(z.string(), z.string()).optional().meta({ ui: 'auto', section: 's', label: 'Env' }),
+  })
+
+  it('dispatches z.array(z.string()) to JsonValueControl (textarea, not row-of-rows)', () => {
+    render(<SchemaSettingsForm schema={PrimitiveSchema} value={{ args: ['-y', '/tmp'] }} onChange={() => {}} />)
+    const taArgs = screen.getAllByRole('textbox').find((t) => (t as HTMLTextAreaElement).value.includes('-y'))
+    expect(taArgs).toBeDefined()
+    // No "+ Add" button (that's the ArrayOfObjectsControl signature)
+    expect(screen.queryByText('+ Add')).toBeNull()
+  })
+
+  it('dispatches z.record to JsonValueControl', () => {
+    render(<SchemaSettingsForm schema={PrimitiveSchema} value={{ env: { FOO: 'bar' } }} onChange={() => {}} />)
+    const tas = screen.getAllByRole('textbox') as HTMLTextAreaElement[]
+    expect(tas.some((t) => t.value.includes('"FOO"'))).toBe(true)
+  })
+
+  it('unwraps z.optional so the inner shape decides the control', () => {
+    // `args` is z.array(z.string()).optional() — without the unwrap it would
+    // hit the ZodOptional warn-and-skip branch.
+    const r = render(<SchemaSettingsForm schema={PrimitiveSchema} value={{}} onChange={() => {}} />)
+    expect(r.container.querySelector('textarea')).not.toBeNull()
+  })
+})
+
+describe('SchemaSettingsForm — mcpServers rowExtras', () => {
+  beforeEach(() => {
+    ;(window as unknown as { canvMcp: { testServer: (n: string) => Promise<{ ok: true; tools: [] }>; reconnectServer: (n: string) => Promise<{ ok: true; tools: [] }> } }).canvMcp = {
+      testServer: vi.fn().mockResolvedValue({ ok: true, tools: [] }),
+      reconnectServer: vi.fn().mockResolvedValue({ ok: true, tools: [] }),
+    }
+  })
+
+  afterEach(() => {
+    delete (window as unknown as { canvMcp?: unknown }).canvMcp
+  })
+
+  it('renders an MCPRowExtras status dot next to each mcpServers row', () => {
+    const value = SettingsSchema.parse({
+      mcpServers: [{ name: 'a', transport: 'stdio', command: 'echo' }],
+    })
+    render(<SchemaSettingsForm schema={SettingsSchema} value={value} onChange={() => {}} sectionFilter={(s) => s === 'mcp'} />)
+    // Status dot has data-role="mcp-row-status-dot"
+    const dot = document.querySelector('[data-role="mcp-row-status-dot"]')
+    expect(dot).not.toBeNull()
+  })
+
+  // Regression: the slot was previously rendered TWICE per row (once in the
+  // header, once in the expanded panel). When the renderer was a component
+  // that called useMcpServerStatus, that meant two hook calls per row → two
+  // testServer IPCs per row → 4 under StrictMode. The structural fix lifts
+  // the hook into a per-row RowExtrasContext.Provider so it runs exactly once.
+  it('only calls testServer ONCE per mcpServers row (no dual-render duplicate IPC)', async () => {
+    const testServerSpy = vi.fn().mockResolvedValue({ ok: true, tools: [] })
+    ;(window as unknown as { canvMcp: { testServer: typeof testServerSpy; reconnectServer: typeof testServerSpy } }).canvMcp = {
+      testServer: testServerSpy,
+      reconnectServer: vi.fn().mockResolvedValue({ ok: true, tools: [] }),
+    }
+    const value = SettingsSchema.parse({
+      mcpServers: [{ name: 'a', transport: 'stdio', command: 'echo' }],
+    })
+    render(<SchemaSettingsForm schema={SettingsSchema} value={value} onChange={() => {}} sectionFilter={(s) => s === 'mcp'} />)
+    await waitFor(() => expect(testServerSpy).toHaveBeenCalledTimes(1))
+  })
+
+  // Regression: without stable per-row keys, reordering rows shuffled the
+  // per-row hook state (status dot) at the original position instead of
+  // following the item. Using item.name as the React key fixes it — the
+  // hook follows the item.
+  it('keeps each row hook bound to its item when the array is reordered', async () => {
+    const calls: string[] = []
+    const testServerSpy = vi.fn(async (name: string) => {
+      calls.push(name)
+      return { ok: true, tools: [] }
+    })
+    ;(window as unknown as { canvMcp: { testServer: typeof testServerSpy; reconnectServer: typeof testServerSpy } }).canvMcp = {
+      testServer: testServerSpy,
+      reconnectServer: vi.fn().mockResolvedValue({ ok: true, tools: [] }),
+    }
+    const v1 = SettingsSchema.parse({
+      mcpServers: [
+        { name: 'first', transport: 'stdio', command: 'echo' },
+        { name: 'second', transport: 'stdio', command: 'echo' },
+      ],
+    })
+    const { rerender } = render(<SchemaSettingsForm schema={SettingsSchema} value={v1} onChange={() => {}} sectionFilter={(s) => s === 'mcp'} />)
+    // Both rows boot-test once.
+    await waitFor(() => expect(testServerSpy).toHaveBeenCalledTimes(2))
+    expect(calls.sort()).toEqual(['first', 'second'])
+
+    // Swap the two rows. With stable keys, neither hook remounts — no
+    // additional testServer calls fire.
+    const v2 = SettingsSchema.parse({
+      mcpServers: [
+        { name: 'second', transport: 'stdio', command: 'echo' },
+        { name: 'first', transport: 'stdio', command: 'echo' },
+      ],
+    })
+    rerender(<SchemaSettingsForm schema={SettingsSchema} value={v2} onChange={() => {}} sectionFilter={(s) => s === 'mcp'} />)
+    // Allow any pending microtasks (would-be re-tests) to flush.
+    await new Promise((r) => setTimeout(r, 20))
+    expect(testServerSpy).toHaveBeenCalledTimes(2)
   })
 })

@@ -6,6 +6,11 @@ import { SwitchControl } from './controls/SwitchControl'
 import { EnumControl } from './controls/EnumControl'
 import { ArrayOfObjectsControl } from './controls/ArrayOfObjectsControl'
 import { DiscriminatedUnionControl } from './controls/DiscriminatedUnionControl'
+import { JsonValueControl } from './controls/JsonValueControl'
+import { MCPRowExtrasHeader } from './mcp/MCPRowExtrasHeader'
+import { MCPRowExtrasPanel } from './mcp/MCPRowExtrasPanel'
+import { useMcpServerStatus } from './mcp/useMcpServerStatus'
+import type { RowExtrasConfig } from './controls/ArrayOfObjectsControl'
 import type { SettingsFieldMeta } from '../../hooks/settingsSchema'
 
 interface Props<T extends z.ZodObject<z.ZodRawShape>> {
@@ -72,6 +77,34 @@ function unwrapDefault(s: z.ZodTypeAny): z.ZodTypeAny {
   return s
 }
 
+function unwrapOptional(s: z.ZodTypeAny): z.ZodTypeAny {
+  const d = defOf(s)
+  if (d?.type === 'optional' && d.innerType) return unwrapOptional(d.innerType)
+  return s
+}
+
+/**
+ * Strip both `.optional()` and `.default(...)` wraps — the renderer always
+ * cares about the innermost shape. The triple wrap converges both orderings
+ * (`.default().optional()` and `.optional().default()`) in one pass.
+ */
+function unwrapAll(s: z.ZodTypeAny): z.ZodTypeAny {
+  return unwrapDefault(unwrapOptional(unwrapDefault(s)))
+}
+
+/**
+ * Primitive scalars (string / number / boolean) — does NOT include enum, which
+ * has its own EnumControl. Used by the array dispatch to decide between
+ * `JsonValueControl` (textarea over a primitive list) and
+ * `ArrayOfObjectsControl` (row-of-rows over object items).
+ */
+function isPrimitiveSchema(s: z.ZodTypeAny): boolean {
+  const u = unwrapAll(s)
+  return u instanceof z.ZodString
+      || u instanceof z.ZodNumber
+      || u instanceof z.ZodBoolean
+}
+
 function readMeta(s: z.ZodTypeAny): SettingsFieldMeta {
   const meta = (s as z.ZodTypeAny & { meta?: () => unknown }).meta?.()
   return (meta ?? {}) as SettingsFieldMeta
@@ -117,10 +150,9 @@ function renderObjectInline(
   const nodes: ReactNode[] = []
   for (const key of Object.keys(schema.shape)) {
     const field = schema.shape[key] as z.ZodTypeAny
-    const inner = unwrapDefault(field)
+    const inner = unwrapAll(field)
     // Skip the discriminator field — that's handled by DiscriminatedUnionControl's tabs.
     if (defOf(inner)?.type === 'literal') continue
-    // Skip optional non-primitive bags (env/headers maps) — the surface is intentionally narrow.
     const meta = readMeta(field)
     const label = meta.label ?? key.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase())
     const childPath = `${parentPath}.${key}`
@@ -137,7 +169,7 @@ function renderField(
   setField: (next: unknown) => void,
   meta: SettingsFieldMeta,
 ): ReactNode {
-  const inner = unwrapDefault(field)
+  const inner = unwrapAll(field)
   const innerType = defOf(inner)?.type
   const label = meta.label ?? key
   const help = meta.help
@@ -232,19 +264,67 @@ function renderField(
     }
   }
 
-  // Array of objects (or array of a discriminated union).
+  // Record / map (e.g. env, headers) → JsonValueControl. The auto-gen form
+  // intentionally doesn't try to draw a row-per-entry editor for arbitrary
+  // string maps; a JSON textarea is the simplest editable surface.
+  if (inner instanceof z.ZodRecord) {
+    return (
+      <JsonValueControl
+        key={key}
+        label={label}
+        help={help}
+        value={value}
+        onChange={(v) => setField(v)}
+        schema={inner}
+      />
+    )
+  }
+
+  // Array — split by element type. Primitives → JsonValueControl (textarea).
+  // Objects / discriminated unions → ArrayOfObjectsControl (row-of-rows).
   if (inner instanceof z.ZodArray) {
+    // For the primitive check we look at the schema's *real* element type.
+    // `meta.itemSchema` is the storage-vs-editor override and is always an
+    // object schema, so the primitive branch should never consult it.
+    const schemaElem = defOf(inner)?.element
+    if (schemaElem && isPrimitiveSchema(schemaElem)) {
+      return (
+        <JsonValueControl
+          key={key}
+          label={label}
+          help={help}
+          value={value}
+          onChange={(v) => setField(v)}
+          schema={inner}
+        />
+      )
+    }
     // meta.itemSchema overrides the schema's _def.element. Used when the
     // storage shape is intentionally permissive (z.array(z.unknown())) so
     // salvage doesn't wipe the array on a single partially-typed entry,
     // but the editor still needs a real per-item schema to dispatch on.
-    const elem = meta.itemSchema ?? defOf(inner)?.element
+    const elem = meta.itemSchema ?? schemaElem
     if (!elem) {
       console.warn(`[SchemaSettingsForm] array "${path}" has no element schema. Deferred.`)
       return null
     }
     const arr = (Array.isArray(value) ? value : []) as unknown[]
     const itemPath = `${path}[]`
+    const rowExtrasConfig = meta.rowExtras === 'mcp' ? MCP_ROW_EXTRAS : undefined
+    // Stable per-row key. Without this, reordering rows shifts the per-row
+    // hook state (from `renderRowExtras.useRowState`) into the wrong row —
+    // e.g. the mcp status dot of the row at index 0 would stick at index 0
+    // after a move-down, even though the underlying server config moved to
+    // index 1. For arrays with no `rowExtras`, the position-based default
+    // is fine. For mcpServers, use `name` (with an idx fallback for unnamed
+    // in-progress rows).
+    const rowKeyOf = meta.rowExtras === 'mcp'
+      ? (item: unknown, idx: number) => {
+          const cfg = item as { name?: unknown } | null
+          const name = typeof cfg?.name === 'string' && cfg.name.length > 0 ? cfg.name : null
+          return name ?? `__idx${idx}`
+        }
+      : undefined
     return (
       <ArrayOfObjectsControl
         key={key}
@@ -254,8 +334,10 @@ function renderField(
         onChange={(v) => setField(v)}
         itemSchema={elem}
         itemLabel={meta.itemLabel}
+        keyOf={rowKeyOf}
         createItem={() => makeDefault(elem)}
         renderItemForm={(itemSchema, item, onItemChange) => renderItem(itemSchema, item, onItemChange, itemPath)}
+        renderRowExtras={rowExtrasConfig}
       />
     )
   }
@@ -271,7 +353,7 @@ function renderItem(
   onChange: (next: unknown) => void,
   path: string,
 ): ReactNode {
-  const inner = unwrapDefault(schema)
+  const inner = unwrapAll(schema)
   const itemObj = (item && typeof item === 'object' ? item : {}) as Record<string, unknown>
   const setRecord = (next: Record<string, unknown>) => onChange(next)
 
@@ -281,7 +363,7 @@ function renderItem(
     const variants = variantSchemas
       .map((opt) => {
         const litField = opt.shape[discriminator] as z.ZodTypeAny | undefined
-        const lits = litField ? defOf(unwrapDefault(litField))?.values : undefined
+        const lits = litField ? defOf(unwrapAll(litField))?.values : undefined
         if (!lits || lits.length === 0) return null
         return { literal: String(lits[0]), schema: opt }
       })
@@ -312,6 +394,18 @@ function renderItem(
 
   console.warn(`[SchemaSettingsForm] no control for "${path}" (zod type: non-object item ${defOf(inner)?.type}). Deferred.`)
   return null
+}
+
+// Stable module-scope reference so the ArrayOfObjectsControl's row-extras
+// config prop doesn't change identity on every render. The state type is
+// `unknown` at the slot boundary; we cast back inside the renderers.
+type McpRowState = ReturnType<typeof useMcpServerStatus>
+const MCP_ROW_EXTRAS: RowExtrasConfig<unknown> = {
+  useRowState: (item, _idx, helpers) => useMcpServerStatus(item, helpers.onCollapsed),
+  header: (state, helpers) => (
+    <MCPRowExtrasHeader state={state as McpRowState} isExpanded={helpers.isExpanded} />
+  ),
+  panel: (state) => <MCPRowExtrasPanel state={state as McpRowState} />,
 }
 
 function makeDefault(schema: z.ZodTypeAny): unknown {

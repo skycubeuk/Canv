@@ -20,69 +20,81 @@ const { Server } = await import('@modelcontextprotocol/sdk/server/index.js')
 const { SSEServerTransport } = await import('@modelcontextprotocol/sdk/server/sse.js')
 const { ListToolsRequestSchema, CallToolRequestSchema } = await import('@modelcontextprotocol/sdk/types.js')
 
-const server = new Server(
-  { name: 'dev-sse-mcp', version: '0.1.0' },
-  { capabilities: { tools: {} } },
-)
+// Per-connection state. The SDK's Server can only connect to ONE transport at
+// a time; for multi-client smoke (e.g. Canv's setServers + reconnect cycle
+// landing two concurrent connect attempts), each GET /sse gets a fresh Server
+// + transport instance. Sessions are keyed by the transport's sessionId
+// (embedded in the POST URL by SSEServerTransport's "endpoint" event).
+const sessions = new Map() // sessionId -> { server, transport }
 
-server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: [
-    { name: 'ping', description: 'Returns "pong".', inputSchema: { type: 'object', properties: {}, required: [] } },
-    {
-      name: 'echo',
-      description: 'Echoes the provided text argument back.',
-      inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
-    },
-    {
-      name: 'add',
-      description: 'Adds two numbers and returns the sum.',
-      inputSchema: {
-        type: 'object',
-        properties: { a: { type: 'number' }, b: { type: 'number' } },
-        required: ['a', 'b'],
+function makeServer() {
+  const server = new Server(
+    { name: 'dev-sse-mcp', version: '0.1.0' },
+    { capabilities: { tools: {} } },
+  )
+  server.setRequestHandler(ListToolsRequestSchema, async () => ({
+    tools: [
+      { name: 'ping', description: 'Returns "pong".', inputSchema: { type: 'object', properties: {}, required: [] } },
+      {
+        name: 'echo',
+        description: 'Echoes the provided text argument back.',
+        inputSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
       },
-    },
-  ],
-}))
-
-server.setRequestHandler(CallToolRequestSchema, async (req) => {
-  const { name, arguments: args = {} } = req.params
-  switch (name) {
-    case 'ping':
-      return { content: [{ type: 'text', text: 'pong' }] }
-    case 'echo':
-      return { content: [{ type: 'text', text: String(args.text ?? '') }] }
-    case 'add': {
-      const a = Number(args.a)
-      const b = Number(args.b)
-      if (!Number.isFinite(a) || !Number.isFinite(b)) {
-        return { content: [{ type: 'text', text: 'error: a and b must be numbers' }], isError: true }
+      {
+        name: 'add',
+        description: 'Adds two numbers and returns the sum.',
+        inputSchema: {
+          type: 'object',
+          properties: { a: { type: 'number' }, b: { type: 'number' } },
+          required: ['a', 'b'],
+        },
+      },
+    ],
+  }))
+  server.setRequestHandler(CallToolRequestSchema, async (req) => {
+    const { name, arguments: args = {} } = req.params
+    switch (name) {
+      case 'ping':
+        return { content: [{ type: 'text', text: 'pong' }] }
+      case 'echo':
+        return { content: [{ type: 'text', text: String(args.text ?? '') }] }
+      case 'add': {
+        const a = Number(args.a)
+        const b = Number(args.b)
+        if (!Number.isFinite(a) || !Number.isFinite(b)) {
+          return { content: [{ type: 'text', text: 'error: a and b must be numbers' }], isError: true }
+        }
+        return { content: [{ type: 'text', text: String(a + b) }] }
       }
-      return { content: [{ type: 'text', text: String(a + b) }] }
+      default:
+        return { content: [{ type: 'text', text: `unknown tool: ${name}` }], isError: true }
     }
-    default:
-      return { content: [{ type: 'text', text: `unknown tool: ${name}` }], isError: true }
-  }
-})
-
-let activeTransport = null
+  })
+  return server
+}
 
 const httpServer = http.createServer(async (req, res) => {
   try {
     if (req.method === 'GET' && req.url === '/sse') {
-      console.log(`[mcp-sse] client connected from ${req.socket.remoteAddress}`)
-      activeTransport = new SSEServerTransport('/messages', res)
+      const server = makeServer()
+      const transport = new SSEServerTransport('/messages', res)
+      const sessionId = transport.sessionId
+      sessions.set(sessionId, { server, transport })
+      console.log(`[mcp-sse] client connected from ${req.socket.remoteAddress} (session ${sessionId.slice(0, 8)})`)
       res.on('close', () => {
-        console.log('[mcp-sse] client disconnected')
-        activeTransport = null
+        console.log(`[mcp-sse] client disconnected (session ${sessionId.slice(0, 8)})`)
+        sessions.delete(sessionId)
       })
-      await server.connect(activeTransport)
+      await server.connect(transport)
     } else if (req.method === 'POST' && req.url && req.url.startsWith('/messages')) {
-      if (activeTransport) {
-        await activeTransport.handlePostMessage(req, res)
+      // Pull sessionId out of the query string (SSEServerTransport embeds it).
+      const sessionId = new URL(req.url, `http://${req.headers.host}`).searchParams.get('sessionId')
+      const session = sessionId ? sessions.get(sessionId) : null
+      if (session) {
+        await session.transport.handlePostMessage(req, res)
       } else {
         res.statusCode = 503
-        res.end('no active transport')
+        res.end(`no active transport for session ${sessionId ?? '(none)'}`)
       }
     } else {
       res.statusCode = 404
@@ -103,7 +115,21 @@ httpServer.listen(PORT, '127.0.0.1', () => {
   console.log('[mcp-sse] press Ctrl+C to stop')
 })
 
-process.on('SIGINT', () => {
+function shutdown() {
   console.log('\n[mcp-sse] shutting down')
+  // SSE connections are long-lived, so httpServer.close() alone will hang
+  // forever waiting for clients to disconnect. Forcibly drop open sockets,
+  // then close, then bail after a short grace period in case anything stuck.
+  for (const { transport } of sessions.values()) {
+    try { transport.close?.() } catch { /* ignore */ }
+  }
+  sessions.clear()
+  if (typeof httpServer.closeAllConnections === 'function') {
+    httpServer.closeAllConnections()
+  }
   httpServer.close(() => process.exit(0))
-})
+  setTimeout(() => process.exit(0), 500).unref()
+}
+
+process.on('SIGINT', shutdown)
+process.on('SIGTERM', shutdown)
