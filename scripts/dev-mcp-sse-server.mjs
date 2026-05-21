@@ -115,7 +115,21 @@ httpServer.listen(PORT, '127.0.0.1', () => {
   console.log('[mcp-sse] press Ctrl+C to stop')
 })
 
-process.on('SIGINT', () => {
+function shutdown() {
   console.log('\n[mcp-sse] shutting down')
+  // SSE connections are long-lived, so httpServer.close() alone will hang
+  // forever waiting for clients to disconnect. Forcibly drop open sockets,
+  // then close, then bail after a short grace period in case anything stuck.
+  for (const { transport } of sessions.values()) {
+    try { transport.close?.() } catch { /* ignore */ }
+  }
+  sessions.clear()
+  if (typeof httpServer.closeAllConnections === 'function') {
+    httpServer.closeAllConnections()
+  }
   httpServer.close(() => process.exit(0))
-})
+  setTimeout(() => process.exit(0), 500).unref()
+}
+
+process.on('SIGINT', shutdown)
+process.on('SIGTERM', shutdown)
