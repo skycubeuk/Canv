@@ -399,4 +399,223 @@ describe('fs service IPC handlers', () => {
       await expect(ipcMain.invoke('canvFS:reconnect')).resolves.toBeUndefined()
     })
   })
+
+  // ---------------------------------------------------------------------------
+  // FS CRUD handlers
+  // ---------------------------------------------------------------------------
+
+  describe('canvFS:listDir', () => {
+    it('happy: returns buildTree result for local workspace', async () => {
+      const ipc = makeIpcMain()
+      const tree = [{ name: 'a.md', type: 'file' }]
+      svc.registerIpcHandlers(ipc, baseDeps(root, {
+        buildTree: async (r, rel, depth) => {
+          expect(r).toBe(root)
+          expect(rel).toBe('sub')
+          expect(depth).toBe(0)
+          return tree
+        },
+      }))
+      const r = await ipc.invoke('canvFS:listDir', 'sub')
+      expect(r).toEqual(tree)
+    })
+
+    it('error: safeResolve refusal not directly triggered by listDir (buildTree handles paths) — propagates buildTree errors', async () => {
+      const ipc = makeIpcMain()
+      svc.registerIpcHandlers(ipc, baseDeps(root, {
+        buildTree: async () => { throw new Error('tree failed') },
+      }))
+      await expect(ipc.invoke('canvFS:listDir', '')).rejects.toThrow(/tree failed/)
+    })
+  })
+
+  describe('canvFS:readFile', () => {
+    it('happy: returns { ok, content, mtimeMs, eol, bom, size }', async () => {
+      await fsp.writeFile(path.join(root, 'note.md'), 'hello\n')
+      const r = await ipcMain.invoke('canvFS:readFile', 'note.md')
+      expect(r.ok).toBe(true)
+      expect(r.content).toBe('hello\n')
+      expect(typeof r.mtimeMs).toBe('number')
+      expect(r.eol).toBe('lf')
+      expect(r.bom).toBe(false)
+      expect(r.size).toBe(6)
+    })
+
+    it('error: missing file → throws ENOENT (Pattern 2 regex)', async () => {
+      await expect(ipcMain.invoke('canvFS:readFile', 'missing.md'))
+        .rejects.toThrow(/ENOENT|no such file|cannot find the file/i)
+    })
+  })
+
+  describe('canvFS:writeFile', () => {
+    it('happy: writes content and returns mtimeMs', async () => {
+      await fsp.writeFile(path.join(root, 'a.md'), 'old')
+      const r = await ipcMain.invoke('canvFS:writeFile', 'a.md', 'new', undefined, { eol: 'lf', bom: false })
+      expect(typeof r.mtimeMs).toBe('number')
+      expect(await fsp.readFile(path.join(root, 'a.md'), 'utf-8')).toBe('new')
+    })
+
+    it('error: refuses stale mtime', async () => {
+      await fsp.writeFile(path.join(root, 'a.md'), 'old')
+      await expect(
+        ipcMain.invoke('canvFS:writeFile', 'a.md', 'new', 1, { eol: 'lf', bom: false }),
+      ).rejects.toThrow(/stale|mtime/i)
+    })
+
+    it('error: unsupported extension rejected', async () => {
+      const ipc = makeIpcMain()
+      svc.registerIpcHandlers(ipc, baseDeps(root, {
+        isAllowedExt: () => false,
+      }))
+      await fsp.writeFile(path.join(root, 'a.bin'), 'x')
+      await expect(
+        ipc.invoke('canvFS:writeFile', 'a.bin', 'y', undefined, { eol: 'lf', bom: false }),
+      ).rejects.toThrow(/unsupported file type/)
+    })
+  })
+
+  describe('canvFS:createFile', () => {
+    it('happy: creates new file and returns mtimeMs', async () => {
+      const r = await ipcMain.invoke('canvFS:createFile', 'new.md', 'hello')
+      expect(typeof r.mtimeMs).toBe('number')
+      expect(await fsp.readFile(path.join(root, 'new.md'), 'utf-8')).toBe('hello')
+    })
+
+    it('error: target already exists → throws "file already exists"', async () => {
+      await fsp.writeFile(path.join(root, 'dup.md'), 'x')
+      await expect(ipcMain.invoke('canvFS:createFile', 'dup.md', 'y'))
+        .rejects.toThrow(/file already exists/)
+    })
+
+    it('error: unsupported extension → throws', async () => {
+      const ipc = makeIpcMain()
+      svc.registerIpcHandlers(ipc, baseDeps(root, { isAllowedExt: () => false }))
+      await expect(ipc.invoke('canvFS:createFile', 'bad.bin', '')).rejects.toThrow(/unsupported file type/)
+    })
+  })
+
+  describe('canvFS:createFolder', () => {
+    it('happy: creates a folder under workspace', async () => {
+      await ipcMain.invoke('canvFS:createFolder', 'sub/nested')
+      const stat = await fsp.stat(path.join(root, 'sub', 'nested'))
+      expect(stat.isDirectory()).toBe(true)
+    })
+
+    it('error: safeResolve refuses path escape', async () => {
+      await expect(ipcMain.invoke('canvFS:createFolder', '../escape'))
+        .rejects.toThrow(/outside workspace/)
+    })
+  })
+
+  describe('canvFS:rename', () => {
+    it('happy: renames a file in place', async () => {
+      await fsp.writeFile(path.join(root, 'old.md'), 'x')
+      await ipcMain.invoke('canvFS:rename', 'old.md', 'new.md')
+      expect(fs.existsSync(path.join(root, 'old.md'))).toBe(false)
+      expect(await fsp.readFile(path.join(root, 'new.md'), 'utf-8')).toBe('x')
+    })
+
+    it('error: source missing → throws ENOENT', async () => {
+      await expect(ipcMain.invoke('canvFS:rename', 'nope.md', 'whatever.md'))
+        .rejects.toThrow(/ENOENT|no such file|cannot find the file/i)
+    })
+
+    it('error: target extension unsupported → throws', async () => {
+      const ipc = makeIpcMain()
+      svc.registerIpcHandlers(ipc, baseDeps(root, {
+        isAllowedExt: (rel) => !rel.endsWith('.bin'),
+      }))
+      await fsp.writeFile(path.join(root, 'a.md'), 'x')
+      await expect(ipc.invoke('canvFS:rename', 'a.md', 'a.bin'))
+        .rejects.toThrow(/unsupported file type/)
+    })
+  })
+
+  describe('canvFS:delete', () => {
+    it('happy: removes the file (via trashItem stub)', async () => {
+      const target = path.join(root, 'gone.md')
+      await fsp.writeFile(target, 'x')
+      vi.spyOn(electron.shell, 'trashItem').mockImplementation(async (abs) => {
+        await fsp.unlink(abs)
+      })
+      await ipcMain.invoke('canvFS:delete', 'gone.md')
+      expect(fs.existsSync(target)).toBe(false)
+    })
+
+    it('happy: trashItem unavailable → falls back to fsp.unlink/rm', async () => {
+      const target = path.join(root, 'fallback.md')
+      await fsp.writeFile(target, 'x')
+      vi.spyOn(electron.shell, 'trashItem').mockRejectedValue(new Error('no trash'))
+      await ipcMain.invoke('canvFS:delete', 'fallback.md')
+      expect(fs.existsSync(target)).toBe(false)
+    })
+
+    it('error: refuses to delete workspace root', async () => {
+      await expect(ipcMain.invoke('canvFS:delete', ''))
+        .rejects.toThrow(/cannot delete workspace root/)
+    })
+
+    it('happy: ENOENT is swallowed (silent no-op)', async () => {
+      await expect(ipcMain.invoke('canvFS:delete', 'never-existed.md'))
+        .resolves.toBeUndefined()
+    })
+  })
+
+  describe('canvFS:search', () => {
+    it('happy: finds matches in workspace markdown files', async () => {
+      await fsp.writeFile(path.join(root, 'a.md'), 'hello world\nanother line\n')
+      await fsp.writeFile(path.join(root, 'b.md'), 'no match here\n')
+      const r = await ipcMain.invoke('canvFS:search', { query: 'hello', regex: false, caseSensitive: false })
+      expect(r.truncated).toBe(false)
+      expect(r.matches.length).toBe(1)
+      expect(r.matches[0].rel).toBe('a.md')
+      expect(r.matches[0].matchLen).toBe(5)
+    })
+
+    it('error: empty query → returns empty matches', async () => {
+      const r = await ipcMain.invoke('canvFS:search', { query: '', regex: false, caseSensitive: false })
+      expect(r).toEqual({ matches: [], truncated: false })
+    })
+
+    it('error: invalid regex → returns empty matches (no throw)', async () => {
+      const r = await ipcMain.invoke('canvFS:search', { query: '[unclosed', regex: true, caseSensitive: false })
+      expect(r).toEqual({ matches: [], truncated: false })
+    })
+  })
+
+  describe('canvFS:readWorkspaceConfig', () => {
+    it('happy: reads .canv/workspace.json schemaVersion 1', async () => {
+      const dir = path.join(root, '.canv')
+      await fsp.mkdir(dir, { recursive: true })
+      const cfg = { schemaVersion: 1, mode: 'fiction' }
+      await fsp.writeFile(path.join(dir, 'workspace.json'), JSON.stringify(cfg) + '\n')
+      const r = await ipcMain.invoke('canvFS:readWorkspaceConfig')
+      expect(r).toEqual(cfg)
+    })
+
+    it('error: missing config file → returns null (handler default)', async () => {
+      const r = await ipcMain.invoke('canvFS:readWorkspaceConfig')
+      expect(r).toBeNull()
+    })
+  })
+
+  describe('canvFS:writeWorkspaceConfig', () => {
+    it('happy: persists config and returns true', async () => {
+      const cfg = { schemaVersion: 1, mode: 'technical' }
+      const r = await ipcMain.invoke('canvFS:writeWorkspaceConfig', cfg)
+      expect(r).toBe(true)
+      const onDisk = JSON.parse(await fsp.readFile(path.join(root, '.canv', 'workspace.json'), 'utf-8'))
+      expect(onDisk).toEqual(cfg)
+    })
+
+    it('error: remote workspace → throws "Workspace config is local-only"', async () => {
+      const ipc = makeIpcMain()
+      svc.registerIpcHandlers(ipc, baseDeps(root, {
+        isRemote: () => true,
+        getWorkspace: () => ({ kind: 'remote', root, backend: {} }),
+      }))
+      await expect(ipc.invoke('canvFS:writeWorkspaceConfig', { schemaVersion: 1 }))
+        .rejects.toThrow(/local-only/)
+    })
+  })
 })
