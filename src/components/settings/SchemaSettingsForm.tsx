@@ -92,7 +92,7 @@ function renderTopLevel(
     const section = meta.section ?? 'general'
     if (sectionFilter && !sectionFilter(section)) continue
     const arr = sections.get(section) ?? []
-    arr.push(renderField(key, field, value[key], (next) => onPatch({ [key]: next }), meta))
+    arr.push(renderField(key, key, field, value[key], (next) => onPatch({ [key]: next }), meta))
     sections.set(section, arr)
   }
 
@@ -112,6 +112,7 @@ function renderObjectInline(
   schema: z.ZodObject<z.ZodRawShape>,
   value: Record<string, unknown>,
   onChange: (next: Record<string, unknown>) => void,
+  parentPath: string,
 ): ReactNode {
   const nodes: ReactNode[] = []
   for (const key of Object.keys(schema.shape)) {
@@ -122,13 +123,15 @@ function renderObjectInline(
     // Skip optional non-primitive bags (env/headers maps) — the surface is intentionally narrow.
     const meta = readMeta(field)
     const label = meta.label ?? key.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase())
-    nodes.push(renderField(key, field, value[key], (next) => onChange({ ...value, [key]: next }), { ...meta, label }))
+    const childPath = `${parentPath}.${key}`
+    nodes.push(renderField(key, childPath, field, value[key], (next) => onChange({ ...value, [key]: next }), { ...meta, label }))
   }
   return <div className="flex flex-col gap-2">{nodes}</div>
 }
 
 function renderField(
   key: string,
+  path: string,
   field: z.ZodTypeAny,
   value: unknown,
   setField: (next: unknown) => void,
@@ -233,10 +236,11 @@ function renderField(
   if (inner instanceof z.ZodArray) {
     const elem = defOf(inner)?.element
     if (!elem) {
-      console.warn(`[SchemaSettingsForm] array "${key}" has no element schema — skipping`)
+      console.warn(`[SchemaSettingsForm] array "${path}" has no element schema. Deferred.`)
       return null
     }
     const arr = (Array.isArray(value) ? value : []) as unknown[]
+    const itemPath = `${path}[]`
     return (
       <ArrayOfObjectsControl
         key={key}
@@ -247,13 +251,13 @@ function renderField(
         itemSchema={elem}
         itemLabel={meta.itemLabel}
         createItem={() => makeDefault(elem)}
-        renderItemForm={(itemSchema, item, onItemChange) => renderItem(itemSchema, item, onItemChange)}
+        renderItemForm={(itemSchema, item, onItemChange) => renderItem(itemSchema, item, onItemChange, itemPath)}
       />
     )
   }
 
   // Anything else — deliberately skipped. The surface is restricted on purpose.
-  console.warn(`[SchemaSettingsForm] no control for field "${key}" (zod type: ${innerType}) — skipping`)
+  console.warn(`[SchemaSettingsForm] no control for "${path}" (zod type: ${innerType}). Deferred.`)
   return null
 }
 
@@ -261,6 +265,7 @@ function renderItem(
   schema: z.ZodTypeAny,
   item: unknown,
   onChange: (next: unknown) => void,
+  path: string,
 ): ReactNode {
   const inner = unwrapDefault(schema)
   const itemObj = (item && typeof item === 'object' ? item : {}) as Record<string, unknown>
@@ -278,7 +283,7 @@ function renderItem(
       })
       .filter((v): v is { literal: string; schema: z.ZodObject<z.ZodRawShape> } => v !== null)
     if (variants.length === 0) {
-      console.warn('[SchemaSettingsForm] discriminated union has no inspectable literals — skipping')
+      console.warn(`[SchemaSettingsForm] no control for "${path}" (zod type: discriminated union with no inspectable literals). Deferred.`)
       return null
     }
     return (
@@ -287,7 +292,7 @@ function renderItem(
         onChange={setRecord}
         discriminator={discriminator}
         variants={variants}
-        renderVariantForm={(varSchema, v, onV) => renderObjectInline(varSchema, v, onV)}
+        renderVariantForm={(varSchema, v, onV) => renderObjectInline(varSchema, v, onV, path)}
         makeVariantDefault={(literal) => {
           const variant = variants.find((vt) => vt.literal === literal)
           if (!variant) return { [discriminator]: literal }
@@ -298,10 +303,10 @@ function renderItem(
   }
 
   if (inner instanceof z.ZodObject) {
-    return renderObjectInline(inner, itemObj, setRecord)
+    return renderObjectInline(inner, itemObj, setRecord, path)
   }
 
-  console.warn('[SchemaSettingsForm] non-object item schema — skipping')
+  console.warn(`[SchemaSettingsForm] no control for "${path}" (zod type: non-object item ${defOf(inner)?.type}). Deferred.`)
   return null
 }
 
