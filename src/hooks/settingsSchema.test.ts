@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { SettingsSchema, type Settings } from './settingsSchema'
+import { SettingsSchema, McpServerConfigSchema, type Settings } from './settingsSchema'
 
 describe('SettingsSchema', () => {
   it('parses an empty object into the full default Settings shape', () => {
@@ -77,11 +77,18 @@ describe('SettingsSchema', () => {
     expect(r.success).toBe(true)
   })
 
-  it('rejects an mcpServer with no matching discriminator', () => {
-    const r = SettingsSchema.safeParse({
+  it('per-item McpServerConfigSchema rejects a row with an unknown discriminator', () => {
+    // The wrapping `mcpServers` field is intentionally permissive
+    // (z.array(z.unknown())) so a partially-typed in-progress entry from the
+    // auto-gen UI does not wipe valid siblings on the next salvage cycle.
+    // Per-item validation is the McpServerConfigSchema's job and runs inside
+    // postProcess. Confirm both halves of the contract here.
+    const wrappingAccepts = SettingsSchema.safeParse({
       mcpServers: [{ name: 'huh', transport: 'mystery' }],
     })
-    expect(r.success).toBe(false)
+    expect(wrappingAccepts.success).toBe(true)
+    const perItemRejects = McpServerConfigSchema.safeParse({ name: 'huh', transport: 'mystery' })
+    expect(perItemRejects.success).toBe(false)
   })
 
   it('upgrades legacy flat perAgentModel (string values) to nested AgentModelRef', () => {

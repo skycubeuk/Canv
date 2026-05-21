@@ -234,7 +234,11 @@ function renderField(
 
   // Array of objects (or array of a discriminated union).
   if (inner instanceof z.ZodArray) {
-    const elem = defOf(inner)?.element
+    // meta.itemSchema overrides the schema's _def.element. Used when the
+    // storage shape is intentionally permissive (z.array(z.unknown())) so
+    // salvage doesn't wipe the array on a single partially-typed entry,
+    // but the editor still needs a real per-item schema to dispatch on.
+    const elem = meta.itemSchema ?? defOf(inner)?.element
     if (!elem) {
       console.warn(`[SchemaSettingsForm] array "${path}" has no element schema. Deferred.`)
       return null

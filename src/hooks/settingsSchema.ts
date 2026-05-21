@@ -14,6 +14,12 @@ export interface SettingsFieldMeta {
   /** For z.array(z.object(...)): function that produces a one-line summary
    *  for a row in the collapsed list view. */
   itemLabel?: (item: unknown) => string
+  /** For z.array(z.unknown()) fields that want a typed editor: overrides the
+   *  schema's `_def.element` so the renderer dispatches to the right per-item
+   *  control. Used when the storage shape is intentionally permissive (so
+   *  salvage drops bad entries instead of wiping the array) but the editor
+   *  still needs a real per-item schema to render. */
+  itemSchema?: z.ZodTypeAny
   /** Workspace-settings forward-compat — see workspace settings design note. */
   scope?: 'user' | 'workspace' | 'both'
   /** Hide from auto-gen even if section is set (e.g. dev-only fields). */
@@ -136,9 +142,17 @@ export const SettingsSchema = z.object({
     // want a duplicate auto-gen text input. Stays in the schema so the future
     // workspace-settings loader sees it.
   }),
-  mcpServers: z.array(McpServerConfigSchema).default([]).meta({
+  // Permissive storage shape on purpose: the SchemaSettingsForm-driven editor
+  // allows partially-filled rows while the user types (name blank, command
+  // blank, etc.) — those would fail the strict per-item schema and, if the
+  // wrapping array were typed, would make salvage drop the WHOLE array on
+  // the next render. Permissive storage + per-item filter in `postProcess`
+  // mirrors how `perAgentModel` and `pricingOverrides` already work. The
+  // renderer uses `meta.itemSchema` to find the typed per-item schema.
+  mcpServers: z.array(z.unknown()).default([]).meta({
     ui: 'auto', section: 'mcp', label: 'MCP servers',
     help: 'Model Context Protocol servers available to chat and to gated extensions.',
+    itemSchema: McpServerConfigSchema,
     itemLabel: (item: unknown) => {
       const it = item as Partial<McpServerConfig> | undefined
       return it?.name || '(unnamed server)'
@@ -152,11 +166,12 @@ export type Theme = z.infer<typeof Theme>
 export type LineWidth = z.infer<typeof LineWidth>
 export type StreamChunkDelayMs = z.infer<typeof StreamDelay>
 
-/** Inferred settings type, with the two permissive record fields tightened
- *  back to the curated shape that `postProcess` guarantees. Without these
- *  overrides downstream consumers would see `Record<string, unknown>` and lose
- *  all the structural typing the rest of the codebase relies on. */
-export type Settings = Omit<z.infer<typeof SettingsSchema>, 'perAgentModel' | 'pricingOverrides'> & {
+/** Inferred settings type, with the three permissive fields tightened back to
+ *  the curated shape that `postProcess` guarantees. Without these overrides
+ *  downstream consumers would see `Record<string, unknown>` / `unknown[]` and
+ *  lose all the structural typing the rest of the codebase relies on. */
+export type Settings = Omit<z.infer<typeof SettingsSchema>, 'perAgentModel' | 'pricingOverrides' | 'mcpServers'> & {
   perAgentModel: Record<string, Record<string, AgentModelRef>>
   pricingOverrides: Record<string, ModelPricing>
+  mcpServers: McpServerConfig[]
 }

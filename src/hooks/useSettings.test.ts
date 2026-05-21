@@ -270,3 +270,53 @@ describe('useSettings — legacy-key cleanup on first mount', () => {
     expect(persisted.fontSize).toBe(18)
   })
 })
+
+describe("useSettings — mcpServers permissive editor storage", () => {
+  beforeEach(() => { localStorage.clear() })
+
+  it("preserves every stored entry, including partial ones (storage is permissive on purpose)", () => {
+    // The schema's mcpServers field is z.array(z.unknown()) so a partially
+    // typed in-progress row from the auto-gen UI doesn't fail the whole-array
+    // parse and wipe valid siblings. The renderer needs to see ALL items
+    // (including the in-progress one) so the user can finish filling it in.
+    // Per-row validation happens downstream in mcp.contribution.ts before
+    // anything is handed to the MCP service for an actual connect.
+    localStorage.setItem("canv:settings", JSON.stringify({
+      mcpServers: [
+        { name: "good-stdio", transport: "stdio", command: "echo" },
+        { name: "huh", transport: "mystery" },                    // invalid discriminator
+        { name: "", transport: "stdio", command: "" },            // partially-typed (UI in-progress)
+        { name: "good-http", transport: "http", url: "http://localhost:9000" },
+      ],
+    }))
+    const { result } = renderHook(() => useSettings())
+    expect(result.current.settings.mcpServers).toHaveLength(4)
+  })
+
+  it("an empty new row appended via update() does NOT wipe the existing valid rows", () => {
+    // This is the exact UX from the auto-gen '+ Add' button — was wiping the
+    // array on the next render before the permissive-storage fix landed.
+    localStorage.setItem("canv:settings", JSON.stringify({
+      mcpServers: [
+        { name: "fs", transport: "stdio", command: "mcp-server-filesystem" },
+      ],
+    }))
+    const { result } = renderHook(() => useSettings())
+    expect(result.current.settings.mcpServers).toHaveLength(1)
+
+    act(() => result.current.update({
+      mcpServers: [
+        ...result.current.settings.mcpServers,
+        { name: "", transport: "stdio", command: "" } as never,
+      ],
+    }))
+
+    // BOTH rows persist — the valid one and the new empty one. The empty
+    // one is visible to the editor so the user can complete it. The mcp
+    // contribution filters before pushing to the MCP service, so the empty
+    // entry never reaches a subprocess spawn.
+    expect(result.current.settings.mcpServers).toHaveLength(2)
+    expect(result.current.settings.mcpServers[0].name).toBe("fs")
+    expect(result.current.settings.mcpServers[1].name).toBe("")
+  })
+})

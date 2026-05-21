@@ -23,9 +23,10 @@ const SETTINGS_KEY = 'canv:settings'
  *  Mirrors the runtime-data-dependent passes the old hand-coded `merged`
  *  builder used to do: legacy perAgentModel upgrade, bare-key pricing
  *  override re-keying, defaultModel clamp against live adapter models. */
-type SettingsLoose = Omit<Settings, 'perAgentModel' | 'pricingOverrides'> & {
+type SettingsLoose = Omit<Settings, 'perAgentModel' | 'pricingOverrides' | 'mcpServers'> & {
   perAgentModel: Record<string, Record<string, unknown>>
   pricingOverrides: Record<string, unknown>
+  mcpServers: unknown[]
 }
 
 function postProcess(s: SettingsLoose): Settings {
@@ -34,7 +35,19 @@ function postProcess(s: SettingsLoose): Settings {
     ...s,
     pricingOverrides: {},
     perAgentModel: {},
+    mcpServers: [],
   }
+
+  // mcpServers: storage shape is z.array(z.unknown()) so a partially-typed
+  // in-progress row (e.g. an empty new entry the user just added via the
+  // auto-gen UI) doesn't fail the whole-array parse and wipe valid siblings.
+  // We pass entries through untouched here — the editor needs to see the
+  // in-progress shape so the user can complete it. Downstream consumers
+  // (the MCP service in electron/services/mcp/index.cjs) filter at their
+  // boundary by safeParse-ing against McpServerConfigSchema before
+  // attempting to connect. Items that don't validate are silently ignored
+  // there and never reach the subprocess spawn.
+  out.mcpServers = s.mcpServers as McpServerConfig[]
 
   // Re-key pricingOverrides bare keys -> provider/model. Drop unresolvable
   // bare keys and any entry whose numbers are non-finite.
