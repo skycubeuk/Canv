@@ -1,4 +1,9 @@
-#!/usr/bin/env node
+// Run via: `node scripts/pack-extension.mjs <folder> [-o <output.canvext>]`.
+// No shebang on purpose: Node strips shebangs from the top-level entry script
+// but, on some Windows Node versions, NOT from .mjs files loaded via dynamic
+// import() — leaving `#` as the first character throws
+// "SyntaxError: Invalid or unexpected token" with no line/column when the
+// vitest test does `await import('./pack-extension.mjs')`. Stay shebang-free.
 import { readFile, stat, readdir } from 'node:fs/promises'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
