@@ -824,6 +824,13 @@ describe('extensions service IPC handlers', () => {
       await state.ipcMain.invoke('canvExtDev:fireEvent', 42, null)
       expect(dispatchSpy).not.toHaveBeenCalled()
     })
+
+    it('error: not registered when app.isPackaged (production mode)', () => {
+      electron.app.isPackaged = true
+      const ipc = makeIpcMain()
+      svc.registerIpcHandlers(ipc, baseDeps(state))
+      expect(ipc._hasHandler('canvExtDev:fireEvent')).toBe(false)
+    })
   })
 
   // ---------------------------------------------------------------------------
