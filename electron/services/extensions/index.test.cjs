@@ -599,4 +599,230 @@ describe('extensions service IPC handlers', () => {
         .rejects.toThrow(/no local workspace/)
     })
   })
+
+  // ---------------------------------------------------------------------------
+  // Settings / reload / activation + dev-only handlers.
+  // ---------------------------------------------------------------------------
+
+  describe('canvExtensions:writeSetting', () => {
+    it('happy: persists the setting under settings.json', async () => {
+      const { id, dir } = await installFixture(state, { id: 'ws-ext' })
+      await state.ipcMain.invoke('canvExtensions:writeSetting', id, 'greeting', 'hi')
+      const onDisk = JSON.parse(await fsp.readFile(path.join(dir, 'settings.json'), 'utf-8'))
+      expect(onDisk).toEqual({ greeting: 'hi' })
+    })
+
+    it('error: invalid key → throws "invalid key"', async () => {
+      const { id } = await installFixture(state, { id: 'ws-bad' })
+      await expect(state.ipcMain.invoke('canvExtensions:writeSetting', id, '1bad-key', 'v'))
+        .rejects.toThrow(/invalid key/)
+    })
+  })
+
+  describe('canvExtensions:reload', () => {
+    it('happy: not-running extension → no-op (does not spawn)', async () => {
+      const { id } = await installFixture(state, { id: 'rl-ext' })
+      const spawnSpy = vi.spyOn(state.runtime, 'spawn').mockResolvedValue(undefined)
+      await state.ipcMain.invoke('canvExtensions:reload', id)
+      expect(spawnSpy).not.toHaveBeenCalled()
+    })
+
+    it('happy: running extension → destroy + respawn cycle', async () => {
+      const { id } = await installFixture(state, { id: 'rl-running' })
+      state.registry.setEnabled(id, true)
+      state.registry.setTrustedAt(id, new Date().toISOString())
+      state.trustStore.set(state.root, 'trusted')
+      // Pretend it's running.
+      state.runtime._byId.set(id, {
+        manifest: { id }, extensionDir: '/x', webContentsId: 1, view: null,
+        storage: null, subscriptions: new Set(),
+      })
+      const destroySpy = vi.spyOn(state.runtime, 'destroy').mockImplementation(async (eid) => {
+        state.runtime._byId.delete(eid)
+      })
+      const spawnSpy = vi.spyOn(state.runtime, 'spawn').mockResolvedValue(undefined)
+      await state.ipcMain.invoke('canvExtensions:reload', id)
+      expect(destroySpy).toHaveBeenCalledWith(id)
+      expect(spawnSpy).toHaveBeenCalled()
+    })
+  })
+
+  describe('canvExtensions:devCrash (dev-only)', () => {
+    it('happy: extension not running → returns ok:false', async () => {
+      const r = await state.ipcMain.invoke('canvExtensions:devCrash', 'nope')
+      expect(r.ok).toBe(false)
+      expect(r.error).toMatch(/not running/)
+    })
+
+    it('error: handler absent in production builds', async () => {
+      // Re-register with isPackaged=true. The dev-only branch is skipped.
+      electron.app.isPackaged = true
+      const ipc = makeIpcMain()
+      svc.registerIpcHandlers(ipc, baseDeps(state))
+      expect(ipc._hasHandler('canvExtensions:devCrash')).toBe(false)
+      await expect(ipc.invoke('canvExtensions:devCrash', 'x'))
+        .rejects.toThrow(/no handler/)
+    })
+  })
+
+  describe('canvExtensions:pickInstallFolder', () => {
+    it('happy: dialog returns a folder → forwarded to caller', async () => {
+      state.mainWindow = { isDestroyed: () => false, webContents: { send: () => {} } }
+      vi.spyOn(electron.dialog, 'showOpenDialog').mockResolvedValue({
+        canceled: false, filePaths: ['/picked/folder'],
+      })
+      const ipc = makeIpcMain()
+      svc.registerIpcHandlers(ipc, baseDeps(state))
+      const r = await ipc.invoke('canvExtensions:pickInstallFolder')
+      expect(r).toBe('/picked/folder')
+    })
+
+    it('error: dialog cancelled → returns null', async () => {
+      state.mainWindow = { isDestroyed: () => false, webContents: { send: () => {} } }
+      vi.spyOn(electron.dialog, 'showOpenDialog').mockResolvedValue({
+        canceled: true, filePaths: [],
+      })
+      const ipc = makeIpcMain()
+      svc.registerIpcHandlers(ipc, baseDeps(state))
+      const r = await ipc.invoke('canvExtensions:pickInstallFolder')
+      expect(r).toBeNull()
+    })
+  })
+
+  describe('canvExtensions:pickInstallFile', () => {
+    it('happy: dialog returns a .canvext path → forwarded', async () => {
+      state.mainWindow = { isDestroyed: () => false, webContents: { send: () => {} } }
+      vi.spyOn(electron.dialog, 'showOpenDialog').mockResolvedValue({
+        canceled: false, filePaths: ['/p/x.canvext'],
+      })
+      const ipc = makeIpcMain()
+      svc.registerIpcHandlers(ipc, baseDeps(state))
+      const r = await ipc.invoke('canvExtensions:pickInstallFile')
+      expect(r).toBe('/p/x.canvext')
+    })
+
+    it('error: dialog cancelled → returns null', async () => {
+      state.mainWindow = { isDestroyed: () => false, webContents: { send: () => {} } }
+      vi.spyOn(electron.dialog, 'showOpenDialog').mockResolvedValue({
+        canceled: true, filePaths: [],
+      })
+      const ipc = makeIpcMain()
+      svc.registerIpcHandlers(ipc, baseDeps(state))
+      const r = await ipc.invoke('canvExtensions:pickInstallFile')
+      expect(r).toBeNull()
+    })
+  })
+
+  describe('canvExtensions:readActivity', () => {
+    it('happy: returns activity counter for the extension', async () => {
+      activity.recordAi('act-ext', { in: 10, out: 5 })
+      activity.recordNet('act-ext')
+      const r = await state.ipcMain.invoke('canvExtensions:readActivity', 'act-ext')
+      expect(r).toEqual({ tokensIn: 10, tokensOut: 5, netRequests: 1 })
+    })
+
+    it('error: no counters for extension → returns zero-counts default', async () => {
+      const r = await state.ipcMain.invoke('canvExtensions:readActivity', 'never-seen')
+      expect(r).toEqual({ tokensIn: 0, tokensOut: 0, netRequests: 0 })
+    })
+  })
+
+  describe('canvExtensions:requestActivation', () => {
+    it('happy: workspace not trusted → returns without spawning', async () => {
+      await installFixture(state, { id: 'ra-ext' })
+      state.registry.setEnabled('ra-ext', true)
+      state.registry.setTrustedAt('ra-ext', new Date().toISOString())
+      // Trust store stays untrusted.
+      const spawnSpy = vi.spyOn(state.runtime, 'spawn').mockResolvedValue(undefined)
+      await state.ipcMain.invoke('canvExtensions:requestActivation', { kind: 'command', commandId: 'x' })
+      expect(spawnSpy).not.toHaveBeenCalled()
+    })
+
+    it('happy: trigger matches enabled+trusted ext → spawnInstalled invoked', async () => {
+      const { id } = await installFixture(state, {
+        id: 'ra-active',
+        activationEvents: ['onCommand:my.cmd'],
+        contributions: [
+          { type: 'command', id: 'my.cmd', title: 'C', entry: 'cmd.js' },
+        ],
+      })
+      state.registry.setEnabled(id, true)
+      state.registry.setTrustedAt(id, new Date().toISOString())
+      state.trustStore.set(state.root, 'trusted')
+      const spawnSpy = vi.spyOn(state.runtime, 'spawn').mockResolvedValue(undefined)
+      await state.ipcMain.invoke('canvExtensions:requestActivation', {
+        kind: 'command', commandId: 'my.cmd',
+      })
+      expect(spawnSpy).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  describe('canvExtDev:spawnTest (dev-only)', () => {
+    it('happy: spawns the hello-world fixture via the runtime', async () => {
+      state.mainWindow = { isDestroyed: () => false, webContents: { send: () => {} } }
+      const spawnSpy = vi.spyOn(state.runtime, 'spawn').mockResolvedValue(undefined)
+      const r = await state.ipcMain.invoke('canvExtDev:spawnTest', 'hello-world')
+      expect(r.ok).toBe(true)
+      expect(r.id).toBe('hello-world')
+      expect(spawnSpy).toHaveBeenCalledTimes(1)
+    })
+
+    it('error: invalid fixture name (..) → throws "invalid fixture name"', async () => {
+      state.mainWindow = { isDestroyed: () => false, webContents: { send: () => {} } }
+      await expect(state.ipcMain.invoke('canvExtDev:spawnTest', '..'))
+        .rejects.toThrow(/invalid fixture name/)
+    })
+
+    it('error: handler absent in production builds', async () => {
+      electron.app.isPackaged = true
+      const ipc = makeIpcMain()
+      svc.registerIpcHandlers(ipc, baseDeps(state))
+      expect(ipc._hasHandler('canvExtDev:spawnTest')).toBe(false)
+    })
+  })
+
+  describe('canvExtDev:destroyTest (dev-only)', () => {
+    it('happy: routes to runtime.destroy', async () => {
+      const destroySpy = vi.spyOn(state.runtime, 'destroy').mockResolvedValue(undefined)
+      await state.ipcMain.invoke('canvExtDev:destroyTest', 'some-id')
+      expect(destroySpy).toHaveBeenCalledWith('some-id')
+    })
+
+    it('error: handler absent in production builds', async () => {
+      electron.app.isPackaged = true
+      const ipc = makeIpcMain()
+      svc.registerIpcHandlers(ipc, baseDeps(state))
+      expect(ipc._hasHandler('canvExtDev:destroyTest')).toBe(false)
+    })
+  })
+
+  describe('canvExtDev:setBounds (dev-only)', () => {
+    it('happy: routes to runtime.setBounds', async () => {
+      const boundsSpy = vi.spyOn(state.runtime, 'setBounds').mockReturnValue(undefined)
+      const bounds = { x: 0, y: 0, width: 100, height: 100 }
+      await state.ipcMain.invoke('canvExtDev:setBounds', 'some-id', bounds)
+      expect(boundsSpy).toHaveBeenCalledWith('some-id', bounds)
+    })
+
+    it('error: handler absent in production builds', async () => {
+      electron.app.isPackaged = true
+      const ipc = makeIpcMain()
+      svc.registerIpcHandlers(ipc, baseDeps(state))
+      expect(ipc._hasHandler('canvExtDev:setBounds')).toBe(false)
+    })
+  })
+
+  describe('canvExtDev:fireEvent (dev-only)', () => {
+    it('happy: routes to runtime.dispatchEvent', async () => {
+      const dispatchSpy = vi.spyOn(state.runtime, 'dispatchEvent').mockReturnValue(undefined)
+      await state.ipcMain.invoke('canvExtDev:fireEvent', 'canvExt:docChanged', { foo: 1 })
+      expect(dispatchSpy).toHaveBeenCalledWith('canvExt:docChanged', { foo: 1 })
+    })
+
+    it('error: non-string type → no-op (no throw)', async () => {
+      const dispatchSpy = vi.spyOn(state.runtime, 'dispatchEvent').mockReturnValue(undefined)
+      await state.ipcMain.invoke('canvExtDev:fireEvent', 42, null)
+      expect(dispatchSpy).not.toHaveBeenCalled()
+    })
+  })
 })
