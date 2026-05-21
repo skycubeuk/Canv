@@ -38,6 +38,13 @@ export interface ApplyEditsErrorPayload {
   detail?: string
   /** When reason === 'anchor-not-unique', the number of matches found. */
   matches?: number
+  /**
+   * When reason === 'write-failed', the subset of files whose rollback ALSO
+   * failed — the workspace is half-written and these paths now hold the
+   * partially-applied content. Surface this to the user verbatim so they can
+   * recover by hand. Absent when every rollback succeeded.
+   */
+  rollbackFailed?: string[]
 }
 
 export interface ApplyEditsErr {

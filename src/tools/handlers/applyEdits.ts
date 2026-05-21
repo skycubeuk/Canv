@@ -53,7 +53,12 @@ export const applyEditsTool: Tool<Input, Output> = {
       const detail = r.error.matches != null
         ? ` (${r.error.matches} matches)`
         : r.error.detail ? `: ${r.error.detail}` : ''
-      throw new Error(`${r.error.reason} for "${r.error.path}"${detail}`)
+      // When a rollback partially failed the workspace is half-written. Surface
+      // every affected path so the user (via the chat toast) can recover.
+      const rollback = r.error.rollbackFailed && r.error.rollbackFailed.length > 0
+        ? `; rollback failed for: ${r.error.rollbackFailed.join(', ')}`
+        : ''
+      throw new Error(`${r.error.reason} for "${r.error.path}"${detail}${rollback}`)
     }
     return { applied: r.applied }
   },

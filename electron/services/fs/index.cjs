@@ -252,6 +252,10 @@ function registerIpcHandlers(ipcMain, deps) {
       return { ok: true, applied }
     } catch (writeErr) {
       // Rollback every file we wrote. Reverse order so the latest is reverted first.
+      // Track restores that themselves fail — the workspace is now half-written
+      // and the caller must surface that to the user explicitly so they can
+      // recover (or at least know which paths to inspect).
+      const rollbackFailed = []
       for (const a of applied.slice().reverse()) {
         const s = snapshots.find((x) => x.path === a.path)
         if (!s) continue
@@ -259,17 +263,17 @@ function registerIpcHandlers(ipcMain, deps) {
           await fsp.writeFile(s.abs, s.prevContent)
         } catch (rollbackErr) {
           console.error(`[applyEdits] rollback of ${s.path} failed:`, rollbackErr)
+          rollbackFailed.push(s.path)
         }
       }
       const failedPath = snapshots[applied.length]?.path ?? applied.at(-1)?.path ?? '?'
-      return {
-        ok: false,
-        error: {
-          reason: 'write-failed',
-          path: failedPath,
-          detail: writeErr instanceof Error ? writeErr.message : String(writeErr),
-        },
+      const error = {
+        reason: 'write-failed',
+        path: failedPath,
+        detail: writeErr instanceof Error ? writeErr.message : String(writeErr),
       }
+      if (rollbackFailed.length > 0) error.rollbackFailed = rollbackFailed
+      return { ok: false, error }
     }
   })
 

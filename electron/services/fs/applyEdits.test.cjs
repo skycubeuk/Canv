@@ -107,8 +107,49 @@ describe('canvFS:applyEdits', () => {
       expect(r.error.reason).toBe('write-failed')
       // a.md restored from snapshot
       expect(await fsp.readFile(path.join(root, 'a.md'), 'utf-8')).toBe('# A\n')
+      // b.md was never partially written — EACCES on open() leaves the file
+      // contents untouched, but we assert it explicitly so a regression that
+      // truncates-then-fails would surface here.
+      expect(await fsp.readFile(path.join(root, 'b.md'), 'utf-8')).toBe('# B\n')
+      // No rollback failure expected on the happy rollback path.
+      expect(r.error.rollbackFailed).toBeUndefined()
     } finally {
       fs.chmodSync(path.join(root, 'b.md'), 0o600)
+    }
+  })
+
+  it('reports rollbackFailed when restoring a previously-written file also throws', async () => {
+    await fsp.writeFile(path.join(root, 'a.md'), '# A\n')
+    await fsp.writeFile(path.join(root, 'b.md'), '# B\n')
+
+    // Force the second write to fail AND the rollback of the first to fail.
+    // Strategy: spy on fsp.writeFile so we control which calls succeed.
+    //   - First write (a.md, # A2) → succeed (delegate to original).
+    //   - Second write (b.md, # B2) → throw EACCES.
+    //   - Rollback write (a.md, original snapshot) → throw EACCES.
+    const realWriteFile = fsp.writeFile
+    let nthCall = 0
+    const spy = vi.spyOn(fsp, 'writeFile').mockImplementation(async (target, data, opts) => {
+      nthCall += 1
+      const abs = String(target)
+      if (nthCall === 1 && abs.endsWith('a.md')) {
+        return realWriteFile.call(fsp, target, data, opts)
+      }
+      // 2nd call: b.md primary write fails; 3rd call: rollback of a.md fails.
+      const err = new Error('EACCES (simulated)')
+      err.code = 'EACCES'
+      throw err
+    })
+    try {
+      const r = await ipcMain.invoke('canvFS:applyEdits', [
+        { path: 'a.md', newContent: '# A2\n', opts: { eol: 'lf', bom: false } },
+        { path: 'b.md', newContent: '# B2\n', opts: { eol: 'lf', bom: false } },
+      ])
+      expect(r.ok).toBe(false)
+      expect(r.error.reason).toBe('write-failed')
+      expect(r.error.rollbackFailed).toEqual(['a.md'])
+    } finally {
+      spy.mockRestore()
     }
   })
 
