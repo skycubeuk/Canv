@@ -618,4 +618,76 @@ describe('fs service IPC handlers', () => {
         .rejects.toThrow(/local-only/)
     })
   })
+
+  // ---------------------------------------------------------------------------
+  // Git handlers (isomorphic-git, real repo in temp workspace)
+  // ---------------------------------------------------------------------------
+
+  describe('canvFS:gitStatus', () => {
+    it('happy: returns status with modified file in `changed`', async () => {
+      const git = require('isomorphic-git')
+      const nodefs = require('node:fs')
+      await git.init({ fs: nodefs, dir: root, defaultBranch: 'main' })
+      await fsp.writeFile(path.join(root, 'a.md'), 'one\n')
+      await git.add({ fs: nodefs, dir: root, filepath: 'a.md' })
+      await git.commit({
+        fs: nodefs,
+        dir: root,
+        message: 'init',
+        author: { name: 't', email: 't@x' },
+      })
+      // # OS-AWARE Pattern 6 — isomorphic-git's statusMatrix uses the index's
+      // cached stat (mtime + size). A same-second write with similar size
+      // appears identical to HEAD. Sleep past 1s and change the size so the
+      // modified state is detected on all platforms.
+      await new Promise((r) => setTimeout(r, 1100))
+      await fsp.writeFile(path.join(root, 'a.md'), 'second longer content\n')
+      const r = await ipcMain.invoke('canvFS:gitStatus')
+      expect(r).toBeTruthy()
+      expect(r.noRepo).toBeUndefined()
+      const modified = r.changed.find((e) => e.relPath === 'a.md')
+      expect(modified).toBeTruthy()
+      expect(modified.status).toBe('modified')
+    })
+
+    it('error: no .git directory → returns { noRepo: true } empty-state payload', async () => {
+      const r = await ipcMain.invoke('canvFS:gitStatus')
+      expect(r).toEqual({
+        branch: null,
+        changed: [],
+        staged: [],
+        untracked: [],
+        noRepo: true,
+      })
+    })
+  })
+
+  describe('canvFS:gitDiff', () => {
+    it('happy: returns baseText and currentText for a modified file', async () => {
+      const git = require('isomorphic-git')
+      const nodefs = require('node:fs')
+      await git.init({ fs: nodefs, dir: root, defaultBranch: 'main' })
+      await fsp.writeFile(path.join(root, 'a.md'), 'first\n')
+      await git.add({ fs: nodefs, dir: root, filepath: 'a.md' })
+      await git.commit({
+        fs: nodefs,
+        dir: root,
+        message: 'init',
+        author: { name: 't', email: 't@x' },
+      })
+      await fsp.writeFile(path.join(root, 'a.md'), 'second\n')
+      const r = await ipcMain.invoke('canvFS:gitDiff', 'a.md', 'HEAD')
+      expect(r.relPath).toBe('a.md')
+      expect(r.baseRef).toBe('HEAD')
+      expect(r.baseText).toBe('first\n')
+      expect(r.currentText).toBe('second\n')
+    })
+
+    it('error: invalid rel → throws "invalid rel"', async () => {
+      await expect(ipcMain.invoke('canvFS:gitDiff', '', 'HEAD'))
+        .rejects.toThrow(/invalid rel/)
+      await expect(ipcMain.invoke('canvFS:gitDiff', 42, 'HEAD'))
+        .rejects.toThrow(/invalid rel/)
+    })
+  })
 })
