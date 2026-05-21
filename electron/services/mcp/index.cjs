@@ -118,9 +118,16 @@ function createMcpService({ getConfig } = {}) {
     }
   }
 
-  // Per-server test: connect (if not already) and return the tool list, or
-  // surface the connect error. Idempotent — re-testing an already-connected
-  // server does NOT spawn a second subprocess / open a second SSE stream.
+  /**
+   * Connect (if not already) and return the cached tool list for one server.
+   *
+   * **Caveat**: this method is idempotent on the handle — if a previous
+   * connect succeeded but the transport has since died silently (e.g. an stdio
+   * subprocess crashed without closing the SDK client), `testServer` will
+   * report success against the dead handle. Use `reconnectServer` for an
+   * unambiguous fresh handshake. The Phase 4.5 UI surfaces a Retry button
+   * that calls `reconnectServer` to give the user that escape hatch.
+   */
   async function testServer(name) {
     const cfgs = (typeof getConfig === 'function' ? getConfig() : []) || []
     const cfg = cfgs.find((c) => c && c.name === name)
