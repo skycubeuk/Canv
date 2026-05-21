@@ -118,8 +118,42 @@ function createMcpService({ getConfig } = {}) {
     }
   }
 
-  return { listTools, callTool, ensureConnected, shutdown,
-           __test__: { handles, connectOne, disconnectOne } }
+  // Per-server test: connect (if not already) and return the tool list, or
+  // surface the connect error. Idempotent — re-testing an already-connected
+  // server does NOT spawn a second subprocess / open a second SSE stream.
+  async function testServer(name) {
+    const cfgs = (typeof getConfig === 'function' ? getConfig() : []) || []
+    const cfg = cfgs.find((c) => c && c.name === name)
+    if (!cfg) return { ok: false, error: `no server named "${name}"` }
+    try {
+      if (!__test__.handles.has(name)) {
+        await __test__.connectOne(cfg)
+      }
+      const h = __test__.handles.get(name)
+      if (!h) return { ok: false, error: 'connection succeeded but no handle was registered' }
+      return {
+        ok: true,
+        tools: h.tools.map((t) => ({
+          name: t.name,
+          description: t.description ?? '',
+          inputSchema: t.inputSchema ?? { type: 'object' },
+        })),
+      }
+    } catch (e) {
+      return { ok: false, error: (e && e.message) || String(e) }
+    }
+  }
+
+  async function reconnectServer(name) {
+    await __test__.disconnectOne(name)
+    return testServer(name)
+  }
+
+  // Expose the inner refs as an object so tests can spy on them. testServer /
+  // reconnectServer route through this object so the spies actually intercept.
+  const __test__ = { handles, connectOne, disconnectOne }
+
+  return { listTools, callTool, ensureConnected, shutdown, testServer, reconnectServer, __test__ }
 }
 
 function registerIpcHandlers(ipcMain, _deps) {
