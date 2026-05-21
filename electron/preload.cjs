@@ -110,6 +110,7 @@ if (!isDockPopout()) {
     readFile: (rel) => ipcRenderer.invoke('canvFS:readFile', rel),
     writeFile: (rel, content, expectedMtimeMs, opts) =>
       ipcRenderer.invoke('canvFS:writeFile', rel, content, expectedMtimeMs, opts),
+    applyEdits: (fileWrites) => ipcRenderer.invoke('canvFS:applyEdits', fileWrites),
     createFile: (rel, content) => ipcRenderer.invoke('canvFS:createFile', rel, content ?? ''),
     createFolder: (rel) => ipcRenderer.invoke('canvFS:createFolder', rel),
     rename: (oldRel, newRel) => ipcRenderer.invoke('canvFS:rename', oldRel, newRel),
