@@ -12,10 +12,12 @@ import { createFolderTool } from './handlers/createFolder'
 import { setTodosTool } from './handlers/setTodos'
 import { siteRegisterTool } from './handlers/siteRegister'
 import { siteUpdateTool } from './handlers/siteUpdate'
+import { applyEditsTool } from './handlers/applyEdits'
 
 const TOOLS: Tool[] = [
   listDirTool, readFileTool, searchWorkspaceTool, fileMetadataTool,
-  createFileTool, editFileTool, deleteFileTool, renameFileTool, createFolderTool,
+  createFileTool, editFileTool, applyEditsTool,
+  deleteFileTool, renameFileTool, createFolderTool,
   setTodosTool,
   siteRegisterTool, siteUpdateTool,
 ] as Tool[]

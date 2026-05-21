@@ -350,6 +350,7 @@ export function useChatSessions(args: UseChatSessionsArgs): UseChatSessionsApi {
               if (path !== args.workspace.activeMarkdownRel) throw new Error(`Cannot apply editor edit to non-active path: ${path}`)
               v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: newContent } })
             },
+            workspace: { applyEdits: args.workspace.applyEdits },
             signal: rt.abort.signal,
           },
           requestApproval: (call, preview) => requestApproval(sessionId, call, preview),
