@@ -5,8 +5,8 @@ import type { McpToolSummary } from '../../../agents/mcp'
 export type Status =
   | { kind: 'idle' }
   | { kind: 'testing' }
-  | { kind: 'connected'; tools: McpToolSummary[]; testedAt: number; configHash: string }
-  | { kind: 'failed'; error: string; testedAt: number; configHash: string }
+  | { kind: 'connected'; tools: McpToolSummary[] }
+  | { kind: 'failed'; error: string }
 
 interface Result {
   status: Status
@@ -66,11 +66,11 @@ export function useMcpServerStatus(
     ) => {
       if (cancelledRef.current) return
       if (!r) {
-        setStatus({ kind: 'failed', error: 'MCP bridge unavailable', testedAt: Date.now(), configHash: hash })
+        setStatus({ kind: 'failed', error: 'MCP bridge unavailable' })
         return
       }
-      if (r.ok) setStatus({ kind: 'connected', tools: r.tools, testedAt: Date.now(), configHash: hash })
-      else setStatus({ kind: 'failed', error: r.error, testedAt: Date.now(), configHash: hash })
+      if (r.ok) setStatus({ kind: 'connected', tools: r.tools })
+      else setStatus({ kind: 'failed', error: r.error })
       lastTestedHashRef.current = hash
     },
     [],
