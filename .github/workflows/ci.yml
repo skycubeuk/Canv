@@ -31,7 +31,10 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        # macOS runners occasionally hit an EEXIST symlink race in electron's
+        # postinstall (extract-zip racing on Electron.framework symlinks).
+        # On failure, wipe the partial electron install and retry once.
+        run: npm ci || (echo "first npm ci failed; cleaning + retrying" && rm -rf node_modules/electron && npm ci)
 
       - name: Lint (non-blocking)
         run: npm run lint
