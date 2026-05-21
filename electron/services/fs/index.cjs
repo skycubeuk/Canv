@@ -193,6 +193,86 @@ function registerIpcHandlers(ipcMain, deps) {
     })
   })
 
+  // Apply N edits across N files atomically. Snapshot every target before any
+  // write; on per-file write failure, roll back every already-written file
+  // from its in-memory snapshot. Remote workspaces are refused (the remote
+  // backend has no equivalent atomic primitive yet).
+  ipcMain.handle('canvFS:applyEdits', async (_e, fileWrites) => {
+    if (deps.isRemote()) {
+      const firstPath = (Array.isArray(fileWrites) && fileWrites[0]?.path) || '?'
+      return { ok: false, error: { reason: 'unsupported-remote', path: firstPath } }
+    }
+    if (!Array.isArray(fileWrites) || fileWrites.length === 0) {
+      return { ok: false, error: { reason: 'write-failed', path: '?', detail: 'empty edit list' } }
+    }
+
+    const root = deps.requireWorkspace()
+    const snapshots = []
+
+    // Pre-snapshot every file. Refuse on any pre-write failure; nothing is on disk yet.
+    for (const fw of fileWrites) {
+      let abs
+      try {
+        abs = deps.safeResolve(root, fw.path)
+      } catch {
+        return { ok: false, error: { reason: 'path-outside-workspace', path: fw.path } }
+      }
+      if (!deps.isAllowedExt(fw.path, abs)) {
+        return { ok: false, error: { reason: 'path-outside-workspace', path: fw.path, detail: 'unsupported file type' } }
+      }
+      let stat
+      try {
+        stat = await fsp.stat(abs)
+      } catch (e) {
+        if (e && e.code === 'ENOENT') {
+          return { ok: false, error: { reason: 'file-not-found', path: fw.path } }
+        }
+        throw e
+      }
+      if (fw.expectedMtimeMs != null && Math.abs(stat.mtimeMs - fw.expectedMtimeMs) > 1) {
+        return { ok: false, error: { reason: 'stale-mtime', path: fw.path } }
+      }
+      const raw = await fsp.readFile(abs)
+      snapshots.push({ path: fw.path, abs, prevContent: raw, prevMtime: stat.mtimeMs, fw })
+    }
+
+    const applied = []
+    try {
+      for (const s of snapshots) {
+        const r = await canvFSWriteFileImpl(
+          root,
+          s.path,
+          s.fw.newContent,
+          undefined, // mtime check already done in the snapshot pass
+          s.fw.opts,
+          { safeResolve: deps.safeResolve, isAllowedExt: deps.isAllowedExt },
+        )
+        applied.push({ path: s.path, mtimeMs: r.mtimeMs })
+      }
+      return { ok: true, applied }
+    } catch (writeErr) {
+      // Rollback every file we wrote. Reverse order so the latest is reverted first.
+      for (const a of applied.slice().reverse()) {
+        const s = snapshots.find((x) => x.path === a.path)
+        if (!s) continue
+        try {
+          await fsp.writeFile(s.abs, s.prevContent)
+        } catch (rollbackErr) {
+          console.error(`[applyEdits] rollback of ${s.path} failed:`, rollbackErr)
+        }
+      }
+      const failedPath = snapshots[applied.length]?.path ?? applied.at(-1)?.path ?? '?'
+      return {
+        ok: false,
+        error: {
+          reason: 'write-failed',
+          path: failedPath,
+          detail: writeErr instanceof Error ? writeErr.message : String(writeErr),
+        },
+      }
+    }
+  })
+
   ipcMain.handle('canvFS:createFile', async (_e, rel, content = '') => {
     if (deps.isRemote()) {
       const ws = deps.getWorkspace()
