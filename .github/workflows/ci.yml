@@ -7,14 +7,18 @@ on:
       - main
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.ref }}-${{ github.workflow }}
   cancel-in-progress: true
 
 jobs:
   test:
-    name: Lint, test, build
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+    name: Lint, test, build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
 
     steps:
       - name: Checkout
@@ -38,3 +42,7 @@ jobs:
 
       - name: Build (renderer)
         run: npm run build
+
+      - name: Keystroke benchmark (warning-only)
+        run: npm run test:bench
+        continue-on-error: true
