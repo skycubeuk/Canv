@@ -37,8 +37,11 @@ function openaiMessages(system: string | undefined, messages: Message[]): Array<
 export const openaiAdapter: LLMAdapter = {
   id: 'openai',
   name: 'OpenAI',
-  // Edit this list when OpenAI ships new models. https://platform.openai.com/docs/models
-  models: ['gpt-5.5', 'gpt-5.5-pro', 'gpt-5.4-mini', 'gpt-5.4-nano'],
+  // Curated list of OpenAI chat-completions-compatible model IDs.
+  // Verified 2026-05-21 against developers.openai.com — `gpt-5.5-pro` was a
+  // stale guess that 404s with "not a chat model" on /v1/chat/completions.
+  // Edit when OpenAI ships new chat models. https://platform.openai.com/docs/models
+  models: ['gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.4-nano', 'gpt-5-mini', 'gpt-4o-mini'],
 
   async complete(params: CompleteParams): Promise<CompleteResult> {
     const { messages, system, model, maxTokens = 2048, signal, onToken, apiKey } = params
