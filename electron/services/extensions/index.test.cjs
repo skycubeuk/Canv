@@ -175,4 +175,242 @@ describe('extensions service IPC handlers', () => {
     expect(typeof state.ipcMain.invoke).toBe('function')
     expect(state.ipcMain._hasHandler('canvExtensions:listInstalled')).toBe(true)
   })
+
+  // ---------------------------------------------------------------------------
+  // Listing + reading handlers (no side-effects beyond the workspace registry
+  // and on-disk extension dir).
+  // ---------------------------------------------------------------------------
+
+  describe('canvExtensions:listInstalled', () => {
+    it('happy: returns the workspace registry entries', async () => {
+      await installFixture(state, { id: 'ext-a' })
+      await installFixture(state, { id: 'ext-b' })
+      const r = await state.ipcMain.invoke('canvExtensions:listInstalled')
+      expect(Array.isArray(r)).toBe(true)
+      expect(r.map((e) => e.id).sort()).toEqual(['ext-a', 'ext-b'])
+    })
+
+    it('error: no workspace registry → returns empty array', async () => {
+      const ipc = makeIpcMain()
+      svc.registerIpcHandlers(ipc, baseDeps(state, {
+        getWorkspaceRegistry: () => null,
+      }))
+      const r = await ipc.invoke('canvExtensions:listInstalled')
+      expect(r).toEqual([])
+    })
+  })
+
+  describe('canvExtensions:getFileHandlerDefaults', () => {
+    it('happy: returns persisted defaults map', async () => {
+      const dir = path.join(state.root, '.canv', 'extensions')
+      await fsp.mkdir(dir, { recursive: true })
+      await fsp.writeFile(
+        path.join(dir, 'file-handlers.json'),
+        JSON.stringify({ version: 1, defaults: { '.pdf': 'pdf-viewer' } }),
+      )
+      const r = await state.ipcMain.invoke('canvExtensions:getFileHandlerDefaults')
+      expect(r).toEqual({ '.pdf': 'pdf-viewer' })
+    })
+
+    it('error: no local workspace → returns empty object', async () => {
+      const ipc = makeIpcMain()
+      svc.registerIpcHandlers(ipc, baseDeps(state, {
+        getWorkspace: () => null,
+      }))
+      const r = await ipc.invoke('canvExtensions:getFileHandlerDefaults')
+      expect(r).toEqual({})
+    })
+  })
+
+  describe('canvExtensions:setFileHandlerDefault', () => {
+    it('happy: persists the new default and returns ok', async () => {
+      const r = await state.ipcMain.invoke(
+        'canvExtensions:setFileHandlerDefault',
+        '.pdf',
+        'pdf-viewer',
+      )
+      expect(r).toEqual({ ok: true })
+      const file = path.join(state.root, '.canv', 'extensions', 'file-handlers.json')
+      const parsed = JSON.parse(await fsp.readFile(file, 'utf-8'))
+      expect(parsed.defaults['.pdf']).toBe('pdf-viewer')
+    })
+
+    it('error: no local workspace → returns ok:false (no write)', async () => {
+      const ipc = makeIpcMain()
+      svc.registerIpcHandlers(ipc, baseDeps(state, {
+        getWorkspace: () => null,
+      }))
+      const r = await ipc.invoke('canvExtensions:setFileHandlerDefault', '.pdf', 'p')
+      expect(r).toEqual({ ok: false })
+    })
+  })
+
+  describe('canvExtensions:readAllContributions', () => {
+    it('happy: trusted workspace → returns merged contributions', async () => {
+      const { id } = await installFixture(state, {
+        id: 'with-panel',
+        contributions: [
+          { type: 'panel', id: 'main', title: 'M', icon: 'i', location: 'left-sidebar', entry: 'main.html' },
+        ],
+      })
+      state.registry.setEnabled(id, true)
+      state.registry.setTrustedAt(id, new Date().toISOString())
+      state.trustStore.set(state.root, 'trusted')
+      const r = await state.ipcMain.invoke('canvExtensions:readAllContributions')
+      expect(r.panels.length).toBe(1)
+      expect(r.panels[0].extensionId).toBe('with-panel')
+    })
+
+    it('error: workspace not trusted → returns EMPTY contributions', async () => {
+      await installFixture(state)
+      // Trust store defaults to 'untrusted'.
+      const r = await state.ipcMain.invoke('canvExtensions:readAllContributions')
+      expect(r.panels).toEqual([])
+      expect(r.fileHandlers).toEqual([])
+      expect(r.commands).toEqual([])
+    })
+  })
+
+  describe('canvExtensions:previewInstall', () => {
+    it('happy: folder source with valid manifest → returns parsed manifest', async () => {
+      const src = await fsp.mkdtemp(path.join(os.tmpdir(), 'ext-src-'))
+      try {
+        await fsp.writeFile(path.join(src, 'manifest.json'), JSON.stringify({
+          id: 'preview-ext',
+          name: 'Preview',
+          version: '1.0.0',
+          engines: { canv: '^1.0.0' },
+          description: 'p',
+          author: 'a',
+          capabilities: ['storage'],
+          contributions: [
+            { type: 'panel', id: 'main', title: 'M', icon: 'i', location: 'left-sidebar', entry: 'main.html' },
+          ],
+        }))
+        const r = await state.ipcMain.invoke('canvExtensions:previewInstall', src)
+        expect(r.ok).toBe(true)
+        expect(r.manifest.id).toBe('preview-ext')
+      } finally {
+        await fsp.rm(src, { recursive: true, force: true })
+      }
+    })
+
+    it('happy: .canvext zip source → unpacks and returns manifest', async () => {
+      const tmp = await fsp.mkdtemp(path.join(os.tmpdir(), 'ext-zip-'))
+      try {
+        const zip = new AdmZip()
+        zip.addFile('manifest.json', Buffer.from(JSON.stringify({
+          id: 'zip-ext',
+          name: 'Zip',
+          version: '1.0.0',
+          engines: { canv: '^1.0.0' },
+          description: 'z',
+          author: 'a',
+          capabilities: ['storage'],
+          contributions: [
+            { type: 'panel', id: 'main', title: 'M', icon: 'i', location: 'left-sidebar', entry: 'main.html' },
+          ],
+        })))
+        const zipPath = path.join(tmp, 'ext.canvext')
+        zip.writeZip(zipPath)
+        const r = await state.ipcMain.invoke('canvExtensions:previewInstall', zipPath)
+        expect(r.ok).toBe(true)
+        expect(r.manifest.id).toBe('zip-ext')
+      } finally {
+        await fsp.rm(tmp, { recursive: true, force: true })
+      }
+    })
+
+    it('error: missing source path → returns ok:false with errors', async () => {
+      const r = await state.ipcMain.invoke(
+        'canvExtensions:previewInstall',
+        path.join(os.tmpdir(), 'no-such-' + Date.now()),
+      )
+      expect(r.ok).toBe(false)
+      expect(r.errors[0]).toMatch(/source not found/)
+    })
+
+    it('error: corrupt manifest → returns ok:false with validation errors', async () => {
+      const src = await fsp.mkdtemp(path.join(os.tmpdir(), 'ext-src-'))
+      try {
+        await fsp.writeFile(path.join(src, 'manifest.json'), '{"id":"bad"}')
+        const r = await state.ipcMain.invoke('canvExtensions:previewInstall', src)
+        expect(r.ok).toBe(false)
+        expect(r.errors.length).toBeGreaterThan(0)
+      } finally {
+        await fsp.rm(src, { recursive: true, force: true })
+      }
+    })
+  })
+
+  describe('canvExtensions:readSettings', () => {
+    it('happy: returns parsed settings.json for installed extension', async () => {
+      const { id, dir } = await installFixture(state)
+      await fsp.writeFile(path.join(dir, 'settings.json'), JSON.stringify({ greeting: 'hi' }))
+      const r = await state.ipcMain.invoke('canvExtensions:readSettings', id)
+      expect(r).toEqual({ greeting: 'hi' })
+    })
+
+    it('error: settings file absent → returns empty object (handler swallows ENOENT)', async () => {
+      const { id } = await installFixture(state)
+      const r = await state.ipcMain.invoke('canvExtensions:readSettings', id)
+      expect(r).toEqual({})
+    })
+  })
+
+  describe('canvExtensions:readManifest', () => {
+    it('happy: returns the on-disk manifest JSON', async () => {
+      const { id } = await installFixture(state, { id: 'rd-ext' })
+      const r = await state.ipcMain.invoke('canvExtensions:readManifest', id)
+      expect(r.id).toBe('rd-ext')
+      expect(r.version).toBe('1.0.0')
+    })
+
+    it('error: manifest missing → throws ENOENT', async () => {
+      await expect(state.ipcMain.invoke('canvExtensions:readManifest', 'ghost'))
+        .rejects.toThrow(/ENOENT|no such file|cannot find the file/i)
+    })
+  })
+
+  describe('canvExtensions:listFiles', () => {
+    it('happy: walks extension dir and returns sorted relative paths', async () => {
+      const { id, dir } = await installFixture(state, { id: 'lf-ext' })
+      await fsp.mkdir(path.join(dir, 'panels'), { recursive: true })
+      await fsp.writeFile(path.join(dir, 'panels', 'main.html'), '<x/>')
+      await fsp.writeFile(path.join(dir, 'index.js'), '/* */')
+      const r = await state.ipcMain.invoke('canvExtensions:listFiles', id)
+      expect(r).toContain('manifest.json')
+      expect(r).toContain('index.js')
+      expect(r).toContain('panels/main.html')
+      // Sorted.
+      const sorted = [...r].sort()
+      expect(r).toEqual(sorted)
+    })
+
+    it('error: extension dir missing → returns empty array (walk swallows)', async () => {
+      const r = await state.ipcMain.invoke('canvExtensions:listFiles', 'never-installed')
+      expect(r).toEqual([])
+    })
+  })
+
+  describe('canvExtensions:readFile', () => {
+    it('happy: returns text contents of a file under the extension dir', async () => {
+      const { id, dir } = await installFixture(state, { id: 'rf-ext' })
+      await fsp.writeFile(path.join(dir, 'note.txt'), 'hello\n')
+      const r = await state.ipcMain.invoke('canvExtensions:readFile', id, 'note.txt')
+      expect(r).toBe('hello\n')
+    })
+
+    it('error: path traversal in rel → throws "invalid path"', async () => {
+      const { id } = await installFixture(state)
+      await expect(state.ipcMain.invoke('canvExtensions:readFile', id, '../../etc/passwd'))
+        .rejects.toThrow(/invalid path/)
+    })
+
+    it('error: target missing → throws ENOENT', async () => {
+      const { id } = await installFixture(state)
+      await expect(state.ipcMain.invoke('canvExtensions:readFile', id, 'nope.txt'))
+        .rejects.toThrow(/ENOENT|no such file|cannot find the file/i)
+    })
+  })
 })
