@@ -27,7 +27,9 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # Track .nvmrc so dev and CI stay in lock-step. Bump the version
+          # there, not here.
+          node-version-file: '.nvmrc'
           cache: npm
 
       - name: Install dependencies
