@@ -1,5 +1,5 @@
 import type { Tool } from '../types'
-import type { AnchorEdit, ApplyEditsResult } from '../../services/workspaceEdits'
+import type { AnchorEdit, ApplyEditsErrorPayload, ApplyEditsResult } from '../../services/workspaceEdits'
 
 interface Input {
   edits: AnchorEdit[]
@@ -7,6 +7,38 @@ interface Input {
 
 interface Output {
   applied: Array<{ path: string; mtimeMs: number }>
+}
+
+/**
+ * Human-readable failure messages. The model copy-pastes these into chat, so
+ * the prose IS the user experience — keep them explanatory, not jargony.
+ * Each message still carries the keywords ("appears N times", "changed on
+ * disk", "not found") the model can use to choose a retry strategy.
+ */
+export function formatApplyEditsError(error: ApplyEditsErrorPayload): string {
+  const rollback = error.rollbackFailed && error.rollbackFailed.length > 0
+    ? ` The rollback of ${error.rollbackFailed.join(', ')} also failed, so the workspace may be in a half-written state — ask the user to verify those files.`
+    : ''
+  switch (error.reason) {
+    case 'anchor-not-found':
+      return `Could not edit "${error.path}": the text to replace was not found. Re-read the file before retrying.${rollback}`
+    case 'anchor-not-unique':
+      return `Could not edit "${error.path}": the text to replace appears ${error.matches} times in the file, so it's ambiguous which occurrence to change. Add 1–3 lines of surrounding context to oldText to make the match unique, then retry.${rollback}`
+    case 'file-not-found':
+      return `Could not edit "${error.path}": the file does not exist in this workspace.${rollback}`
+    case 'path-outside-workspace':
+      return `Could not edit "${error.path}": the path is outside the workspace${error.detail ? ` (${error.detail})` : ''}.${rollback}`
+    case 'stale-mtime':
+      return `Could not edit "${error.path}": the file changed on disk since you last read it. Re-read the file and retry.${rollback}`
+    case 'file-dirty':
+      return `Could not edit "${error.path}": the user has unsaved changes in this file. Ask them to save first, then retry.${rollback}`
+    case 'write-failed':
+      return `Could not edit "${error.path}": the file write failed${error.detail ? ` (${error.detail})` : ''}. No files were changed.${rollback}`
+    case 'unsupported-remote':
+      return `Could not edit "${error.path}": apply_edits does not yet support remote (SSH) workspaces. Ask the user to open this workspace locally.`
+    default:
+      return `Could not edit "${error.path}": ${error.reason}${error.detail ? ` (${error.detail})` : ''}.${rollback}`
+  }
 }
 
 export const applyEditsTool: Tool<Input, Output> = {
@@ -50,15 +82,7 @@ export const applyEditsTool: Tool<Input, Output> = {
     }
     const r: ApplyEditsResult = await ctx.workspace.applyEdits(input.edits)
     if (!r.ok) {
-      const detail = r.error.matches != null
-        ? ` (${r.error.matches} matches)`
-        : r.error.detail ? `: ${r.error.detail}` : ''
-      // When a rollback partially failed the workspace is half-written. Surface
-      // every affected path so the user (via the chat toast) can recover.
-      const rollback = r.error.rollbackFailed && r.error.rollbackFailed.length > 0
-        ? `; rollback failed for: ${r.error.rollbackFailed.join(', ')}`
-        : ''
-      throw new Error(`${r.error.reason} for "${r.error.path}"${detail}${rollback}`)
+      throw new Error(formatApplyEditsError(r.error))
     }
     return { applied: r.applied }
   },

@@ -47,7 +47,9 @@ HOW TO EDIT — when an edit is warranted (per the rule above), follow these:
 
 5. To inspect a file, call \`read_file\`. Never guess content.
 
-6. For small in-place edits or cross-file rewrites, prefer \`apply_edits\` over \`edit_file\`. Each edit is { path, oldText, newText }. \`oldText\` must occur EXACTLY ONCE in the target file — include 1–3 lines of unique surrounding context if a short snippet would be ambiguous. If the tool returns "anchor-not-unique", add more context and retry. If "anchor-not-found", re-read the file before retrying. The whole call is rejected if any edit fails, so do not ship a partial sequence.
+6. For small in-place edits or cross-file rewrites, prefer \`apply_edits\` over \`edit_file\`. Each edit is { path, oldText, newText }. \`oldText\` must occur EXACTLY ONCE in the target file — include 1–3 lines of unique surrounding context if a short snippet would be ambiguous. The whole call is rejected if any edit fails, so do not ship a partial sequence.
+
+  If \`apply_edits\` returns an error, the message tells you what to do: "the text to replace appears N times" → add more surrounding context and retry; "the text to replace was not found" or "the file changed on disk" → re-read the file then retry; "the user has unsaved changes" → ask the user to save first. Either way, do NOT copy the raw error verbatim into your reply — explain in plain language what went wrong and what you're doing next.
 
 7. For \`edit_file\`, the \`content\` parameter must be the COMPLETE new file body. Partial edits / patches are not supported. Use \`edit_file\` only when you genuinely need to replace the entire file; otherwise prefer \`apply_edits\`.
 
