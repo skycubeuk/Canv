@@ -12,6 +12,9 @@ import type { RemoteStatus } from '../lib/fs'
 import type { OpenTab, PinnedEntry, EditorGroupId, EditorGroupState } from '../types/workspace'
 import { wsKey } from '../lib/wsKey'
 import { tabKey, SETTINGS_TAB_KEY, DIFF_TAB_KEY_PREFIX, EXTENSION_TAB_KEY_PREFIX, isMarkdownTab } from '../lib/tabKey'
+import { applyEdits as applyEditsImpl, type AnchorEdit, type ApplyEditsResult } from '../services/workspaceEdits'
+
+export type { AnchorEdit, ApplyEditsResult }
 
 const SCHEMA_VERSION = '2'
 const SCHEMA_KEY = 'canv:schemaVersion'
@@ -130,6 +133,13 @@ export interface WorkspaceApi {
    */
   writeFileFromTool: (rel: string, content: string, expectedMtimeMs?: number) => Promise<WriteResult>
   /**
+   * Apply N anchor-based edits across N files atomically. The renderer client
+   * checks anchor uniqueness; main snapshots every file before any write and
+   * rolls back on per-file failure. Refuses if any target path has unsaved
+   * changes (would clobber the user's buffer).
+   */
+  applyEdits: (edits: AnchorEdit[]) => Promise<ApplyEditsResult>
+  /**
    * Mark an mtime as "we wrote this from the app" so the watcher's conflict
    * prompt is suppressed when the corresponding chokidar 'change' event echoes
    * back. Use after an out-of-band write performed by main (e.g. history
@@ -234,6 +244,11 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
   useEffect(() => { editorGroupsRef.current = editorGroups }, [editorGroups])
   useEffect(() => { activeGroupIdRef.current = activeGroupId }, [activeGroupId])
   useEffect(() => { pinnedRef.current = pinned }, [pinned])
+
+  // Mirror dirtySet into a ref so applyEdits can snapshot it at call time
+  // without re-creating the callback per render.
+  const dirtySetRef = useRef<Set<string>>(dirtySet)
+  useEffect(() => { dirtySetRef.current = dirtySet }, [dirtySet])
 
   const persistGroups = useCallback((rt: string, groups: EditorGroupState[], activeId: EditorGroupId) => {
     const payload: PersistedGroups = {
@@ -364,6 +379,44 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
     setDirty(rel, false)
     return result
   }, [setDirty, getTabEolBom])
+
+  const applyEdits = useCallback(async (edits: AnchorEdit[]): Promise<ApplyEditsResult> => {
+    // Snapshot the dirty set at call time so isDirty closes over a stable view
+    // (no risk of mid-call state churn making a previously-clean file dirty).
+    const dirtyNow = new Set(dirtySetRef.current)
+    const result = await applyEditsImpl(edits, { isDirty: (p) => dirtyNow.has(p) })
+    if (!result.ok) return result
+    // Mark every affected file's new mtime as "our own write" so the chokidar
+    // 'change' echo is suppressed in the watcher subscription. Mirrors the
+    // single-file path in writeFileFromTool.
+    for (const { path: rel, mtimeMs } of result.applied) {
+      recentWrites.current.set(rel, { mtimeMs, ts: Date.now(), content: null })
+    }
+    // Refresh open tabs' mtimeMs so subsequent saves don't trip stale-mtime.
+    // We deliberately do NOT update loadedMarkdown here — chokidar's change
+    // event for our write is suppressed, and tabs holding this file will pick
+    // up the new content on the next reload/re-open. Keeping the renderer's
+    // tab-buffer model simple is more valuable than partial in-place refresh.
+    setEditorGroups((prev) => prev.map((g) => ({
+      ...g,
+      openTabs: g.openTabs.map((t) => {
+        if (!isMarkdownTab(t)) return t
+        const hit = result.applied.find((a) => a.path === t.relPath)
+        if (!hit) return t
+        return { ...t, mtimeMs: hit.mtimeMs }
+      }),
+    })))
+    // Drop dirty markers for every affected file; they're freshly written.
+    setDirtySet((prev) => {
+      let changed = false
+      const next = new Set(prev)
+      for (const a of result.applied) {
+        if (next.delete(a.path)) changed = true
+      }
+      return changed ? next : prev
+    })
+    return result
+  }, [])
 
   const noteOwnDiskWrite = useCallback((rel: string, mtimeMs: number) => {
     recentWrites.current.set(rel, { mtimeMs, ts: Date.now(), content: null })
@@ -1312,6 +1365,7 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
     setActiveGroupId,
     saveTab,
     writeFileFromTool,
+    applyEdits,
     noteOwnDiskWrite,
     flushAll,
     pin,
@@ -1326,5 +1380,5 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
     reloadTabFromDisk,
     remoteStatus,
     reconnect,
-  }), [ready, available, root, kind, tree, treeTruncated, editorGroups, activeGroupId, activeTabKey, activeMarkdownRel, allOpenKeys, dirtySet, writingSet, pinned, pickWorkspace, openRemote, closeWorkspace, openTab, closeTab, setActiveTab, openSettingsTab, openDiffTab, openExtensionTab, closeTabByKey, setActiveTabByKey, splitRight, moveTab, setActiveGroupId, saveTab, writeFileFromTool, noteOwnDiskWrite, flushAll, pin, unpin, createFile, createFolder, renameOp, remove, refreshTree, conflict, resolveConflict, reloadTabFromDisk, remoteStatus, reconnect])
+  }), [ready, available, root, kind, tree, treeTruncated, editorGroups, activeGroupId, activeTabKey, activeMarkdownRel, allOpenKeys, dirtySet, writingSet, pinned, pickWorkspace, openRemote, closeWorkspace, openTab, closeTab, setActiveTab, openSettingsTab, openDiffTab, openExtensionTab, closeTabByKey, setActiveTabByKey, splitRight, moveTab, setActiveGroupId, saveTab, writeFileFromTool, applyEdits, noteOwnDiskWrite, flushAll, pin, unpin, createFile, createFolder, renameOp, remove, refreshTree, conflict, resolveConflict, reloadTabFromDisk, remoteStatus, reconnect])
 }
