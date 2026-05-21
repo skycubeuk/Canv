@@ -31,7 +31,6 @@ describe('createMcpService — per-server methods', () => {
       { name: 'ping', description: 'returns pong', inputSchema: { type: 'object' } },
       { name: 'echo', description: 'echoes the input', inputSchema: { type: 'object' } },
     ]
-    const originalConnectOne = service.__test__.connectOne
     vi.spyOn(service.__test__, 'connectOne').mockImplementation(async (cfg) => {
       service.__test__.handles.set(cfg.name, { client: {}, transport: {}, tools: fakeTools, cfg })
     })
@@ -44,7 +43,6 @@ describe('createMcpService — per-server methods', () => {
     // Sanity: didn't accidentally double-connect on re-test.
     await service.testServer('fake')
     expect(service.__test__.connectOne).toHaveBeenCalledTimes(1)
-    void originalConnectOne
   })
 
   it('testServer returns ok:false with the error message when connectOne throws', async () => {

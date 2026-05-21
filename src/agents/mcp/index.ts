@@ -5,6 +5,15 @@ export interface McpToolDef {
   inputSchema: unknown    // JSON Schema
 }
 
+/** Per-server tool summary — `name` is the bare tool name (NOT qualified
+ *  with server prefix). Used by testServer/reconnectServer where the server
+ *  context is already known from the call site. */
+export interface McpToolSummary {
+  name: string
+  description: string
+  inputSchema: unknown
+}
+
 declare global {
   interface Window {
     canvMcp?: {
@@ -14,12 +23,12 @@ declare global {
       reconnect: () => Promise<{ ok: boolean }>
       /** Connect (if not already) and return tools for one server, or the connect error. */
       testServer: (name: string) => Promise<
-        | { ok: true; tools: McpToolDef[] }
+        | { ok: true; tools: McpToolSummary[] }
         | { ok: false; error: string }
       >
       /** Disconnect then reconnect one server. Returns the same shape as testServer. */
       reconnectServer: (name: string) => Promise<
-        | { ok: true; tools: McpToolDef[] }
+        | { ok: true; tools: McpToolSummary[] }
         | { ok: false; error: string }
       >
     }
