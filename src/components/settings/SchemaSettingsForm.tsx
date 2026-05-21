@@ -149,7 +149,6 @@ function renderObjectInline(
     const inner = unwrapAll(field)
     // Skip the discriminator field — that's handled by DiscriminatedUnionControl's tabs.
     if (defOf(inner)?.type === 'literal') continue
-    // Skip optional non-primitive bags (env/headers maps) — the surface is intentionally narrow.
     const meta = readMeta(field)
     const label = meta.label ?? key.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase())
     const childPath = `${parentPath}.${key}`

@@ -51,6 +51,29 @@ describe('JsonValueControl', () => {
     expect(onChange).toHaveBeenCalledWith(undefined)
   })
 
+  it('clobbers the in-progress invalid draft when value changes externally', () => {
+    const { rerender } = render(<JsonValueControl
+      label="args"
+      value={['a']}
+      onChange={() => {}}
+      schema={z.array(z.string())}
+    />)
+    const ta = screen.getByRole('textbox') as HTMLTextAreaElement
+    // User starts typing invalid JSON.
+    fireEvent.change(ta, { target: { value: '[bad' } })
+    expect(ta.value).toBe('[bad')                              // draft preserved
+    expect(screen.getByText(/invalid json/i)).toBeDefined()    // error visible
+    // External update arrives (e.g. another tab / control writes to settings).
+    rerender(<JsonValueControl
+      label="args"
+      value={['b']}
+      onChange={() => {}}
+      schema={z.array(z.string())}
+    />)
+    expect(ta.value).toBe(JSON.stringify(['b'], null, 2))      // draft clobbered
+    expect(screen.queryByText(/invalid json/i)).toBeNull()     // error cleared
+  })
+
   it('renders records (object shape) too', () => {
     const onChange = vi.fn()
     render(<JsonValueControl
