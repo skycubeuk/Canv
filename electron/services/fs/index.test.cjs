@@ -29,6 +29,9 @@ const electron = {
   require.cache[electronPath] = m
 }
 
+const sshPoolMod = require('../../ssh-pool.cjs')
+const remoteFsMod = require('../../remote-fs.cjs')
+
 const svc = require('./index.cjs')
 
 function makeIpcMain() {
@@ -173,6 +176,227 @@ describe('fs service IPC handlers', () => {
         throw new Error('rm denied')
       })
       await expect(ipcMain.invoke('canvConfig:factoryReset')).rejects.toThrow(/rm denied/)
+    })
+  })
+
+  // ---------------------------------------------------------------------------
+  // Workspace lifecycle handlers
+  // ---------------------------------------------------------------------------
+
+  describe('canvFS:pickWorkspace', () => {
+    it('happy: dialog returns a path → sets workspace and returns { root }', async () => {
+      const picked = await fsp.mkdtemp(path.join(os.tmpdir(), 'fs-picked-'))
+      try {
+        const setWs = vi.fn()
+        const closeWs = vi.fn(async () => {})
+        const onChanged = vi.fn()
+        const ipc = makeIpcMain()
+        svc.registerIpcHandlers(ipc, baseDeps(root, {
+          getMainWindow: () => ({ webContents: { send: () => {} } }),
+          setWorkspace: setWs,
+          closeWorkspace: closeWs,
+          onWorkspaceChangedGlobal: onChanged,
+        }))
+        vi.spyOn(electron.dialog, 'showOpenDialog').mockResolvedValue({
+          canceled: false,
+          filePaths: [picked],
+        })
+        const r = await ipc.invoke('canvFS:pickWorkspace')
+        expect(r).toEqual({ root: picked })
+        expect(setWs).toHaveBeenCalledWith({ kind: 'local', root: picked })
+        expect(closeWs).toHaveBeenCalled()
+        expect(onChanged).toHaveBeenCalled()
+        svc.stopWatcher()
+      } finally {
+        await fsp.rm(picked, { recursive: true, force: true })
+      }
+    })
+
+    it('error: dialog cancelled → returns null', async () => {
+      const ipc = makeIpcMain()
+      svc.registerIpcHandlers(ipc, baseDeps(root, {
+        getMainWindow: () => ({ webContents: { send: () => {} } }),
+      }))
+      vi.spyOn(electron.dialog, 'showOpenDialog').mockResolvedValue({
+        canceled: true,
+        filePaths: [],
+      })
+      const r = await ipc.invoke('canvFS:pickWorkspace')
+      expect(r).toBeNull()
+    })
+  })
+
+  describe('canvFS:setWorkspace', () => {
+    it('happy: valid directory → sets workspace and updates state', async () => {
+      const target = await fsp.mkdtemp(path.join(os.tmpdir(), 'fs-setws-'))
+      try {
+        const setWs = vi.fn()
+        const closeWs = vi.fn(async () => {})
+        const ipc = makeIpcMain()
+        svc.registerIpcHandlers(ipc, baseDeps(root, {
+          getMainWindow: () => ({ webContents: { send: () => {} } }),
+          setWorkspace: setWs,
+          closeWorkspace: closeWs,
+        }))
+        await ipc.invoke('canvFS:setWorkspace', target)
+        expect(setWs).toHaveBeenCalledWith({ kind: 'local', root: target })
+        expect(closeWs).toHaveBeenCalled()
+        svc.stopWatcher()
+      } finally {
+        await fsp.rm(target, { recursive: true, force: true })
+      }
+    })
+
+    it('error: invalid (non-existent) path → throws', async () => {
+      const ipc = makeIpcMain()
+      svc.registerIpcHandlers(ipc, baseDeps(root))
+      const fake = path.join(os.tmpdir(), 'definitely-does-not-exist-' + Date.now())
+      await expect(ipc.invoke('canvFS:setWorkspace', fake)).rejects.toThrow(/workspace folder does not exist/)
+    })
+
+    it('error: non-string root → throws "invalid root"', async () => {
+      await expect(ipcMain.invoke('canvFS:setWorkspace', null)).rejects.toThrow(/invalid root/)
+    })
+  })
+
+  describe('canvFS:getWorkspace', () => {
+    it('happy: local workspace set → returns the root path', async () => {
+      const r = await ipcMain.invoke('canvFS:getWorkspace')
+      expect(r).toBe(root)
+    })
+
+    it('error: no workspace → returns null', async () => {
+      const ipc = makeIpcMain()
+      svc.registerIpcHandlers(ipc, baseDeps(root, { getWorkspace: () => null }))
+      const r = await ipc.invoke('canvFS:getWorkspace')
+      expect(r).toBeNull()
+    })
+  })
+
+  describe('canvFS:getWorkspaceKind', () => {
+    it('happy: local workspace → returns { kind:"local", root }', async () => {
+      const r = await ipcMain.invoke('canvFS:getWorkspaceKind')
+      expect(r).toEqual({ kind: 'local', root })
+    })
+
+    it('happy: remote workspace → returns { kind:"remote", display }', async () => {
+      const ipc = makeIpcMain()
+      svc.registerIpcHandlers(ipc, baseDeps(root, {
+        getWorkspace: () => ({
+          kind: 'remote',
+          target: { user: 'alice', host: 'box', port: 22, path: '/srv/notes' },
+        }),
+      }))
+      const r = await ipc.invoke('canvFS:getWorkspaceKind')
+      expect(r).toEqual({ kind: 'remote', display: 'alice@box:/srv/notes' })
+    })
+
+    it('error: no workspace → returns null', async () => {
+      const ipc = makeIpcMain()
+      svc.registerIpcHandlers(ipc, baseDeps(root, { getWorkspace: () => null }))
+      const r = await ipc.invoke('canvFS:getWorkspaceKind')
+      expect(r).toBeNull()
+    })
+  })
+
+  describe('canvFS:closeWorkspace', () => {
+    it('happy: calls deps.closeWorkspace and onWorkspaceChangedGlobal', async () => {
+      const closeWs = vi.fn(async () => {})
+      const onChanged = vi.fn()
+      const ipc = makeIpcMain()
+      svc.registerIpcHandlers(ipc, baseDeps(root, {
+        closeWorkspace: closeWs,
+        onWorkspaceChangedGlobal: onChanged,
+      }))
+      const r = await ipc.invoke('canvFS:closeWorkspace')
+      expect(r).toBeUndefined()
+      expect(closeWs).toHaveBeenCalledTimes(1)
+      expect(onChanged).toHaveBeenCalledTimes(1)
+    })
+
+    it('error: propagates closeWorkspace failures', async () => {
+      const ipc = makeIpcMain()
+      svc.registerIpcHandlers(ipc, baseDeps(root, {
+        closeWorkspace: async () => { throw new Error('close failed') },
+      }))
+      await expect(ipc.invoke('canvFS:closeWorkspace')).rejects.toThrow(/close failed/)
+    })
+  })
+
+  describe('canvFS:listRecentRemotes', () => {
+    it('happy: returns the list from getRecentRemotes()', async () => {
+      const entries = [{ raw: 'me@a:/x', lastUsed: 1 }, { raw: 'me@b:/y', lastUsed: 2 }]
+      const ipc = makeIpcMain()
+      svc.registerIpcHandlers(ipc, baseDeps(root, {
+        getRecentRemotes: () => ({ list: () => entries, record: () => {} }),
+      }))
+      const r = await ipc.invoke('canvFS:listRecentRemotes')
+      expect(r).toEqual(entries)
+    })
+
+    it('error: getRecentRemotes returns null → returns empty array', async () => {
+      const r = await ipcMain.invoke('canvFS:listRecentRemotes')
+      expect(r).toEqual([])
+    })
+  })
+
+  describe('canvFS:openRemote', () => {
+    it('error: empty input → throws "invalid target"', async () => {
+      await expect(ipcMain.invoke('canvFS:openRemote', '')).rejects.toThrow(/invalid target/)
+      await expect(ipcMain.invoke('canvFS:openRemote', null)).rejects.toThrow(/invalid target/)
+    })
+
+    it('error: malformed URL → parseTarget throws', async () => {
+      // Missing :path
+      await expect(ipcMain.invoke('canvFS:openRemote', 'just-a-host')).rejects.toThrow(/missing :path/)
+    })
+
+    it('happy: valid target → preflight passes, workspace set to remote', async () => {
+      // The service captured `SshPool` and `RemoteFs` by destructuring at
+      // import time, so we cannot replace the constructors. Instead, spy on
+      // their prototypes: `SshPool.prototype.exec` is called for the preflight
+      // probe, and `RemoteFs.prototype.subscribe` is invoked after the pool
+      // connects. The constructors themselves are pure (no network I/O), so
+      // letting them run is safe.
+      vi.spyOn(sshPoolMod.SshPool.prototype, 'exec').mockResolvedValue({
+        stdout: '/usr/bin/inotifywait\n/usr/bin/git\nLinux\n',
+        stderr: '',
+        code: 0,
+      })
+      vi.spyOn(sshPoolMod.SshPool.prototype, 'close').mockResolvedValue(undefined)
+      vi.spyOn(remoteFsMod.RemoteFs.prototype, 'subscribe').mockReturnValue(() => {})
+
+      const setWs = vi.fn()
+      const closeWs = vi.fn(async () => {})
+      const recordRemote = vi.fn()
+      const ipc = makeIpcMain()
+      svc.registerIpcHandlers(ipc, baseDeps(root, {
+        setWorkspace: setWs,
+        closeWorkspace: closeWs,
+        getMainWindow: () => null,
+        getRecentRemotes: () => ({ list: () => [], record: recordRemote }),
+      }))
+      const r = await ipc.invoke('canvFS:openRemote', 'me@host:/srv/notes')
+      expect(r.kind).toBe('remote')
+      expect(r.display).toMatch(/me@host:\/srv\/notes/)
+      expect(setWs).toHaveBeenCalledWith(expect.objectContaining({ kind: 'remote' }))
+      expect(recordRemote).toHaveBeenCalledWith('me@host:/srv/notes')
+    })
+  })
+
+  describe('canvFS:reconnect', () => {
+    it('happy: remote workspace → calls pool.reconnectNow', async () => {
+      const reconnectNow = vi.fn()
+      const ipc = makeIpcMain()
+      svc.registerIpcHandlers(ipc, baseDeps(root, {
+        getWorkspace: () => ({ kind: 'remote', pool: { reconnectNow } }),
+      }))
+      await ipc.invoke('canvFS:reconnect')
+      expect(reconnectNow).toHaveBeenCalledTimes(1)
+    })
+
+    it('error: local workspace → no-op (does not throw)', async () => {
+      await expect(ipcMain.invoke('canvFS:reconnect')).resolves.toBeUndefined()
     })
   })
 })
