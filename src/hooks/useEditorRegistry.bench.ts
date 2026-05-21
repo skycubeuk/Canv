@@ -15,6 +15,12 @@
  *
  * Treat the printed p99 as a regression baseline for the live-doc
  * notification pipeline.
+ *
+ * Note on drift: `state` is mutated across iterations (each `update` returns
+ * a new state which we reassign), so the doc grows by one char per call —
+ * ~1.1 KB over ~1,100 samples on a 2 MB base. That's a ≤0.05% size drift,
+ * immaterial vs. the noise floor of the measurement, so we don't reset
+ * state per-iteration.
  */
 import { bench, describe } from 'vitest'
 import { EditorState } from '@codemirror/state'
