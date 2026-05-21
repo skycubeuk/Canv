@@ -60,6 +60,11 @@ function pathInSitesSandbox(p: unknown): boolean {
 export function pathIsAutoApproved(call: { name: string; input: unknown }): boolean {
   if (REGISTRY_TOOLS.has(call.name)) return true
   if (!FILE_MUTATING_TOOLS.has(call.name)) return false
+  // apply_edits operates on N files in a single call; the sites-sandbox
+  // auto-approval check only models single-file mutations. Refuse explicitly
+  // so a future contributor "fixing" the missing path-extraction can't
+  // accidentally widen auto-approval to multi-file rewrites.
+  if (call.name === 'apply_edits') return false
   const input = (call.input ?? {}) as Record<string, unknown>
   if (call.name === 'rename_file') {
     return pathInSitesSandbox(input.from) && pathInSitesSandbox(input.to)

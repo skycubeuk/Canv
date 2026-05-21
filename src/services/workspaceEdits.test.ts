@@ -79,4 +79,28 @@ describe('applyEdits (renderer client)', () => {
       expect.objectContaining({ path: 'a.md', newContent: '1 B 3 D' }),
     ])
   })
+
+  it('batches edits across two files into a single IPC call with distinct entries', async () => {
+    const bridge = (globalThis as unknown as { canvFS: MockBridge }).canvFS
+    bridge.readFile.mockImplementation(async (rel: string) => {
+      if (rel === 'a.md') return { ok: true, content: 'hello world', mtimeMs: 10, eol: 'lf', bom: false }
+      if (rel === 'b.md') return { ok: true, content: 'foo bar', mtimeMs: 20, eol: 'crlf', bom: true }
+      throw new Error(`unexpected readFile: ${rel}`)
+    })
+    bridge.applyEdits.mockResolvedValue({
+      ok: true,
+      applied: [{ path: 'a.md', mtimeMs: 11 }, { path: 'b.md', mtimeMs: 21 }],
+    })
+    const edits: AnchorEdit[] = [
+      { path: 'a.md', oldText: 'world', newText: 'planet' },
+      { path: 'b.md', oldText: 'foo', newText: 'baz' },
+    ]
+    const r = await applyEdits(edits, { isDirty: () => false })
+    expect(r.ok).toBe(true)
+    expect(bridge.applyEdits).toHaveBeenCalledTimes(1)
+    const [forwarded] = bridge.applyEdits.mock.calls[0] as [Array<{ path: string; newContent: string; opts: { eol: string; bom: boolean } }>]
+    expect(forwarded).toHaveLength(2)
+    expect(forwarded[0]).toMatchObject({ path: 'a.md', newContent: 'hello planet', opts: { eol: 'lf', bom: false } })
+    expect(forwarded[1]).toMatchObject({ path: 'b.md', newContent: 'baz bar', opts: { eol: 'crlf', bom: true } })
+  })
 })
