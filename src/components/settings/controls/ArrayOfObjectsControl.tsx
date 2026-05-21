@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import type { z } from 'zod'
 
 interface Props<T> {
@@ -14,6 +14,17 @@ interface Props<T> {
   /** Factory for a fresh item; the parent supplies this so it can pick a
    *  discriminator variant if the item schema is a discriminated union. */
   createItem: () => T
+  /** Optional bespoke content rendered alongside each row. The slot consumer
+   *  receives the item, its index, and helpers it can use to coordinate with
+   *  the row's expand state (e.g. fire a test on collapse). The returned node
+   *  is rendered in BOTH the collapsed header (next to the row buttons) AND
+   *  inside the expanded panel (below `renderItemForm`); the consumer uses
+   *  `helpers.isExpanded` to decide which portion to show in each slot. */
+  renderRowExtras?: (item: T, idx: number, helpers: {
+    isExpanded: boolean
+    /** Subscribe to row-collapse events. Returns an unsubscribe function. */
+    onCollapsed: (cb: () => void) => () => void
+  }) => ReactNode
 }
 
 export function ArrayOfObjectsControl<T>({
@@ -25,8 +36,29 @@ export function ArrayOfObjectsControl<T>({
   itemSchema,
   renderItemForm,
   createItem,
+  renderRowExtras,
 }: Props<T>) {
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null)
+
+  // Per-row collapse listeners. Fired when the row transitions expanded → collapsed
+  // (via header click OR via `remove`). Each row indexes a Set of subscribers so
+  // multiple consumers per row are safe.
+  const collapseListenersRef = useRef<Map<number, Set<() => void>>>(new Map())
+
+  const subscribeCollapse = (idx: number, cb: () => void): (() => void) => {
+    const map = collapseListenersRef.current
+    if (!map.has(idx)) map.set(idx, new Set())
+    map.get(idx)!.add(cb)
+    return () => { map.get(idx)?.delete(cb) }
+  }
+
+  const fireCollapse = (idx: number) => {
+    const set = collapseListenersRef.current.get(idx)
+    if (!set) return
+    for (const cb of set) {
+      try { cb() } catch (e) { console.error('[ArrayOfObjectsControl] collapse listener threw', e) }
+    }
+  }
 
   function update(idx: number, next: T) {
     const out = value.slice()
@@ -35,6 +67,7 @@ export function ArrayOfObjectsControl<T>({
   }
 
   function remove(idx: number) {
+    if (expandedIdx === idx) fireCollapse(idx)
     const out = value.slice()
     out.splice(idx, 1)
     onChange(out)
@@ -75,17 +108,34 @@ export function ArrayOfObjectsControl<T>({
         <ul className="flex flex-col gap-1">
           {value.map((item, idx) => {
             const expanded = expandedIdx === idx
+            const extras = renderRowExtras
+              ? renderRowExtras(item, idx, {
+                  isExpanded: expanded,
+                  onCollapsed: (cb) => subscribeCollapse(idx, cb),
+                })
+              : null
             return (
               <li key={idx} className="rounded border border-default">
                 <div className="flex items-center justify-between px-2 py-1 gap-2">
                   <button
                     type="button"
-                    onClick={() => setExpandedIdx(expanded ? null : idx)}
+                    onClick={() => {
+                      if (expanded) {
+                        // Transitioning expanded → collapsed; fire listeners BEFORE
+                        // the state update so a synchronous listener still sees the
+                        // row as expanded if it needs to.
+                        fireCollapse(idx)
+                        setExpandedIdx(null)
+                      } else {
+                        setExpandedIdx(idx)
+                      }
+                    }}
                     className="flex-1 text-left text-xs truncate hover:text-default"
                   >
                     {itemLabel ? itemLabel(item) : `Item ${idx + 1}`}
                   </button>
-                  <div className="flex gap-1 shrink-0">
+                  <div className="flex items-center gap-1 shrink-0">
+                    {extras}
                     <button
                       type="button"
                       onClick={() => move(idx, -1)}
@@ -115,8 +165,9 @@ export function ArrayOfObjectsControl<T>({
                   </div>
                 </div>
                 {expanded && (
-                  <div className="border-t border-default p-2">
+                  <div className="border-t border-default p-2 flex flex-col gap-2">
                     {renderItemForm(itemSchema, item, (next) => update(idx, next))}
+                    {extras}
                   </div>
                 )}
               </li>
