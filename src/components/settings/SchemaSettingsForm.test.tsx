@@ -166,4 +166,43 @@ describe('SchemaSettingsForm — mcpServers rowExtras', () => {
     render(<SchemaSettingsForm schema={SettingsSchema} value={value} onChange={() => {}} sectionFilter={(s) => s === 'mcp'} />)
     await waitFor(() => expect(testServerSpy).toHaveBeenCalledTimes(1))
   })
+
+  // Regression: without stable per-row keys, reordering rows shuffled the
+  // per-row hook state (status dot) at the original position instead of
+  // following the item. Using item.name as the React key fixes it — the
+  // hook follows the item.
+  it('keeps each row hook bound to its item when the array is reordered', async () => {
+    const calls: string[] = []
+    const testServerSpy = vi.fn(async (name: string) => {
+      calls.push(name)
+      return { ok: true, tools: [] }
+    })
+    ;(window as unknown as { canvMcp: { testServer: typeof testServerSpy; reconnectServer: typeof testServerSpy } }).canvMcp = {
+      testServer: testServerSpy,
+      reconnectServer: vi.fn().mockResolvedValue({ ok: true, tools: [] }),
+    }
+    const v1 = SettingsSchema.parse({
+      mcpServers: [
+        { name: 'first', transport: 'stdio', command: 'echo' },
+        { name: 'second', transport: 'stdio', command: 'echo' },
+      ],
+    })
+    const { rerender } = render(<SchemaSettingsForm schema={SettingsSchema} value={v1} onChange={() => {}} sectionFilter={(s) => s === 'mcp'} />)
+    // Both rows boot-test once.
+    await waitFor(() => expect(testServerSpy).toHaveBeenCalledTimes(2))
+    expect(calls.sort()).toEqual(['first', 'second'])
+
+    // Swap the two rows. With stable keys, neither hook remounts — no
+    // additional testServer calls fire.
+    const v2 = SettingsSchema.parse({
+      mcpServers: [
+        { name: 'second', transport: 'stdio', command: 'echo' },
+        { name: 'first', transport: 'stdio', command: 'echo' },
+      ],
+    })
+    rerender(<SchemaSettingsForm schema={SettingsSchema} value={v2} onChange={() => {}} sectionFilter={(s) => s === 'mcp'} />)
+    // Allow any pending microtasks (would-be re-tests) to flush.
+    await new Promise((r) => setTimeout(r, 20))
+    expect(testServerSpy).toHaveBeenCalledTimes(2)
+  })
 })

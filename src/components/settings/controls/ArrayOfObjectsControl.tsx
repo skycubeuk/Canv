@@ -23,6 +23,13 @@ interface Props<T> {
   label: string
   help?: string
   itemLabel?: (item: T) => string
+  /** Stable per-item identity used as the React key for each row. When the
+   *  array is reordered, rows with stable keys carry their component state
+   *  (including per-row hooks via `renderRowExtras`) with them. Default:
+   *  fall back to the row index — fine for arrays without per-row state,
+   *  but reorders will visually keep state at the old position. Provide
+   *  when rows have meaningful state to preserve across reorders/removals. */
+  keyOf?: (item: T, idx: number) => string | number
   /** Item schema — passed to the parent renderer. */
   itemSchema: z.ZodTypeAny
   /** Renderer the parent passes in to avoid an import cycle. */
@@ -86,6 +93,7 @@ export function ArrayOfObjectsControl<T>({
   label,
   help,
   itemLabel,
+  keyOf,
   itemSchema,
   renderItemForm,
   createItem,
@@ -150,8 +158,9 @@ export function ArrayOfObjectsControl<T>({
   // whole `<li>` lets both slots see the same state from a single hook call.
   const renderRow = (item: T, idx: number) => {
     const expanded = expandedIdx === idx
+    const rowKey = keyOf ? keyOf(item, idx) : idx
     const body = (
-      <li key={idx} className="rounded border border-default">
+      <li key={rowKey} className="rounded border border-default">
         <div className="flex items-center justify-between px-2 py-1 gap-2">
           <button
             type="button"
@@ -213,7 +222,7 @@ export function ArrayOfObjectsControl<T>({
     if (!renderRowExtras) return body
     return (
       <RowExtrasProvider
-        key={idx}
+        key={rowKey}
         item={item}
         idx={idx}
         onCollapsed={(cb) => subscribeCollapse(idx, cb)}

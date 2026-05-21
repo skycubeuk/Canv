@@ -311,6 +311,20 @@ function renderField(
     const arr = (Array.isArray(value) ? value : []) as unknown[]
     const itemPath = `${path}[]`
     const rowExtrasConfig = meta.rowExtras === 'mcp' ? MCP_ROW_EXTRAS : undefined
+    // Stable per-row key. Without this, reordering rows shifts the per-row
+    // hook state (from `renderRowExtras.useRowState`) into the wrong row —
+    // e.g. the mcp status dot of the row at index 0 would stick at index 0
+    // after a move-down, even though the underlying server config moved to
+    // index 1. For arrays with no `rowExtras`, the position-based default
+    // is fine. For mcpServers, use `name` (with an idx fallback for unnamed
+    // in-progress rows).
+    const rowKeyOf = meta.rowExtras === 'mcp'
+      ? (item: unknown, idx: number) => {
+          const cfg = item as { name?: unknown } | null
+          const name = typeof cfg?.name === 'string' && cfg.name.length > 0 ? cfg.name : null
+          return name ?? `__idx${idx}`
+        }
+      : undefined
     return (
       <ArrayOfObjectsControl
         key={key}
@@ -320,6 +334,7 @@ function renderField(
         onChange={(v) => setField(v)}
         itemSchema={elem}
         itemLabel={meta.itemLabel}
+        keyOf={rowKeyOf}
         createItem={() => makeDefault(elem)}
         renderItemForm={(itemSchema, item, onItemChange) => renderItem(itemSchema, item, onItemChange, itemPath)}
         renderRowExtras={rowExtrasConfig}
