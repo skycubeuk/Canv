@@ -413,4 +413,190 @@ describe('extensions service IPC handlers', () => {
         .rejects.toThrow(/ENOENT|no such file|cannot find the file/i)
     })
   })
+
+  // ---------------------------------------------------------------------------
+  // Install / uninstall / setEnabled / trust handlers. spawn() calls are
+  // suppressed via a prototype spy on ExtensionRuntime so we never touch
+  // WebContentsView. destroy() is also spied because some setEnabled paths
+  // tear down running extensions.
+  // ---------------------------------------------------------------------------
+
+  describe('canvExtensions:install', () => {
+    it('happy: folder source → copies tree, registers, returns ok:true', async () => {
+      const src = await fsp.mkdtemp(path.join(os.tmpdir(), 'ext-install-src-'))
+      try {
+        await fsp.writeFile(path.join(src, 'manifest.json'), JSON.stringify({
+          id: 'inst-folder', name: 'F', version: '1.0.0',
+          engines: { canv: '^1.0.0' }, description: 'd', author: 'a',
+          capabilities: ['storage'],
+          contributions: [
+            { type: 'panel', id: 'main', title: 'M', icon: 'i', location: 'left-sidebar', entry: 'panels/main.html' },
+          ],
+        }))
+        await fsp.mkdir(path.join(src, 'panels'), { recursive: true })
+        await fsp.writeFile(path.join(src, 'panels', 'main.html'), '<x/>')
+        const r = await state.ipcMain.invoke('canvExtensions:install', src)
+        expect(r).toEqual({ ok: true, id: 'inst-folder' })
+        const target = path.join(state.root, '.canv', 'extensions', 'inst-folder')
+        expect(fs.existsSync(path.join(target, 'manifest.json'))).toBe(true)
+        expect(fs.existsSync(path.join(target, 'panels', 'main.html'))).toBe(true)
+        // Registry now records the install.
+        expect(state.registry.get('inst-folder')).toBeTruthy()
+      } finally {
+        await fsp.rm(src, { recursive: true, force: true })
+      }
+    })
+
+    it('happy: .canvext zip source → unpacks, copies, registers', async () => {
+      const tmp = await fsp.mkdtemp(path.join(os.tmpdir(), 'ext-install-zip-'))
+      try {
+        const zip = new AdmZip()
+        zip.addFile('manifest.json', Buffer.from(JSON.stringify({
+          id: 'inst-zip', name: 'Z', version: '1.0.0',
+          engines: { canv: '^1.0.0' }, description: 'd', author: 'a',
+          capabilities: ['storage'],
+          contributions: [
+            { type: 'panel', id: 'main', title: 'M', icon: 'i', location: 'left-sidebar', entry: 'index.html' },
+          ],
+        })))
+        zip.addFile('index.html', Buffer.from('<x/>'))
+        const zipPath = path.join(tmp, 'ext.canvext')
+        zip.writeZip(zipPath)
+        const r = await state.ipcMain.invoke('canvExtensions:install', zipPath)
+        expect(r).toEqual({ ok: true, id: 'inst-zip' })
+        expect(state.registry.get('inst-zip')).toBeTruthy()
+      } finally {
+        await fsp.rm(tmp, { recursive: true, force: true })
+      }
+    })
+
+    it('error: invalid manifest → returns ok:false with validation errors', async () => {
+      const src = await fsp.mkdtemp(path.join(os.tmpdir(), 'ext-install-bad-'))
+      try {
+        await fsp.writeFile(path.join(src, 'manifest.json'), '{"id":"x"}')
+        const r = await state.ipcMain.invoke('canvExtensions:install', src)
+        expect(r.ok).toBe(false)
+        expect(r.errors.length).toBeGreaterThan(0)
+      } finally {
+        await fsp.rm(src, { recursive: true, force: true })
+      }
+    })
+
+    it('error: missing source → returns ok:false', async () => {
+      const r = await state.ipcMain.invoke('canvExtensions:install',
+        path.join(os.tmpdir(), 'no-such-' + Date.now()))
+      expect(r.ok).toBe(false)
+      expect(r.errors[0]).toMatch(/source not found/)
+    })
+  })
+
+  describe('canvExtensions:uninstall', () => {
+    it('happy: removes from registry and deletes the extension dir', async () => {
+      const { id, dir } = await installFixture(state, { id: 'uninst-me' })
+      // Sanity: dir is present.
+      expect(fs.existsSync(dir)).toBe(true)
+      await state.ipcMain.invoke('canvExtensions:uninstall', id)
+      expect(state.registry.get(id)).toBeNull()
+      expect(fs.existsSync(dir)).toBe(false)
+    })
+
+    it('error: no workspace registry → throws "no workspace open"', async () => {
+      const ipc = makeIpcMain()
+      svc.registerIpcHandlers(ipc, baseDeps(state, {
+        getWorkspaceRegistry: () => null,
+      }))
+      await expect(ipc.invoke('canvExtensions:uninstall', 'x'))
+        .rejects.toThrow(/no workspace open/)
+    })
+  })
+
+  describe('canvExtensions:setEnabled', () => {
+    it('happy: flips enabled flag in the registry', async () => {
+      const { id } = await installFixture(state, { id: 'se-ext' })
+      expect(state.registry.get(id).enabled).toBe(false)
+      // Untrusted + workspace untrusted → setEnabled won't try to spawn.
+      await state.ipcMain.invoke('canvExtensions:setEnabled', id, true)
+      expect(state.registry.get(id).enabled).toBe(true)
+      await state.ipcMain.invoke('canvExtensions:setEnabled', id, false)
+      expect(state.registry.get(id).enabled).toBe(false)
+    })
+
+    it('error: no workspace registry → throws "no workspace open"', async () => {
+      const ipc = makeIpcMain()
+      svc.registerIpcHandlers(ipc, baseDeps(state, {
+        getWorkspaceRegistry: () => null,
+      }))
+      await expect(ipc.invoke('canvExtensions:setEnabled', 'x', true))
+        .rejects.toThrow(/no workspace open/)
+    })
+  })
+
+  describe('canvExtensions:setTrustedAt', () => {
+    it('happy: stores the provided ISO timestamp', async () => {
+      const { id } = await installFixture(state, { id: 'tr-ext' })
+      const iso = '2026-01-01T00:00:00.000Z'
+      await state.ipcMain.invoke('canvExtensions:setTrustedAt', id, iso)
+      expect(state.registry.get(id).trustedAt).toBe(iso)
+    })
+
+    it('happy: null clears the trust timestamp', async () => {
+      const { id } = await installFixture(state, { id: 'tr-clear' })
+      state.registry.setTrustedAt(id, '2026-01-01T00:00:00.000Z')
+      await state.ipcMain.invoke('canvExtensions:setTrustedAt', id, null)
+      expect(state.registry.get(id).trustedAt).toBeNull()
+    })
+
+    it('error: no workspace registry → throws "no workspace open"', async () => {
+      const ipc = makeIpcMain()
+      svc.registerIpcHandlers(ipc, baseDeps(state, {
+        getWorkspaceRegistry: () => null,
+      }))
+      await expect(ipc.invoke('canvExtensions:setTrustedAt', 'x', null))
+        .rejects.toThrow(/no workspace open/)
+    })
+  })
+
+  describe('canvExtensions:getWorkspaceTrust', () => {
+    it('happy: returns the trust-store state for the current workspace', async () => {
+      state.trustStore.set(state.root, 'trusted')
+      const r = await state.ipcMain.invoke('canvExtensions:getWorkspaceTrust')
+      expect(r).toBe('trusted')
+    })
+
+    it('error: no local workspace → returns "untrusted"', async () => {
+      const ipc = makeIpcMain()
+      svc.registerIpcHandlers(ipc, baseDeps(state, {
+        getWorkspace: () => null,
+      }))
+      const r = await ipc.invoke('canvExtensions:getWorkspaceTrust')
+      expect(r).toBe('untrusted')
+    })
+  })
+
+  describe('canvExtensions:setWorkspaceTrust', () => {
+    it('happy: persists the new trust state', async () => {
+      await state.ipcMain.invoke('canvExtensions:setWorkspaceTrust', 'trusted')
+      expect(state.trustStore.stateFor(state.root)).toBe('trusted')
+    })
+
+    it('happy: revoking trust destroys any running extensions', async () => {
+      // Populate the runtime with one fake "running" extension and spy on destroy.
+      state.runtime._byId.set('running', {
+        manifest: { id: 'running' }, extensionDir: '/x',
+        webContentsId: 99, view: null, storage: null, subscriptions: new Set(),
+      })
+      const destroySpy = vi.spyOn(state.runtime, 'destroy').mockResolvedValue(undefined)
+      await state.ipcMain.invoke('canvExtensions:setWorkspaceTrust', 'untrusted')
+      expect(destroySpy).toHaveBeenCalledWith('running')
+    })
+
+    it('error: no local workspace → throws "no local workspace"', async () => {
+      const ipc = makeIpcMain()
+      svc.registerIpcHandlers(ipc, baseDeps(state, {
+        getWorkspace: () => null,
+      }))
+      await expect(ipc.invoke('canvExtensions:setWorkspaceTrust', 'trusted'))
+        .rejects.toThrow(/no local workspace/)
+    })
+  })
 })
