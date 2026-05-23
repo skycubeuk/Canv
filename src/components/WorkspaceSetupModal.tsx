@@ -10,14 +10,13 @@ export interface WorkspaceSetupResult {
 export interface WorkspaceSetupModalProps {
   modes: ProfileOption[]
   defaultProfile: string
-  remote: boolean
   onConfirm: (r: WorkspaceSetupResult) => void
   onCancel: () => void
 }
 
 export function WorkspaceSetupModal(p: WorkspaceSetupModalProps) {
   const [profile, setProfile] = useState(p.defaultProfile)
-  const [enableRA, setEnableRA] = useState(!p.remote)
+  const [enableRA, setEnableRA] = useState(true)
 
   return (
     <div
@@ -64,17 +63,11 @@ export function WorkspaceSetupModal(p: WorkspaceSetupModalProps) {
             <input
               type="checkbox"
               checked={enableRA}
-              disabled={p.remote}
               onChange={(e) => setEnableRA(e.target.checked)}
-              className="accent-[rgb(var(--accent))] disabled:opacity-50"
+              className="accent-[rgb(var(--accent))]"
             />
             Enable Revision Archaeology
           </label>
-          {p.remote && (
-            <p className="text-xs text-subtle mt-1 px-2">
-              Remote workspaces are not yet supported.
-            </p>
-          )}
         </div>
 
         <div className="mt-5 flex justify-end gap-2">

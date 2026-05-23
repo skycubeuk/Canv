@@ -1,7 +1,6 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useMemo } from 'react'
 import type { useWorkspace } from './useWorkspace'
 import type { useDialogs } from '../lib/dialogs'
-import { getFs, type RecentRemote } from '../lib/fs'
 
 type WorkspaceApi = ReturnType<typeof useWorkspace>
 type DialogsApi = ReturnType<typeof useDialogs>
@@ -13,12 +12,7 @@ export interface UseWorkspaceFileOpsArgs {
 }
 
 export interface UseWorkspaceFileOpsApi {
-  remoteDialogOpen: boolean
-  closeRemoteDialog: () => void
-  recentRemotes: RecentRemote[]
   changeWorkspace: () => Promise<void>
-  openRemoteWorkspace: () => Promise<void>
-  connectRemote: (raw: string) => Promise<void>
   createFile: (parentRel: string) => Promise<void>
   createFolder: (parentRel: string) => Promise<void>
   rename: (oldRel: string, newRel: string) => Promise<void>
@@ -28,32 +22,10 @@ export interface UseWorkspaceFileOpsApi {
 export function useWorkspaceFileOps(args: UseWorkspaceFileOpsArgs): UseWorkspaceFileOpsApi {
   const { workspace, dialogs, showToast } = args
 
-  const [remoteDialogOpen, setRemoteDialogOpen] = useState(false)
-  const [recentRemotes, setRecentRemotes] = useState<RecentRemote[]>([])
-
   const changeWorkspace = useCallback(async () => {
     await workspace.flushAll()
     const ok = await workspace.pickWorkspace()
     if (!ok) return
-  }, [workspace])
-
-  const openRemoteWorkspace = useCallback(async () => {
-    await workspace.flushAll()
-    try {
-      const list = await getFs().listRecentRemotes()
-      setRecentRemotes(list)
-    } catch {
-      setRecentRemotes([])
-    }
-    setRemoteDialogOpen(true)
-  }, [workspace])
-
-  const closeRemoteDialog = useCallback(() => {
-    setRemoteDialogOpen(false)
-  }, [])
-
-  const connectRemote = useCallback(async (raw: string) => {
-    await workspace.openRemote(raw)
   }, [workspace])
 
   const createFile = useCallback(async (parentRel: string) => {
@@ -117,12 +89,10 @@ export function useWorkspaceFileOps(args: UseWorkspaceFileOpsArgs): UseWorkspace
   }, [workspace, showToast])
 
   return useMemo<UseWorkspaceFileOpsApi>(() => ({
-    remoteDialogOpen, closeRemoteDialog, recentRemotes,
-    changeWorkspace, openRemoteWorkspace, connectRemote,
+    changeWorkspace,
     createFile, createFolder, rename, remove,
   }), [
-    remoteDialogOpen, closeRemoteDialog, recentRemotes,
-    changeWorkspace, openRemoteWorkspace, connectRemote,
+    changeWorkspace,
     createFile, createFolder, rename, remove,
   ])
 }

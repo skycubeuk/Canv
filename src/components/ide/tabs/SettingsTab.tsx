@@ -639,8 +639,7 @@ export function SettingsTab(props: Props) {
         <section className="panel-section" data-testid="settings-section-appearance">
           <AppearanceSection
             settings={{
-              theme: settings.theme,
-              accent: settings.accent,
+              theme: settings.theme as import('../../../lib/themes').ThemeId,
               fontSize: settings.fontSize,
               chatFontSize: settings.chatFontSize,
             }}

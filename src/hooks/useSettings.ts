@@ -120,7 +120,19 @@ export function useSettings(opts: UseSettingsOptions = {}) {
   // get a fresh `settings` identity per render (the same render-loop concern
   // the original file documented for `merged`).
   const { settings, dropped } = useMemo(() => {
-    const sal = salvage(SettingsSchema, raw)
+    // Pre-salvage legacy theme remap: the new schema enum doesn't accept
+    // 'dark' or 'light', so salvage would drop them and fall back to
+    // 'system'. We migrate them in-place before salvage runs.
+    const migrated = raw && typeof raw === 'object'
+      ? (() => {
+          const r = raw as Record<string, unknown>
+          if (r.theme === 'dark') return { ...r, theme: 'canv-dark' }
+          if (r.theme === 'light') return { ...r, theme: 'canv-light' }
+          return r
+        })()
+      : raw
+
+    const sal = salvage(SettingsSchema, migrated)
     // The schema is intentionally permissive on `perAgentModel` /
     // `pricingOverrides` value shapes so a single bad entry can't wipe the
     // whole map. The structural cast here moves us into `SettingsLoose` so

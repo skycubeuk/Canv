@@ -13,12 +13,8 @@ const fsMock = {
   rename: vi.fn(),
   delete: vi.fn(),
   subscribe: vi.fn(() => () => {}),
-  openRemote: vi.fn(),
-  listRecentRemotes: vi.fn().mockResolvedValue([]),
   closeWorkspace: vi.fn(),
   getWorkspaceKind: vi.fn().mockResolvedValue(null),
-  reconnect: vi.fn(),
-  onStatus: vi.fn().mockReturnValue(() => {}),
 }
 
 beforeEach(() => {

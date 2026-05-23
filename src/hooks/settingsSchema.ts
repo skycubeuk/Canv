@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { DEFAULT_ACCENT } from '../lib/accent'
+import { THEMES } from '../lib/themes'
 
 /** Field-level metadata read by SchemaSettingsForm + the future workspace-settings loader. */
 export interface SettingsFieldMeta {
@@ -34,7 +34,7 @@ export interface SettingsFieldMeta {
 export const Provider = z.enum(['anthropic', 'openai', 'ollama'])
 export type Provider = z.infer<typeof Provider>
 
-const Theme = z.enum(['light', 'dark', 'system'])
+const Theme = z.enum(['system', ...THEMES.map((t) => t.id)] as [string, ...string[]])
 const LineWidth = z.enum(['narrow', 'normal', 'wide'])
 const StreamDelay = z.union([z.literal(0), z.literal(50), z.literal(100), z.literal(200)])
 
@@ -141,12 +141,6 @@ export const SettingsSchema = z.object({
     ui: 'auto', section: 'chat', label: 'Auto-scroll chat',
   }),
   lintRules: LintRules,  // bespoke UI (toggle group)
-  accent: z.string().default(DEFAULT_ACCENT).meta({
-    ui: 'auto', section: 'appearance', label: 'Accent colour', hidden: true,
-    // hidden=true: the existing AppearanceSection has a colour picker; we don't
-    // want a duplicate auto-gen text input. Stays in the schema so the future
-    // workspace-settings loader sees it.
-  }),
   // Permissive storage shape on purpose: the SchemaSettingsForm-driven editor
   // allows partially-filled rows while the user types (name blank, command
   // blank, etc.) — those would fail the strict per-item schema and, if the

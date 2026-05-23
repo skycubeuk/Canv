@@ -102,11 +102,10 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
   const setup = useWorkspaceSetup({
     workspaceReady: workspace.ready,
     workspaceRoot: workspace.root,
-    remote: workspace.kind?.kind === 'remote',
     fs: getFs(),
     // Stub when canvHistory is not exposed (e.g. dock popout / web build).
-    // The hook only calls history.init when enableRA + non-remote, so the
-    // stub is unreachable in that path; this keeps the type happy.
+    // The hook only calls history.init when enableRA, so the stub is
+    // unreachable in that path; this keeps the type happy.
     history: getCanvHistory() ?? { init: async () => ({ branch: 'canv-history', headCommit: '' }) },
     defaultModeId: modes.defaultModeId ?? 'fiction',
   })

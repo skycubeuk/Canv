@@ -10,7 +10,7 @@ import type { DockState, UserAction } from '../../lib/dockTypes'
 import type { PendingApproval, ChatProvider } from '../ChatPanel'
 import type { RunRecord } from '../ResultsPanel'
 import type { LintIssue } from '../../lib/lintTypes'
-import { applyAccent, resolveTheme } from '../../lib/accent'
+import { applyTheme } from '../../lib/theme'
 import { DialogProvider } from '../../lib/dialogs'
 import { ContextMenuProvider } from '../../lib/contextMenu'
 import { getCanvHistory } from '../../lib/history'
@@ -36,10 +36,7 @@ export function DockPopoutBoot() {
   // accent rails) falls back to undefined and the window renders unstyled.
   useEffect(() => {
     if (!state) return
-    const resolved = resolveTheme(state.ui.theme)
-    // TEMP: legacy 'dark'/'light' remap until Phase 2 (Tasks 11-14) replaces this with applyTheme(state.ui.theme)
-    document.documentElement.dataset.theme = resolved === 'dark' ? 'canv-dark' : resolved === 'light' ? 'canv-light' : resolved
-    applyAccent(state.ui.accent)
+    applyTheme(state.ui.theme)
   }, [state])
 
   // When theme === 'system', subscribe to prefers-color-scheme so OS dark-mode
@@ -48,12 +45,9 @@ export function DockPopoutBoot() {
   useEffect(() => {
     if (theme !== 'system') return
     const mq = window.matchMedia('(prefers-color-scheme: dark)')
-    const apply = (matches: boolean) => {
-      // TEMP: same legacy remap until Phase 2 rewires this to applyTheme('system')
-      document.documentElement.dataset.theme = matches ? 'canv-dark' : 'canv-light'
-    }
-    apply(mq.matches)
-    const handler = (e: MediaQueryListEvent) => apply(e.matches)
+    const apply = () => applyTheme('system')
+    apply()
+    const handler = () => apply()
     mq.addEventListener('change', handler)
     return () => mq.removeEventListener('change', handler)
   }, [theme])
@@ -109,6 +103,7 @@ export function DockPopoutBoot() {
       changeProviderModel: (provider: ChatProvider, model: string) =>
         dispatch({ type: 'change-provider-model', provider, model }),
       availableModels: state.availableModels,
+      workspaceFiles: state.workspaceFiles,
 
       getSession: (id: string) => state.chatSessionsFull.find((s) => s.id === id) ?? null,
       chatSystemPreamble: state.chatSystemPreamble,

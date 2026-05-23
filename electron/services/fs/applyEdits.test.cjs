@@ -24,7 +24,6 @@ function baseDeps(root, overrides = {}) {
   return {
     getWorkspace: () => ({ kind: 'local', root }),
     requireWorkspace: () => root,
-    isRemote: () => false,
     safeResolve: (r, rel) => {
       const abs = path.resolve(r, rel)
       if (!abs.startsWith(r + path.sep) && abs !== r) {
@@ -41,7 +40,6 @@ function baseDeps(root, overrides = {}) {
     onWorkspaceChangedGlobal: () => {},
     toRel: (r, abs) => path.relative(r, abs).replace(/\\/g, '/'),
     isAllowedDirEntry: () => true,
-    getRecentRemotes: () => null,
     ...overrides,
   }
 }
@@ -153,17 +151,4 @@ describe('canvFS:applyEdits', () => {
     }
   })
 
-  it('refuses remote workspaces with reason:"unsupported-remote"', async () => {
-    const remoteIpc = makeIpcMain()
-    const remoteDeps = baseDeps(root, {
-      getWorkspace: () => ({ kind: 'remote', root, backend: {} }),
-      isRemote: () => true,
-    })
-    fsService.registerIpcHandlers(remoteIpc, remoteDeps)
-    const r = await remoteIpc.invoke('canvFS:applyEdits', [
-      { path: 'a.md', newContent: '# A\n', opts: { eol: 'lf', bom: false } },
-    ])
-    expect(r.ok).toBe(false)
-    expect(r.error.reason).toBe('unsupported-remote')
-  })
 })

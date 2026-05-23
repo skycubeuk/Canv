@@ -1,7 +1,6 @@
 import { ExtensionPromptModal } from '../extensions/ExtensionPromptModal'
 import { ProfilePicker } from '../ProfilePicker'
 import { MigrationModal } from '../MigrationModal'
-import OpenRemoteDialog from '../dialogs/OpenRemoteDialog'
 import { DocumentAgentInstructionModal } from '../DocumentAgentInstructionModal'
 import { WorkspaceSetupModal } from '../WorkspaceSetupModal'
 import { RestorePreviewDialog } from './sidebar/RestorePreviewDialog'
@@ -35,7 +34,6 @@ export function AppOverlays(props: AppOverlaysProps) {
   const profilePicker = useService('profilePicker')
   const workspace = useService('workspace')
   const editorRegistry = useService('editorRegistry')
-  const fileOps = useService('workspaceFileOps')
   const notifications = useService('notifications')
   const chatSessions = useService('chatSessions')
   const setup = useService('setup')
@@ -73,13 +71,6 @@ export function AppOverlays(props: AppOverlaysProps) {
       {migrationOpen && (
         <MigrationModal onComplete={onMigrationComplete} />
       )}
-
-      <OpenRemoteDialog
-        open={fileOps.remoteDialogOpen}
-        recent={fileOps.recentRemotes}
-        onClose={fileOps.closeRemoteDialog}
-        onConnect={fileOps.connectRemote}
-      />
 
       {pendingDocAgent && (
         <DocumentAgentInstructionModal
@@ -143,7 +134,6 @@ export function AppOverlays(props: AppOverlaysProps) {
         <WorkspaceSetupModal
           modes={modesSvc.modes.map((m) => ({ id: m.id, label: m.label }))}
           defaultProfile={modesSvc.defaultModeId ?? modesSvc.modes[0]?.id ?? 'fiction'}
-          remote={workspace.kind?.kind === 'remote' ? true : false}
           onConfirm={async (r) => {
             try { await setup.confirm(r) } catch (e) { showToast(`Setup failed: ${(e as Error).message}`) }
           }}

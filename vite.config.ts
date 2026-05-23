@@ -1,4 +1,7 @@
 import { defineConfig, type Plugin } from 'vite'
+import { createRequire } from 'node:module'
+
+const pkg = createRequire(import.meta.url)('./package.json') as { version: string }
 import react from '@vitejs/plugin-react'
 
 // Strict CSP for the packaged app. The meta tag in index.html ships this
@@ -53,6 +56,9 @@ function cspByMode(): Plugin {
 
 export default defineConfig({
   base: './',
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+  },
   plugins: [react(), cspByMode()],
   server: { host: '0.0.0.0', port: 5173, strictPort: true },
 })

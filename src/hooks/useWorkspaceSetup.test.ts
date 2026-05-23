@@ -21,7 +21,7 @@ describe('useWorkspaceSetup', () => {
       revisionArchaeology: { enabled: false },
     })
     const { result } = renderHook(() =>
-      useWorkspaceSetup({ workspaceReady: true, workspaceRoot: '/test/ws', remote: false, fs: fs as never, history: history as never, defaultModeId: 'fiction' }))
+      useWorkspaceSetup({ workspaceReady: true, workspaceRoot: '/test/ws', fs: fs as never, history: history as never, defaultModeId: 'fiction' }))
     await waitFor(() => expect(result.current.phase).toBe('ready'))
     expect(result.current.config?.defaultProfile).toBe('fiction')
   })
@@ -29,14 +29,14 @@ describe('useWorkspaceSetup', () => {
   it('phase is needs-setup when config missing', async () => {
     fs.readWorkspaceConfig.mockResolvedValue(null)
     const { result } = renderHook(() =>
-      useWorkspaceSetup({ workspaceReady: true, workspaceRoot: '/test/ws', remote: false, fs: fs as never, history: history as never, defaultModeId: 'fiction' }))
+      useWorkspaceSetup({ workspaceReady: true, workspaceRoot: '/test/ws', fs: fs as never, history: history as never, defaultModeId: 'fiction' }))
     await waitFor(() => expect(result.current.phase).toBe('needs-setup'))
   })
 
   it('confirm writes config and triggers history.init when RA enabled', async () => {
     fs.readWorkspaceConfig.mockResolvedValue(null)
     const { result } = renderHook(() =>
-      useWorkspaceSetup({ workspaceReady: true, workspaceRoot: '/test/ws', remote: false, fs: fs as never, history: history as never, defaultModeId: 'fiction' }))
+      useWorkspaceSetup({ workspaceReady: true, workspaceRoot: '/test/ws', fs: fs as never, history: history as never, defaultModeId: 'fiction' }))
     await waitFor(() => expect(result.current.phase).toBe('needs-setup'))
     await act(async () => { await result.current.confirm({ defaultProfile: 'fiction', enableRA: true }) })
     expect(fs.writeWorkspaceConfig).toHaveBeenCalledWith(expect.objectContaining({
@@ -50,7 +50,7 @@ describe('useWorkspaceSetup', () => {
   it('confirm with RA disabled writes config but skips history.init', async () => {
     fs.readWorkspaceConfig.mockResolvedValue(null)
     const { result } = renderHook(() =>
-      useWorkspaceSetup({ workspaceReady: true, workspaceRoot: '/test/ws', remote: false, fs: fs as never, history: history as never, defaultModeId: 'fiction' }))
+      useWorkspaceSetup({ workspaceReady: true, workspaceRoot: '/test/ws', fs: fs as never, history: history as never, defaultModeId: 'fiction' }))
     await waitFor(() => expect(result.current.phase).toBe('needs-setup'))
     await act(async () => { await result.current.confirm({ defaultProfile: 'fiction', enableRA: false }) })
     expect(history.init).not.toHaveBeenCalled()
@@ -60,21 +60,11 @@ describe('useWorkspaceSetup', () => {
   it('phase stays loading while workspaceRoot is null even after workspaceReady', async () => {
     fs.readWorkspaceConfig.mockResolvedValue(null)
     const { result } = renderHook(() =>
-      useWorkspaceSetup({ workspaceReady: true, workspaceRoot: null, remote: false, fs: fs as never, history: history as never, defaultModeId: 'fiction' }))
+      useWorkspaceSetup({ workspaceReady: true, workspaceRoot: null, fs: fs as never, history: history as never, defaultModeId: 'fiction' }))
     // Give the effect a tick to run if it were going to.
     await new Promise((r) => setTimeout(r, 5))
     expect(result.current.phase).toBe('loading')
     expect(fs.readWorkspaceConfig).not.toHaveBeenCalled()
   })
 
-  it('remote workspace forces RA disabled even when enableRA=true', async () => {
-    fs.readWorkspaceConfig.mockResolvedValue(null)
-    const { result } = renderHook(() =>
-      useWorkspaceSetup({ workspaceReady: true, workspaceRoot: '/test/ws', remote: true, fs: fs as never, history: history as never, defaultModeId: 'fiction' }))
-    await waitFor(() => expect(result.current.phase).toBe('needs-setup'))
-    await act(async () => { await result.current.confirm({ defaultProfile: 'fiction', enableRA: true }) })
-    const cfg = fs.writeWorkspaceConfig.mock.calls[0][0]
-    expect(cfg.revisionArchaeology).toEqual({ enabled: false })
-    expect(history.init).not.toHaveBeenCalled()
-  })
 })

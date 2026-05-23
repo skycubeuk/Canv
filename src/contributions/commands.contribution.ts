@@ -142,10 +142,6 @@ export const commands: Contribution = {
       run: () => { void services.workspaceFileOps.changeWorkspace() },
     })
     reg({
-      id: 'workspace.openRemote', label: 'Open Remote Workspace…', group: 'Workspace',
-      run: () => { void services.workspaceFileOps.openRemoteWorkspace() },
-    })
-    reg({
       id: 'tab.close', label: 'Close Active Tab', group: 'Tabs',
       shortcut: 'Ctrl+W',
       runInEditable: true,

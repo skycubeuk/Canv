@@ -22,6 +22,12 @@ import { ChatTodoCard } from './ChatTodoCard'
 import { ChatRetryActions, type RetryActionKind } from './ChatRetryActions'
 import { getTool } from '../tools/registry'
 import { ChatSessionsSidebar, type SidebarSession } from './ChatSessionsSidebar'
+import { useAtMention } from '../hooks/useAtMention'
+import { AtMentionPopover } from './chat/AtMentionPopover'
+
+// Stable reference for the no-workspace case so useAtMention's memo input
+// doesn't change identity every render.
+const EMPTY_FILES: string[] = []
 
 export type ChatProvider = 'anthropic' | 'openai' | 'ollama'
 
@@ -106,10 +112,14 @@ interface Props {
   onCloseSession: (id: string) => void
   onChangeProviderModel: (provider: ChatProvider, model: string) => void
   availableModels: Record<ChatProvider, string[]>
+  /** Workspace files (forward-slash relative paths) shown by the @-mention
+   *  picker. Empty when no workspace is mounted. */
+  workspaceFiles?: string[]
 }
 
-export function ChatPanel({ messages, busy, provider, model, onSend, onClear, onStop, onRetry, onEditAndRetry, pendingApprovals, onApprovalDecide, pricingOverrides, followLatest, onSetFollowLatest, contextFileName, chatFontSize, sessions, activeId, onCreateSession, onSelectSession, onCloseSession, onChangeProviderModel, availableModels }: Props) {
+export function ChatPanel({ messages, busy, provider, model, onSend, onClear, onStop, onRetry, onEditAndRetry, pendingApprovals, onApprovalDecide, pricingOverrides, followLatest, onSetFollowLatest, contextFileName, chatFontSize, sessions, activeId, onCreateSession, onSelectSession, onCloseSession, onChangeProviderModel, availableModels, workspaceFiles }: Props) {
   const [input, setInput] = useState('')
+  const mention = useAtMention(workspaceFiles ?? EMPTY_FILES)
   const [editingUserId, setEditingUserId] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const dialogs = useDialogs()
@@ -352,13 +362,73 @@ export function ChatPanel({ messages, busy, provider, model, onSend, onClear, on
           inputRef.current?.focus()
         }}
       >
-        <div className="bg-elev border border-default rounded-[10px] p-2 cursor-text">
+        <div className="relative bg-elev border border-default rounded-[10px] p-2 cursor-text">
+          {mention.state.active && (
+            <AtMentionPopover
+              suggestions={mention.state.suggestions}
+              highlight={mention.state.highlight}
+              onPick={(i) => {
+                const el = inputRef.current
+                if (!el) return
+                const result = mention.pick(input, el.selectionStart ?? input.length, i)
+                if (!result) return
+                setInput(result.nextText)
+                requestAnimationFrame(() => {
+                  el.focus()
+                  el.setSelectionRange(result.nextCaret, result.nextCaret)
+                })
+                mention.close()
+              }}
+              onHover={(i) => mention.moveHighlight(i - mention.state.highlight)}
+            />
+          )}
           <AutoGrowTextarea
             ref={inputRef}
             data-testid="chat-input"
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => {
+              const v = e.target.value
+              setInput(v)
+              mention.sync(v, e.target.selectionStart ?? v.length)
+            }}
+            onSelect={(e) => {
+              const el = e.currentTarget
+              mention.sync(el.value, el.selectionStart ?? el.value.length)
+            }}
+            onBlur={() => mention.close()}
             onKeyDown={(e) => {
+              if (mention.state.active && mention.state.suggestions.length > 0) {
+                if (e.key === 'ArrowDown') {
+                  e.preventDefault()
+                  mention.moveHighlight(1)
+                  return
+                }
+                if (e.key === 'ArrowUp') {
+                  e.preventDefault()
+                  mention.moveHighlight(-1)
+                  return
+                }
+                if (e.key === 'Enter' || e.key === 'Tab') {
+                  const el = inputRef.current
+                  if (!el) return
+                  const result = mention.pick(input, el.selectionStart ?? input.length)
+                  if (result) {
+                    e.preventDefault()
+                    setInput(result.nextText)
+                    requestAnimationFrame(() => {
+                      el.focus()
+                      el.setSelectionRange(result.nextCaret, result.nextCaret)
+                    })
+                    mention.close()
+                    return
+                  }
+                }
+                if (e.key === 'Escape') {
+                  e.preventDefault()
+                  mention.close()
+                  return
+                }
+              }
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault()
                 handleSubmit()

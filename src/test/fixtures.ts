@@ -147,12 +147,8 @@ export function makeMockFs(initial: Record<string, MockFile>): CanvFs {
     gitDiff: async () => ({ relPath: '', baseRef: '', baseText: '', currentText: '' }),
     readWorkspaceConfig: async () => null,
     writeWorkspaceConfig: async () => true,
-    openRemote: async () => ({ kind: 'remote' as const, display: '' }),
-    listRecentRemotes: async () => [],
     closeWorkspace: async () => {},
     getWorkspaceKind: async () => null,
-    reconnect: async () => {},
-    onStatus: () => () => {},
   }
 }
 

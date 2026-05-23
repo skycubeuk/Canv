@@ -120,11 +120,11 @@ export function MigrationModal({ onComplete }: Props) {
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Welcome to Canv 0.2"
+        aria-label={`Welcome to Canv ${__APP_VERSION__}`}
         className="max-w-lg w-full bg-elev rounded-lg shadow-xl p-6 space-y-4"
       >
         <div className="space-y-1">
-          <h2 className="text-lg font-semibold">Welcome to Canv 0.2</h2>
+          <h2 className="text-lg font-semibold">Welcome to Canv {__APP_VERSION__}</h2>
           <p className="text-sm text-muted">
             Canv now stores your writing on your computer. Pick a folder to use as your workspace.
             Your existing document and uploaded context files will be replaced — export a backup first.

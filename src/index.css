@@ -225,6 +225,365 @@
     --syntax-keyword: #6f42c1;
     --syntax-comment: #94a3b8;
   }
+
+  /* Dracula — full official palette per spec.draculatheme.com.
+   * Surface tones use the canonical Background / AnsiBlack / Selection /
+   * Current-Line set; status colours pair Standard with AnsiBright for *-fg. */
+  [data-theme='dracula'] {
+    --bg-app: 40 42 54;              /* #282a36 Background */
+    --bg-panel: 33 34 44;             /* #21222c AnsiBlack — deeper sidebar */
+    --bg-elev: 68 71 90;              /* #44475a Selection / Current Line */
+    --bg-hover: 87 90 113;            /* derived: Selection +10% lightness */
+    --bg-active: 98 114 164;          /* #6272a4 Comment / AnsiBrightBlack */
+    --border-default: 68 71 90;       /* #44475a */
+    --border-strong: 98 114 164;      /* #6272a4 */
+    --text-default: 248 248 242;     /* #f8f8f2 Foreground / AnsiWhite */
+    --text-muted: 191 192 199;        /* derived: between fg and comment */
+    --text-subtle: 98 114 164;        /* #6272a4 Comment */
+    --inverse: 248 248 242;
+    --inverse-fg: 40 42 54;
+    --accent: 255 121 198;            /* #ff79c6 Pink — iconic Dracula accent */
+    --accent-fg: 40 42 54;
+    --accent-soft: color-mix(in oklab, rgb(var(--accent)) 18%, transparent);
+    --accent-hover: color-mix(in oklab, rgb(var(--accent)) 80%, white 20%);
+    --warning: 255 184 108;           /* #ffb86c Orange */
+    --warning-fg: 255 255 165;        /* #ffffa5 AnsiBrightYellow */
+    --warning-soft: color-mix(in oklab, rgb(var(--warning)) 18%, transparent);
+    --danger: 255 85 85;              /* #ff5555 Red */
+    --danger-fg: 255 110 110;         /* #ff6e6e AnsiBrightRed */
+    --danger-soft: color-mix(in oklab, rgb(var(--danger)) 18%, transparent);
+    --success: 80 250 123;            /* #50fa7b Green */
+    --success-fg: 105 255 148;        /* #69ff94 AnsiBrightGreen */
+    --success-soft: color-mix(in oklab, rgb(var(--success)) 16%, transparent);
+    --info: 139 233 253;              /* #8be9fd Cyan */
+    --info-fg: 164 255 255;           /* #a4ffff AnsiBrightCyan */
+    --info-soft: color-mix(in oklab, rgb(var(--info)) 18%, transparent);
+    --selection-bg: rgba(68, 71, 90, 0.7);  /* #44475a Selection */
+    --scrollbar-thumb: 68 71 90;
+    --scrollbar-thumb-hover: 98 114 164;
+    --overlay-shadow: 0 8px 32px rgba(0, 0, 0, 0.55);
+    --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.55), 0 4px 12px rgba(0, 0, 0, 0.45);
+    --syntax-string: #f1fa8c;         /* Yellow */
+    --syntax-keyword: #ff79c6;        /* Pink */
+    --syntax-comment: #6272a4;        /* Comment */
+  }
+
+  /* Alucard — official Dracula light variant. Cream background, deep ink
+   * foreground, darkened Dracula hues for AA contrast on light surfaces. */
+  [data-theme='alucard'] {
+    --bg-app: 255 251 235;            /* #fffbeb Background — cream */
+    --bg-panel: 248 243 220;          /* derived: slightly deeper cream */
+    --bg-elev: 240 235 213;           /* derived */
+    --bg-hover: 230 225 203;          /* derived */
+    --bg-active: 207 207 222;         /* #cfcfde Selection */
+    --border-default: 230 225 203;
+    --border-strong: 207 207 222;
+    --text-default: 31 31 31;         /* #1f1f1f Foreground */
+    --text-muted: 74 71 54;            /* derived: deeper comment */
+    --text-subtle: 108 102 75;        /* #6c664b Comment / Current Line */
+    --inverse: 31 31 31;
+    --inverse-fg: 255 251 235;
+    --accent: 163 20 77;              /* #a3144d Pink */
+    --accent-fg: 255 251 235;
+    --accent-soft: color-mix(in oklab, rgb(var(--accent)) 14%, transparent);
+    --accent-hover: color-mix(in oklab, rgb(var(--accent)) 80%, black 20%);
+    --warning: 163 77 20;              /* #a34d14 Orange */
+    --warning-fg: 110 52 9;            /* derived: deeper for contrast */
+    --warning-soft: color-mix(in oklab, rgb(var(--warning)) 14%, transparent);
+    --danger: 203 58 42;               /* #cb3a2a Red */
+    --danger-fg: 139 40 32;            /* derived */
+    --danger-soft: color-mix(in oklab, rgb(var(--danger)) 12%, transparent);
+    --success: 20 113 10;              /* #14710a Green */
+    --success-fg: 14 72 7;              /* derived */
+    --success-soft: color-mix(in oklab, rgb(var(--success)) 14%, transparent);
+    --info: 3 106 150;                  /* #036a96 Cyan */
+    --info-fg: 2 74 107;                /* derived */
+    --info-soft: color-mix(in oklab, rgb(var(--info)) 14%, transparent);
+    --selection-bg: rgba(207, 207, 222, 0.65);
+    --scrollbar-thumb: 220 215 195;
+    --scrollbar-thumb-hover: 190 185 165;
+    --overlay-shadow: 0 8px 32px rgba(31, 31, 31, 0.18);
+    --shadow-lg: 0 20px 50px rgba(31, 31, 31, 0.12), 0 4px 12px rgba(31, 31, 31, 0.06);
+    --syntax-string: #846e15;         /* Yellow */
+    --syntax-keyword: #a3144d;        /* Pink */
+    --syntax-comment: #6c664b;        /* Comment */
+  }
+
+  [data-theme='synthwave-84'] {
+    --bg-app: 38 35 53;             /* #262335 */
+    --bg-panel: 28 26 41;
+    --bg-elev: 52 47 71;            /* #34294f */
+    --bg-hover: 65 60 90;
+    --bg-active: 89 80 120;
+    --border-default: 65 60 90;
+    --border-strong: 105 95 135;
+    --text-default: 247 247 249;
+    --text-muted: 184 178 209;
+    --text-subtle: 132 124 168;
+    --inverse: 247 247 249;
+    --inverse-fg: 38 35 53;
+    --accent: 255 113 206;          /* #ff71ce hot pink */
+    --accent-fg: 38 35 53;
+    --accent-soft: color-mix(in oklab, rgb(var(--accent)) 22%, transparent);
+    --accent-hover: color-mix(in oklab, rgb(var(--accent)) 80%, white 20%);
+    --warning: 253 230 138;
+    --warning-fg: 253 230 138;
+    --warning-soft: color-mix(in oklab, rgb(var(--warning)) 18%, transparent);
+    --danger: 254 68 67;            /* #fe4450 */
+    --danger-fg: 254 113 121;
+    --danger-soft: color-mix(in oklab, rgb(var(--danger)) 20%, transparent);
+    --success: 114 246 168;
+    --success-fg: 114 246 168;
+    --success-soft: color-mix(in oklab, rgb(var(--success)) 18%, transparent);
+    --info: 1 233 244;              /* #01e9f4 cyan */
+    --info-fg: 1 233 244;
+    --info-soft: color-mix(in oklab, rgb(var(--info)) 20%, transparent);
+    --selection-bg: rgba(255, 113, 206, 0.4);
+    --scrollbar-thumb: 105 95 135;
+    --scrollbar-thumb-hover: 132 124 168;
+    --overlay-shadow: 0 8px 32px rgba(255, 113, 206, 0.25), 0 8px 32px rgba(0, 0, 0, 0.55);
+    --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.6), 0 4px 12px rgba(255, 113, 206, 0.2);
+    --syntax-string: #ff8b39;
+    --syntax-keyword: #fede5d;
+    --syntax-comment: #495495;
+    --font-mono-override: 'IBM Plex Mono', ui-monospace, monospace;
+  }
+
+  [data-theme='solarized-dark'] {
+    --bg-app: 0 43 54;              /* base03 */
+    --bg-panel: 7 54 66;            /* base02 */
+    --bg-elev: 7 54 66;
+    --bg-hover: 88 110 117;         /* base01 */
+    --bg-active: 101 123 131;       /* base00 */
+    --border-default: 7 54 66;
+    --border-strong: 88 110 117;
+    --text-default: 147 161 161;    /* base1 */
+    --text-muted: 131 148 150;
+    --text-subtle: 101 123 131;
+    --inverse: 253 246 227;
+    --inverse-fg: 0 43 54;
+    --accent: 38 139 210;           /* blue */
+    --accent-fg: 253 246 227;
+    --accent-soft: color-mix(in oklab, rgb(var(--accent)) 18%, transparent);
+    --accent-hover: color-mix(in oklab, rgb(var(--accent)) 80%, white 20%);
+    --warning: 181 137 0;           /* yellow */
+    --warning-fg: 203 75 22;
+    --warning-soft: color-mix(in oklab, rgb(var(--warning)) 14%, transparent);
+    --danger: 220 50 47;            /* red */
+    --danger-fg: 220 50 47;
+    --danger-soft: color-mix(in oklab, rgb(var(--danger)) 14%, transparent);
+    --success: 133 153 0;           /* green */
+    --success-fg: 133 153 0;
+    --success-soft: color-mix(in oklab, rgb(var(--success)) 16%, transparent);
+    --info: 42 161 152;             /* cyan */
+    --info-fg: 42 161 152;
+    --info-soft: color-mix(in oklab, rgb(var(--info)) 16%, transparent);
+    --selection-bg: rgba(38, 139, 210, 0.4);
+    --scrollbar-thumb: 88 110 117;
+    --scrollbar-thumb-hover: 101 123 131;
+    --overlay-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.55), 0 4px 12px rgba(0, 0, 0, 0.45);
+    --syntax-string: #2aa198;
+    --syntax-keyword: #859900;
+    --syntax-comment: #586e75;
+  }
+
+  [data-theme='solarized-light'] {
+    --bg-app: 253 246 227;          /* base3 */
+    --bg-panel: 238 232 213;        /* base2 */
+    --bg-elev: 238 232 213;
+    --bg-hover: 220 213 195;
+    --bg-active: 200 192 175;
+    --border-default: 238 232 213;
+    --border-strong: 147 161 161;
+    --text-default: 101 123 131;
+    --text-muted: 88 110 117;
+    --text-subtle: 147 161 161;
+    --inverse: 0 43 54;
+    --inverse-fg: 253 246 227;
+    --accent: 38 139 210;
+    --accent-fg: 253 246 227;
+    --accent-soft: color-mix(in oklab, rgb(var(--accent)) 14%, transparent);
+    --accent-hover: color-mix(in oklab, rgb(var(--accent)) 80%, black 20%);
+    --warning: 181 137 0;
+    --warning-fg: 121 92 0;
+    --warning-soft: color-mix(in oklab, rgb(var(--warning)) 14%, transparent);
+    --danger: 220 50 47;
+    --danger-fg: 153 27 27;
+    --danger-soft: color-mix(in oklab, rgb(var(--danger)) 12%, transparent);
+    --success: 133 153 0;
+    --success-fg: 86 99 0;
+    --success-soft: color-mix(in oklab, rgb(var(--success)) 14%, transparent);
+    --info: 42 161 152;
+    --info-fg: 31 119 113;
+    --info-soft: color-mix(in oklab, rgb(var(--info)) 14%, transparent);
+    --selection-bg: rgba(38, 139, 210, 0.25);
+    --scrollbar-thumb: 200 192 175;
+    --scrollbar-thumb-hover: 147 161 161;
+    --overlay-shadow: 0 8px 32px rgba(7, 54, 66, 0.18);
+    --shadow-lg: 0 20px 50px rgba(7, 54, 66, 0.12), 0 4px 12px rgba(7, 54, 66, 0.06);
+    --syntax-string: #2aa198;
+    --syntax-keyword: #859900;
+    --syntax-comment: #93a1a1;
+  }
+
+  [data-theme='nord'] {
+    --bg-app: 46 52 64;             /* nord0 */
+    --bg-panel: 59 66 82;           /* nord1 */
+    --bg-elev: 67 76 94;            /* nord2 */
+    --bg-hover: 76 86 106;          /* nord3 */
+    --bg-active: 94 103 119;
+    --border-default: 67 76 94;
+    --border-strong: 76 86 106;
+    --text-default: 216 222 233;    /* nord4 */
+    --text-muted: 229 233 240;
+    --text-subtle: 136 147 163;
+    --inverse: 236 239 244;
+    --inverse-fg: 46 52 64;
+    --accent: 136 192 208;          /* nord8 frost */
+    --accent-fg: 46 52 64;
+    --accent-soft: color-mix(in oklab, rgb(var(--accent)) 20%, transparent);
+    --accent-hover: color-mix(in oklab, rgb(var(--accent)) 80%, white 20%);
+    --warning: 235 203 139;         /* nord13 yellow */
+    --warning-fg: 235 203 139;
+    --warning-soft: color-mix(in oklab, rgb(var(--warning)) 18%, transparent);
+    --danger: 191 97 106;            /* nord11 red */
+    --danger-fg: 208 135 142;
+    --danger-soft: color-mix(in oklab, rgb(var(--danger)) 18%, transparent);
+    --success: 163 190 140;          /* nord14 green */
+    --success-fg: 163 190 140;
+    --success-soft: color-mix(in oklab, rgb(var(--success)) 18%, transparent);
+    --info: 129 161 193;             /* nord9 frost */
+    --info-fg: 129 161 193;
+    --info-soft: color-mix(in oklab, rgb(var(--info)) 20%, transparent);
+    --selection-bg: rgba(136, 192, 208, 0.35);
+    --scrollbar-thumb: 67 76 94;
+    --scrollbar-thumb-hover: 94 103 119;
+    --overlay-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.5), 0 4px 12px rgba(0, 0, 0, 0.4);
+    --syntax-string: #a3be8c;
+    --syntax-keyword: #81a1c1;
+    --syntax-comment: #616e88;
+  }
+
+  [data-theme='tokyo-night'] {
+    --bg-app: 26 27 38;             /* #1a1b26 */
+    --bg-panel: 22 22 30;
+    --bg-elev: 36 40 59;            /* #24283b */
+    --bg-hover: 41 46 66;
+    --bg-active: 65 72 104;
+    --border-default: 36 40 59;
+    --border-strong: 65 72 104;
+    --text-default: 192 202 245;    /* #c0caf5 */
+    --text-muted: 154 173 236;
+    --text-subtle: 86 95 137;
+    --inverse: 192 202 245;
+    --inverse-fg: 26 27 38;
+    --accent: 122 162 247;           /* #7aa2f7 blue */
+    --accent-fg: 26 27 38;
+    --accent-soft: color-mix(in oklab, rgb(var(--accent)) 18%, transparent);
+    --accent-hover: color-mix(in oklab, rgb(var(--accent)) 80%, white 20%);
+    --warning: 224 175 104;
+    --warning-fg: 224 175 104;
+    --warning-soft: color-mix(in oklab, rgb(var(--warning)) 16%, transparent);
+    --danger: 247 118 142;
+    --danger-fg: 247 118 142;
+    --danger-soft: color-mix(in oklab, rgb(var(--danger)) 18%, transparent);
+    --success: 158 206 106;
+    --success-fg: 158 206 106;
+    --success-soft: color-mix(in oklab, rgb(var(--success)) 18%, transparent);
+    --info: 125 207 255;
+    --info-fg: 125 207 255;
+    --info-soft: color-mix(in oklab, rgb(var(--info)) 18%, transparent);
+    --selection-bg: rgba(122, 162, 247, 0.3);
+    --scrollbar-thumb: 65 72 104;
+    --scrollbar-thumb-hover: 86 95 137;
+    --overlay-shadow: 0 8px 32px rgba(0, 0, 0, 0.55);
+    --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.55), 0 4px 12px rgba(0, 0, 0, 0.45);
+    --syntax-string: #9ece6a;
+    --syntax-keyword: #bb9af7;
+    --syntax-comment: #565f89;
+  }
+
+  [data-theme='gruvbox'] {
+    --bg-app: 40 40 40;              /* bg0 */
+    --bg-panel: 29 32 33;            /* bg0_h */
+    --bg-elev: 60 56 54;             /* bg1 */
+    --bg-hover: 80 73 69;            /* bg2 */
+    --bg-active: 102 92 84;          /* bg3 */
+    --border-default: 60 56 54;
+    --border-strong: 102 92 84;
+    --text-default: 235 219 178;     /* fg1 */
+    --text-muted: 213 196 161;
+    --text-subtle: 168 153 132;
+    --inverse: 235 219 178;
+    --inverse-fg: 40 40 40;
+    --accent: 250 189 47;             /* yellow */
+    --accent-fg: 40 40 40;
+    --accent-soft: color-mix(in oklab, rgb(var(--accent)) 22%, transparent);
+    --accent-hover: color-mix(in oklab, rgb(var(--accent)) 80%, white 20%);
+    --warning: 254 128 25;            /* orange */
+    --warning-fg: 254 128 25;
+    --warning-soft: color-mix(in oklab, rgb(var(--warning)) 18%, transparent);
+    --danger: 251 73 52;
+    --danger-fg: 251 73 52;
+    --danger-soft: color-mix(in oklab, rgb(var(--danger)) 18%, transparent);
+    --success: 184 187 38;
+    --success-fg: 184 187 38;
+    --success-soft: color-mix(in oklab, rgb(var(--success)) 18%, transparent);
+    --info: 131 165 152;
+    --info-fg: 131 165 152;
+    --info-soft: color-mix(in oklab, rgb(var(--info)) 18%, transparent);
+    --selection-bg: rgba(250, 189, 47, 0.3);
+    --scrollbar-thumb: 80 73 69;
+    --scrollbar-thumb-hover: 102 92 84;
+    --overlay-shadow: 0 8px 32px rgba(0, 0, 0, 0.55);
+    --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.55), 0 4px 12px rgba(0, 0, 0, 0.45);
+    --syntax-string: #b8bb26;
+    --syntax-keyword: #fb4934;
+    --syntax-comment: #928374;
+  }
+
+  /* Dark 2026 — ported from VS Code's 2026-dark theme.
+   * Source: microsoft/vscode/extensions/theme-defaults/themes/2026-dark.json */
+  [data-theme='dark-2026'] {
+    --bg-app: 24 24 24;              /* editor.background */
+    --bg-panel: 23 23 23;            /* sideBar.background */
+    --bg-elev: 31 31 31;
+    --bg-hover: 42 42 42;
+    --bg-active: 53 53 53;
+    --border-default: 41 41 41;
+    --border-strong: 61 61 61;
+    --text-default: 204 204 204;
+    --text-muted: 154 154 154;
+    --text-subtle: 110 110 110;
+    --inverse: 204 204 204;
+    --inverse-fg: 24 24 24;
+    --accent: 13 99 188;              /* button.background */
+    --accent-fg: 255 255 255;
+    --accent-soft: color-mix(in oklab, rgb(var(--accent)) 22%, transparent);
+    --accent-hover: color-mix(in oklab, rgb(var(--accent)) 80%, white 20%);
+    --warning: 204 162 30;
+    --warning-fg: 245 189 50;
+    --warning-soft: color-mix(in oklab, rgb(var(--warning)) 18%, transparent);
+    --danger: 244 71 71;
+    --danger-fg: 248 113 113;
+    --danger-soft: color-mix(in oklab, rgb(var(--danger)) 18%, transparent);
+    --success: 35 165 90;
+    --success-fg: 134 239 172;
+    --success-soft: color-mix(in oklab, rgb(var(--success)) 18%, transparent);
+    --info: 75 158 230;
+    --info-fg: 147 197 253;
+    --info-soft: color-mix(in oklab, rgb(var(--info)) 18%, transparent);
+    --selection-bg: rgba(13, 99, 188, 0.45);
+    --scrollbar-thumb: 61 61 61;
+    --scrollbar-thumb-hover: 79 79 79;
+    --overlay-shadow: 0 8px 32px rgba(0, 0, 0, 0.55);
+    --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.55), 0 4px 12px rgba(0, 0, 0, 0.45);
+    --syntax-string: #ce9178;
+    --syntax-keyword: #569cd6;
+    --syntax-comment: #6a9955;
+  }
 }
 
 @layer base {

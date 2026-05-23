@@ -106,25 +106,26 @@ function WorkspaceSwitcherButton({
       </button>
       {open && (() => {
         const configuredIds = new Set<Provider>(configuredProviders(settings))
-        const visibleProviders = configuredIds.size > 0
-          ? adapterList.filter((a) => configuredIds.has(a.id as Provider))
-          : adapterList // empty-state fallback so the picker isn't empty
+        const visibleProviders = adapterList.filter((a) => configuredIds.has(a.id as Provider))
+        const nothingConfigured = visibleProviders.length === 0
         // settings.provider may point at an unconfigured provider (e.g. user
         // removed the API key after first run). Dropdown displays the
         // effective provider's pair so the controls reflect what's actually
         // in use; the chosen provider is left intact in settings so the user's
         // earlier preference is remembered if they re-add the key.
         const displayProvider: Provider = effective.provider
-        const displayModels = displayProvider === 'ollama'
-          ? settings.ollamaModels
-          : getAdapter(displayProvider).models
+        const displayModels = nothingConfigured
+          ? []
+          : (displayProvider === 'ollama'
+              ? settings.ollamaModels
+              : getAdapter(displayProvider).models)
         // The <select> `value` must read from defaultModel[displayProvider] so
         // user clicks in the dropdown are reflected back. Reading from a
         // hard-coded `displayModels[0]` previously made every click look like
         // a no-op even though the update persisted correctly.
         const persistedForProvider = settings.defaultModel[displayProvider]
         const displayModel = displayModels.length === 0
-          ? persistedForProvider
+          ? ''
           : (displayModels.includes(persistedForProvider) ? persistedForProvider : displayModels[0])
         return (
           <div className="absolute left-0 right-0 bottom-full mb-1 bg-elev border border-default rounded-lg shadow-lg z-30 p-3 space-y-2">
@@ -133,12 +134,17 @@ function WorkspaceSwitcherButton({
               <select
                 id="sidebar-footer-provider"
                 className="input w-full"
-                value={displayProvider}
+                value={nothingConfigured ? '' : displayProvider}
+                disabled={nothingConfigured}
                 onChange={(e) => onUpdate({ provider: e.target.value as Provider })}
               >
-                {visibleProviders.map((a) => (
-                  <option key={a.id} value={a.id}>{a.name}</option>
-                ))}
+                {nothingConfigured ? (
+                  <option disabled value="">Add a key in Settings</option>
+                ) : (
+                  visibleProviders.map((a) => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))
+                )}
               </select>
             </div>
             <div>
@@ -147,6 +153,7 @@ function WorkspaceSwitcherButton({
                 id="sidebar-footer-model"
                 className="input w-full"
                 value={displayModel}
+                disabled={nothingConfigured}
                 onChange={(e) =>
                   onUpdate({
                     defaultModel: { ...settings.defaultModel, [displayProvider]: e.target.value },
@@ -154,7 +161,9 @@ function WorkspaceSwitcherButton({
                 }
               >
                 {displayModels.length === 0 ? (
-                  <option disabled value="">No models — Refresh in Settings</option>
+                  <option disabled value="">
+                    {nothingConfigured ? 'Add a key in Settings' : 'Refresh in Settings'}
+                  </option>
                 ) : (
                   displayModels.map((m) => (
                     <option key={m} value={m}>{m}</option>

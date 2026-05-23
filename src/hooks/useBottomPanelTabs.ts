@@ -2,6 +2,7 @@ import { useCallback, useMemo } from 'react'
 import { useService } from '../services/useService'
 import { buildBottomPanelTabs, type BottomPanelTabsAdapter } from '../components/ide/bottomPanelTabs'
 import { getCanvHistory } from '../lib/history'
+import { flattenTree } from '../lib/fs'
 import { useApplyRunWithSnapshot } from './useApplyRunWithSnapshot'
 import { buildChatSystemPreamble } from '../lib/buildChatSystemPreamble'
 import { getAdapter, configuredProviders } from '../adapters'
@@ -84,6 +85,15 @@ export function useBottomPanelTabs(args: UseBottomPanelTabsArgs) {
     return result
   }, [settings.apiKeys, settings.baseUrls, settings.ollamaModels, chatProvider, chatMessages.length])
 
+  const workspaceFiles: string[] = useMemo(() => {
+    const tree = workspace.tree
+    if (!tree) return []
+    return flattenTree(tree)
+      .filter((n) => n.kind === 'file')
+      .map((n) => n.relPath)
+      .sort()
+  }, [workspace.tree])
+
   const onOpenDiff = useCallback(
     (rel: string, baseRef: string = 'HEAD', baseLabel?: string) => {
       workspace.openDiffTab(rel, baseRef, baseLabel)
@@ -133,6 +143,7 @@ export function useBottomPanelTabs(args: UseBottomPanelTabsArgs) {
     closeSession: chatSessions.closeSession,
     changeProviderModel: chatSessions.setActiveSessionProviderModel,
     availableModels,
+    workspaceFiles,
     getSession: chatSessions.getSession,
     chatSystemPreamble,
 
@@ -158,7 +169,7 @@ export function useBottomPanelTabs(args: UseBottomPanelTabsArgs) {
     workspace.activeMarkdownRel,
     settings.chatFontSize, settings.pricingOverrides,
     selectionAgent, chatSessions, lint, jumpToProblem,
-    applyRunWithSnapshot, availableModels, chatSystemPreamble,
+    applyRunWithSnapshot, availableModels, workspaceFiles, chatSystemPreamble,
     raEnabled, fileHistoryTarget, fileHistoryNonce,
     onOpenDiff, onOpenRestore,
   ])

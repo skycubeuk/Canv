@@ -29,9 +29,6 @@ const electron = {
   require.cache[electronPath] = m
 }
 
-const sshPoolMod = require('../../ssh-pool.cjs')
-const remoteFsMod = require('../../remote-fs.cjs')
-
 const svc = require('./index.cjs')
 
 function makeIpcMain() {
@@ -61,7 +58,6 @@ function baseDeps(root, overrides = {}) {
   return {
     getWorkspace: () => ({ kind: 'local', root }),
     requireWorkspace: () => root,
-    isRemote: () => false,
     safeResolve: (r, rel) => {
       const abs = path.resolve(r, rel)
       if (!abs.startsWith(r + path.sep) && abs !== r) {
@@ -78,7 +74,6 @@ function baseDeps(root, overrides = {}) {
     setHistory: () => {},
     onWorkspaceChangedGlobal: () => {},
     toRel: (r, abs) => path.relative(r, abs).replace(/\\/g, '/'),
-    getRecentRemotes: () => null,
     ...overrides,
   }
 }
@@ -152,15 +147,13 @@ describe('fs service IPC handlers', () => {
   })
 
   describe('canvConfig:factoryReset', () => {
-    it('happy: removes config dir, recent-remotes.json, and Canv subdir from userData', async () => {
+    it('happy: removes config dir and Canv subdir from userData', async () => {
       const userData = await fsp.mkdtemp(path.join(os.tmpdir(), 'fs-userdata-'))
       const configDir = path.join(userData, 'config')
-      const recent = path.join(userData, 'recent-remotes.json')
       const canvSubdir = path.join(userData, 'Canv')
       try {
         await fsp.mkdir(configDir, { recursive: true })
         await fsp.writeFile(path.join(configDir, 'fiction.yaml'), 'name: test\n')
-        await fsp.writeFile(recent, '[]')
         await fsp.mkdir(canvSubdir, { recursive: true })
         await fsp.writeFile(path.join(canvSubdir, 'trusted-workspaces.json'), '{}')
         await fsp.mkdir(path.join(canvSubdir, 'builder-scratch'), { recursive: true })
@@ -168,7 +161,6 @@ describe('fs service IPC handlers', () => {
         const r = await ipcMain.invoke('canvConfig:factoryReset')
         expect(r).toEqual({ ok: true })
         expect(fs.existsSync(configDir)).toBe(false)
-        expect(fs.existsSync(recent)).toBe(false)
         expect(fs.existsSync(canvSubdir)).toBe(false)
       } finally {
         await fsp.rm(userData, { recursive: true, force: true })
@@ -304,18 +296,6 @@ describe('fs service IPC handlers', () => {
       expect(r).toEqual({ kind: 'local', root })
     })
 
-    it('happy: remote workspace → returns { kind:"remote", display }', async () => {
-      const ipc = makeIpcMain()
-      svc.registerIpcHandlers(ipc, baseDeps(root, {
-        getWorkspace: () => ({
-          kind: 'remote',
-          target: { user: 'alice', host: 'box', port: 22, path: '/srv/notes' },
-        }),
-      }))
-      const r = await ipc.invoke('canvFS:getWorkspaceKind')
-      expect(r).toEqual({ kind: 'remote', display: 'alice@box:/srv/notes' })
-    })
-
     it('error: no workspace → returns null', async () => {
       const ipc = makeIpcMain()
       svc.registerIpcHandlers(ipc, baseDeps(root, { getWorkspace: () => null }))
@@ -345,83 +325,6 @@ describe('fs service IPC handlers', () => {
         closeWorkspace: async () => { throw new Error('close failed') },
       }))
       await expect(ipc.invoke('canvFS:closeWorkspace')).rejects.toThrow(/close failed/)
-    })
-  })
-
-  describe('canvFS:listRecentRemotes', () => {
-    it('happy: returns the list from getRecentRemotes()', async () => {
-      const entries = [{ raw: 'me@a:/x', lastUsed: 1 }, { raw: 'me@b:/y', lastUsed: 2 }]
-      const ipc = makeIpcMain()
-      svc.registerIpcHandlers(ipc, baseDeps(root, {
-        getRecentRemotes: () => ({ list: () => entries, record: () => {} }),
-      }))
-      const r = await ipc.invoke('canvFS:listRecentRemotes')
-      expect(r).toEqual(entries)
-    })
-
-    it('error: getRecentRemotes returns null → returns empty array', async () => {
-      const r = await ipcMain.invoke('canvFS:listRecentRemotes')
-      expect(r).toEqual([])
-    })
-  })
-
-  describe('canvFS:openRemote', () => {
-    it('error: empty input → throws "invalid target"', async () => {
-      await expect(ipcMain.invoke('canvFS:openRemote', '')).rejects.toThrow(/invalid target/)
-      await expect(ipcMain.invoke('canvFS:openRemote', null)).rejects.toThrow(/invalid target/)
-    })
-
-    it('error: malformed URL → parseTarget throws', async () => {
-      // Missing :path
-      await expect(ipcMain.invoke('canvFS:openRemote', 'just-a-host')).rejects.toThrow(/missing :path/)
-    })
-
-    it('happy: valid target → preflight passes, workspace set to remote', async () => {
-      // The service captured `SshPool` and `RemoteFs` by destructuring at
-      // import time, so we cannot replace the constructors. Instead, spy on
-      // their prototypes: `SshPool.prototype.exec` is called for the preflight
-      // probe, and `RemoteFs.prototype.subscribe` is invoked after the pool
-      // connects. The constructors themselves are pure (no network I/O), so
-      // letting them run is safe.
-      vi.spyOn(sshPoolMod.SshPool.prototype, 'exec').mockResolvedValue({
-        stdout: '/usr/bin/inotifywait\n/usr/bin/git\nLinux\n',
-        stderr: '',
-        code: 0,
-      })
-      vi.spyOn(sshPoolMod.SshPool.prototype, 'close').mockResolvedValue(undefined)
-      vi.spyOn(remoteFsMod.RemoteFs.prototype, 'subscribe').mockReturnValue(() => {})
-
-      const setWs = vi.fn()
-      const closeWs = vi.fn(async () => {})
-      const recordRemote = vi.fn()
-      const ipc = makeIpcMain()
-      svc.registerIpcHandlers(ipc, baseDeps(root, {
-        setWorkspace: setWs,
-        closeWorkspace: closeWs,
-        getMainWindow: () => null,
-        getRecentRemotes: () => ({ list: () => [], record: recordRemote }),
-      }))
-      const r = await ipc.invoke('canvFS:openRemote', 'me@host:/srv/notes')
-      expect(r.kind).toBe('remote')
-      expect(r.display).toMatch(/me@host:\/srv\/notes/)
-      expect(setWs).toHaveBeenCalledWith(expect.objectContaining({ kind: 'remote' }))
-      expect(recordRemote).toHaveBeenCalledWith('me@host:/srv/notes')
-    })
-  })
-
-  describe('canvFS:reconnect', () => {
-    it('happy: remote workspace → calls pool.reconnectNow', async () => {
-      const reconnectNow = vi.fn()
-      const ipc = makeIpcMain()
-      svc.registerIpcHandlers(ipc, baseDeps(root, {
-        getWorkspace: () => ({ kind: 'remote', pool: { reconnectNow } }),
-      }))
-      await ipc.invoke('canvFS:reconnect')
-      expect(reconnectNow).toHaveBeenCalledTimes(1)
-    })
-
-    it('error: local workspace → no-op (does not throw)', async () => {
-      await expect(ipcMain.invoke('canvFS:reconnect')).resolves.toBeUndefined()
     })
   })
 
@@ -633,15 +536,6 @@ describe('fs service IPC handlers', () => {
       expect(onDisk).toEqual(cfg)
     })
 
-    it('error: remote workspace → throws "Workspace config is local-only"', async () => {
-      const ipc = makeIpcMain()
-      svc.registerIpcHandlers(ipc, baseDeps(root, {
-        isRemote: () => true,
-        getWorkspace: () => ({ kind: 'remote', root, backend: {} }),
-      }))
-      await expect(ipc.invoke('canvFS:writeWorkspaceConfig', { schemaVersion: 1 }))
-        .rejects.toThrow(/local-only/)
-    })
   })
 
   // ---------------------------------------------------------------------------

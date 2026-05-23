@@ -31,7 +31,6 @@ export function StatusBar() {
     modesSvc.modes.find((m) => m.id === modesSvc.defaultModeId)!
 
   const workspaceName = workspace.root
-  const kind = workspace.kind
   const { wordCount, selectionWordCount } = editorStats
   const { apiKeyMissing, meterTotals } = chatSessions
   const meterTokens = meterTotals.tokens || null
@@ -114,16 +113,9 @@ export function StatusBar() {
       </button>
 
       {workspaceName && (
-        kind?.kind === 'remote' ? (
-          <span className="flex items-center gap-1 truncate max-w-[260px]" title={kind.display}>
-            <span className="px-1.5 py-px text-[9px] uppercase tracking-wider rounded-sm bg-warning text-warning-fg">remote</span>
-            <span className="truncate">{kind.display}</span>
-          </span>
-        ) : (
-          <span className="truncate max-w-[260px]" title={workspaceName}>
-            {basenameOrNull(workspaceName)}
-          </span>
-        )
+        <span className="truncate max-w-[260px]" title={workspaceName}>
+          {basenameOrNull(workspaceName)}
+        </span>
       )}
 
       {leftItems.map((item) => (

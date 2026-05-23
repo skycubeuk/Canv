@@ -6,7 +6,7 @@ import type { ApprovalDecision } from '../agents/chatRunner'
 import type { LintIssue } from './lintTypes'
 import type { ScanState } from '../hooks/useLintIssues'
 import type { BottomTab } from '../hooks/useIdeLayout'
-import type { Theme } from '../hooks/useSettings'
+import type { ThemeId } from './themes'
 import type { ModelPricing } from '../config/pricing'
 
 /** A run as broadcast to the pop-out, with main-side parsing already applied. */
@@ -47,6 +47,9 @@ export interface DockState {
   chatSystemPreamble: string
   activeSessionId: string
   availableModels: Record<ChatProvider, string[]>
+  /** Workspace files (forward-slash relative paths) — feeds the @-mention
+   *  picker in the popout's ChatPanel. */
+  workspaceFiles: string[]
 
   // File history (Revision Archaeology v2 UX)
   revisionArchaeologyEnabled: boolean
@@ -67,8 +70,7 @@ export interface DockState {
   streamingRunId: string | null
 
   ui: {
-    theme: Theme
-    accent: string
+    theme: ThemeId
     fontSize: number
     profileLabel: string | null
   }

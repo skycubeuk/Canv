@@ -3,6 +3,7 @@ export type ThemeId =
   | 'canv-dark'
   | 'canv-light'
   | 'dracula'
+  | 'alucard'
   | 'synthwave-84'
   | 'solarized-dark'
   | 'solarized-light'
@@ -21,6 +22,7 @@ export const THEMES: readonly ThemeDescriptor[] = [
   { id: 'canv-dark',       name: 'Canv Dark',       kind: 'dark'  },
   { id: 'canv-light',      name: 'Canv Light',      kind: 'light' },
   { id: 'dracula',         name: 'Dracula',         kind: 'dark'  },
+  { id: 'alucard',         name: 'Alucard',         kind: 'light' },
   { id: 'synthwave-84',    name: "Synthwave '84",   kind: 'dark'  },
   { id: 'solarized-dark',  name: 'Solarized Dark',  kind: 'dark'  },
   { id: 'solarized-light', name: 'Solarized Light', kind: 'light' },

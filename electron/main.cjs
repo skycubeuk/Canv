@@ -2,7 +2,6 @@ const { app, BrowserWindow, Menu, ipcMain, nativeTheme, protocol, shell } = requ
 const path = require('node:path')
 const fs = require('node:fs')
 const fsp = require('node:fs/promises')
-const { RecentRemotes } = require('./recent-remotes.cjs')
 const serve = require('./serve-folder.cjs')
 const { createHistoryService } = require('./history-service.cjs')
 const fsService       = require('./services/fs/index.cjs')
@@ -71,16 +70,14 @@ const MAX_LIST_ENTRIES = 5000
 const MAX_DEPTH = 8
 
 // Active workspace state. null when no workspace is open.
-// Local: { kind: 'local', root }
-// Remote: { kind: 'remote', target, raw, pool, backend, unsub }
+// Shape: { kind: 'local', root }
 let WORKSPACE = null
 let HISTORY = null
-let recentRemotes = null
 let mainWindow = null
 
 function getHistoryService() {
-  if (WORKSPACE?.kind !== 'local' || !WORKSPACE.root) {
-    throw new Error('History is not available (no local workspace open)')
+  if (!WORKSPACE?.root) {
+    throw new Error('History is not available (no workspace open)')
   }
   if (!HISTORY || HISTORY.__root !== WORKSPACE.root) {
     HISTORY = createHistoryService({ root: WORKSPACE.root })
@@ -108,7 +105,7 @@ function getExtensionClaimedExts() {
   if (extensionClaimedExts) return extensionClaimedExts
   const out = new Set()
   try {
-    if (workspaceRegistry && WORKSPACE && WORKSPACE.kind === 'local') {
+    if (workspaceRegistry && WORKSPACE?.root) {
       const dir = path.join(WORKSPACE.root, '.canv', 'extensions')
       for (const entry of workspaceRegistry.listEntries()) {
         if (!entry.enabled || entry.trustedAt == null) continue
@@ -172,11 +169,8 @@ function safeResolve(root, rel) {
 
 function requireWorkspace() {
   if (!WORKSPACE) throw new Error('no workspace selected')
-  if (WORKSPACE.kind !== 'local') throw new Error('local-only operation on remote workspace')
   return WORKSPACE.root
 }
-
-function isRemote() { return WORKSPACE?.kind === 'remote' }
 
 function toRel(root, abs) {
   const rel = path.relative(root, abs)
@@ -241,7 +235,7 @@ function registerLegacyServeBroadcast() {
   // the serve domain takes ownership of its broadcast lifecycle.
   serve.onStatusChange((s) => {
     let payload = s
-    if (s.running && WORKSPACE && WORKSPACE.kind === 'local') {
+    if (s.running && WORKSPACE?.root) {
       const resolvedWs = path.resolve(WORKSPACE.root)
       const rel = path.relative(resolvedWs, s.root).split(path.sep).join('/')
       payload = { ...s, relPath: rel }
@@ -270,10 +264,38 @@ function configureWindowOpenHandler(win) {
   })
 }
 
+// Persist the last applied titleBarOverlay colours so the next launch can
+// paint the OS-drawn controls in the active theme's panel colour from the
+// very first frame — avoiding the dark/light → real-theme flash while the
+// renderer boots.
+function overlayCachePath() {
+  try { return path.join(app.getPath('userData'), 'titlebar-overlay.json') }
+  catch { return null }
+}
+function readPersistedOverlay() {
+  const p = overlayCachePath()
+  if (!p) return null
+  try {
+    const raw = fs.readFileSync(p, 'utf8')
+    const parsed = JSON.parse(raw)
+    if (typeof parsed?.color === 'string' && typeof parsed?.symbolColor === 'string') {
+      return { color: parsed.color, symbolColor: parsed.symbolColor }
+    }
+  } catch { /* missing or corrupt — fall through to defaults */ }
+  return null
+}
+function writePersistedOverlay(overlay) {
+  const p = overlayCachePath()
+  if (!p) return
+  try { fs.writeFileSync(p, JSON.stringify(overlay), 'utf8') }
+  catch { /* best-effort cache; ignore */ }
+}
+
 function createWindow() {
   const darkOverlay = { color: '#101216', symbolColor: '#e7eaf0' }
   const lightOverlay = { color: '#f7f8fa', symbolColor: '#1f2937' }
-  const initialOverlay = nativeTheme.shouldUseDarkColors ? darkOverlay : lightOverlay
+  const fallbackOverlay = nativeTheme.shouldUseDarkColors ? darkOverlay : lightOverlay
+  const initialOverlay = readPersistedOverlay() ?? fallbackOverlay
 
   const win = new BrowserWindow({
     width: 1400,
@@ -287,7 +309,7 @@ function createWindow() {
     // appear at the left. The renderer's <header> uses CSS env vars
     // (titlebar-area-x / -width) to leave room for the controls.
     titleBarStyle: 'hidden',
-    titleBarOverlay: { ...initialOverlay, height: 40 },
+    titleBarOverlay: { ...initialOverlay, height: 39 },
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -324,7 +346,7 @@ function createWindow() {
   if (process.platform !== 'darwin') {
     const onThemeUpdated = () => {
       const c = nativeTheme.shouldUseDarkColors ? darkOverlay : lightOverlay
-      try { win.setTitleBarOverlay({ ...c, height: 40 }) } catch { /* unsupported on some Linux WMs */ }
+      try { win.setTitleBarOverlay({ ...c, height: 39 }) } catch { /* unsupported on some Linux WMs */ }
     }
     nativeTheme.on('updated', onThemeUpdated)
     win.on('closed', () => nativeTheme.off('updated', onThemeUpdated))
@@ -394,12 +416,10 @@ function makeDeps() {
     setTrustStore: (s) => { trustStore = s },
     getWorkspaceRegistry: () => workspaceRegistry,
     setWorkspaceRegistry: (r) => { workspaceRegistry = r },
-    getRecentRemotes: () => recentRemotes,
-    setRecentRemotes: (r) => { recentRemotes = r },
     getMcpService: () => mcpServiceInstance,
 
     // Shared helpers — passed by reference.
-    requireWorkspace, isRemote, safeResolve, isAllowedExt, isAllowedDirEntry,
+    requireWorkspace, safeResolve, isAllowedExt, isAllowedDirEntry,
     toRel, isInternal, isSitePath, buildTree,
     getExtensionClaimedExts, invalidateExtensionClaimedExts,
     getHistoryService,
@@ -431,7 +451,6 @@ app.whenReady().then(() => {
         ])
       : null,
   )
-  recentRemotes = new RecentRemotes(path.join(app.getPath('userData'), 'recent-remotes.json'))
   // Register canv:// as the OS-level protocol handler before the window is
   // created. No-op in dev / `electron .` (gated inside the module) so an
   // installed packaged Canv on the same machine keeps owning the scheme.
@@ -450,6 +469,22 @@ app.whenReady().then(() => {
   dockService.registerIpcHandlers(ipcMain, deps)
   extService.registerIpcHandlers(ipcMain, deps)
   wsService.registerIpcHandlers(ipcMain, deps)
+  // Renderer pushes the active theme's surface + foreground colours so the
+  // Chromium-drawn min/max/close overlay matches the in-app theme (not just
+  // OS dark/light). No-op on macOS — traffic lights aren't recolourable.
+  ipcMain.handle('canvWindow:setTitleBarOverlay', (_e, payload) => {
+    if (process.platform === 'darwin') return false
+    const w = mainWindow
+    if (!w || w.isDestroyed()) return false
+    const color = typeof payload?.color === 'string' ? payload.color : null
+    const symbolColor = typeof payload?.symbolColor === 'string' ? payload.symbolColor : null
+    if (!color || !symbolColor) return false
+    try {
+      w.setTitleBarOverlay({ color, symbolColor, height: 39 })
+      writePersistedOverlay({ color, symbolColor })
+      return true
+    } catch { return false }
+  })
   const { service: mcp } = mcpService.registerIpcHandlers(ipcMain, deps)
   mcpServiceInstance = mcp
   // Wire the runtime as the canv:// dispatcher. Now safe — extService has

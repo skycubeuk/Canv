@@ -469,7 +469,7 @@ function EmptyState({ hasWorkspace, onChooseWorkspace }: { hasWorkspace: boolean
           </>
         ) : (
           <>
-            <p className="text-base font-medium text-default">Welcome to Canv 0.2</p>
+            <p className="text-base font-medium text-default">Welcome to Canv {__APP_VERSION__}</p>
             <p className="text-sm">Choose a folder on your computer to use as your writing workspace.</p>
             <button type="button" className="btn-primary" onClick={onChooseWorkspace}>
               Choose folder

@@ -7,12 +7,8 @@ const fsp = require('node:fs/promises')
 const chokidar = require('chokidar')
 const git = require('isomorphic-git')
 const nodefs = require('node:fs')
-const SSHConfig = require('ssh-config')
 const { app, dialog, shell } = require('electron')
 const { loadConfigDir } = require('../../config-loader.cjs')
-const { SshPool } = require('../../ssh-pool.cjs')
-const { RemoteFs } = require('../../remote-fs.cjs')
-const { parseTarget, resolveTarget } = require('../../remote-target.cjs')
 const workspaceConfig = require('../../workspace-config.cjs')
 const { MAX_OPEN_BYTES } = require('../fs-limits.cjs')
 const {
@@ -115,7 +111,6 @@ function registerIpcHandlers(ipcMain, deps) {
   ipcMain.handle('canvConfig:factoryReset', async () => {
     const userDataDir = app.getPath('userData')
     const configDir = path.join(userDataDir, 'config')
-    const recentRemotesFile = path.join(userDataDir, 'recent-remotes.json')
     // userData/Canv/ holds the workspace trust store and the extension
     // builder scratch dir — both are persistent app state and must go for a
     // true fresh-install state.
@@ -123,7 +118,6 @@ function registerIpcHandlers(ipcMain, deps) {
     await deps.closeWorkspace()
     deps.onWorkspaceChangedGlobal()
     fs.rmSync(configDir, { recursive: true, force: true })
-    fs.rmSync(recentRemotesFile, { force: true })
     fs.rmSync(canvSubdir, { recursive: true, force: true })
     return { ok: true }
   })
@@ -166,38 +160,16 @@ function registerIpcHandlers(ipcMain, deps) {
   })
 
   ipcMain.handle('canvFS:listDir', async (_e, rel = '') => {
-    const ws = deps.getWorkspace()
-    if (deps.isRemote()) return ws.backend.listDir(rel || '')
     const root = deps.requireWorkspace()
     return deps.buildTree(root, rel || '', 0)
   })
 
   ipcMain.handle('canvFS:readFile', async (_e, rel) => {
-    // Remote backend returns the legacy { content, mtimeMs } shape; we synthesise
-    // eol/bom defaults at this boundary. Updating the remote contract is a future task.
-    if (deps.isRemote()) {
-      const ws = deps.getWorkspace()
-      const { content, mtimeMs } = await ws.backend.readFile(rel)
-      return {
-        ok: true,
-        content,
-        mtimeMs,
-        eol: 'lf',
-        bom: false,
-        size: Buffer.byteLength(content, 'utf8'),
-      }
-    }
     const root = deps.requireWorkspace()
     return canvFSReadFileImpl(root, rel, { safeResolve: deps.safeResolve, isAllowedExt: deps.isAllowedExt })
   })
 
   ipcMain.handle('canvFS:writeFile', async (_e, rel, content, expectedMtimeMs, opts) => {
-    // TODO(remote-fs): SSH backend does not yet honour { eol, bom };
-    // CRLF/BOM files saved to a remote workspace currently re-encode to LF/no-BOM.
-    if (deps.isRemote()) {
-      const ws = deps.getWorkspace()
-      return ws.backend.writeFile(rel, content, expectedMtimeMs)
-    }
     const root = deps.requireWorkspace()
     return canvFSWriteFileImpl(root, rel, content, expectedMtimeMs, opts, {
       safeResolve: deps.safeResolve,
@@ -207,13 +179,8 @@ function registerIpcHandlers(ipcMain, deps) {
 
   // Apply N edits across N files atomically. Snapshot every target before any
   // write; on per-file write failure, roll back every already-written file
-  // from its in-memory snapshot. Remote workspaces are refused (the remote
-  // backend has no equivalent atomic primitive yet).
+  // from its in-memory snapshot.
   ipcMain.handle('canvFS:applyEdits', async (_e, fileWrites) => {
-    if (deps.isRemote()) {
-      const firstPath = (Array.isArray(fileWrites) && fileWrites[0]?.path) || '?'
-      return { ok: false, error: { reason: 'unsupported-remote', path: firstPath } }
-    }
     if (!Array.isArray(fileWrites) || fileWrites.length === 0) {
       return { ok: false, error: { reason: 'write-failed', path: '?', detail: 'empty edit list' } }
     }
@@ -290,10 +257,6 @@ function registerIpcHandlers(ipcMain, deps) {
   })
 
   ipcMain.handle('canvFS:createFile', async (_e, rel, content = '') => {
-    if (deps.isRemote()) {
-      const ws = deps.getWorkspace()
-      return ws.backend.createFile(rel, content)
-    }
     const root = deps.requireWorkspace()
     const abs = deps.safeResolve(root, rel)
     if (!deps.isAllowedExt(rel, abs)) throw new Error('unsupported file type')
@@ -310,20 +273,12 @@ function registerIpcHandlers(ipcMain, deps) {
   })
 
   ipcMain.handle('canvFS:createFolder', async (_e, rel) => {
-    if (deps.isRemote()) {
-      const ws = deps.getWorkspace()
-      return ws.backend.createFolder(rel)
-    }
     const root = deps.requireWorkspace()
     const abs = deps.safeResolve(root, rel)
     await fsp.mkdir(abs, { recursive: true })
   })
 
   ipcMain.handle('canvFS:rename', async (_e, oldRel, newRel) => {
-    if (deps.isRemote()) {
-      const ws = deps.getWorkspace()
-      return ws.backend.rename(oldRel, newRel)
-    }
     const root = deps.requireWorkspace()
     const oldAbs = deps.safeResolve(root, oldRel)
     const newAbs = deps.safeResolve(root, newRel)
@@ -334,10 +289,6 @@ function registerIpcHandlers(ipcMain, deps) {
   })
 
   ipcMain.handle('canvFS:delete', async (_e, rel) => {
-    if (deps.isRemote()) {
-      const ws = deps.getWorkspace()
-      return ws.backend.delete(rel)
-    }
     const root = deps.requireWorkspace()
     const abs = deps.safeResolve(root, rel)
     if (abs === root) throw new Error('cannot delete workspace root')
@@ -361,10 +312,6 @@ function registerIpcHandlers(ipcMain, deps) {
   const SEARCH_SNIPPET_LIMIT = 240 // chars
 
   ipcMain.handle('canvFS:search', async (_e, query) => {
-    if (deps.isRemote()) {
-      const ws = deps.getWorkspace()
-      return ws.backend.search(query)
-    }
     const root = deps.requireWorkspace()
     if (!query || typeof query.query !== 'string' || query.query.length === 0) {
       return { matches: [], truncated: false }
@@ -447,21 +394,17 @@ function registerIpcHandlers(ipcMain, deps) {
   })
 
   // ---------------------------------------------------------------------------
-  // Workspace config (local-only)
+  // Workspace config
   // ---------------------------------------------------------------------------
 
   ipcMain.handle('canvFS:readWorkspaceConfig', async () => {
     const ws = deps.getWorkspace()
-    const root = ws?.kind === 'local' ? ws.root : null
-    if (!root) return null
-    return workspaceConfig.readWorkspaceConfig(root)
+    if (!ws?.root) return null
+    return workspaceConfig.readWorkspaceConfig(ws.root)
   })
 
   ipcMain.handle('canvFS:writeWorkspaceConfig', async (_e, cfg) => {
-    if (deps.isRemote()) throw new Error('Workspace config is local-only')
-    const ws = deps.getWorkspace()
-    const root = ws?.kind === 'local' ? ws.root : null
-    if (!root) throw new Error('No workspace open')
+    const root = deps.requireWorkspace()
     await workspaceConfig.writeWorkspaceConfig(root, cfg)
     return true
   })
@@ -471,10 +414,6 @@ function registerIpcHandlers(ipcMain, deps) {
   // ---------------------------------------------------------------------------
 
   ipcMain.handle('canvFS:gitStatus', async () => {
-    if (deps.isRemote()) {
-      const ws = deps.getWorkspace()
-      return ws.backend.gitStatus()
-    }
     const root = deps.requireWorkspace()
 
     // Detect .git presence — isomorphic-git throws when .git is absent, which
@@ -552,10 +491,6 @@ function registerIpcHandlers(ipcMain, deps) {
   })
 
   ipcMain.handle('canvFS:gitDiff', async (_e, rel, baseRef) => {
-    if (deps.isRemote()) {
-      const ws = deps.getWorkspace()
-      return ws.backend.gitDiff(rel, baseRef)
-    }
     const root = deps.requireWorkspace()
     if (typeof rel !== 'string' || !rel) throw new Error('invalid rel')
     const ref = (typeof baseRef === 'string' && baseRef) ? baseRef : 'HEAD'
@@ -599,83 +534,10 @@ function registerIpcHandlers(ipcMain, deps) {
     deps.onWorkspaceChangedGlobal()
   })
 
-  ipcMain.handle('canvFS:listRecentRemotes', async () => {
-    const rr = deps.getRecentRemotes()
-    return rr ? rr.list() : []
-  })
-
-  ipcMain.handle('canvFS:openRemote', async (_e, raw) => {
-    if (typeof raw !== 'string' || !raw.trim()) throw new Error('invalid target')
-    const target = parseTarget(raw)
-    let cfgLookup = () => null
-    try {
-      const cfgText = fs.readFileSync(path.join(os.homedir(), '.ssh/config'), 'utf8')
-      const parsed = SSHConfig.parse(cfgText)
-      cfgLookup = (host) => {
-        const r = parsed.compute(host)
-        return r && Object.keys(r).length ? r : null
-      }
-    } catch { /* no ssh config — fine */ }
-    const resolved = resolveTarget(target, cfgLookup)
-    const pool = new SshPool({
-      host: resolved.host,
-      port: resolved.port || 22,
-      user: resolved.user,
-      auth: { agent: process.env.SSH_AUTH_SOCK },
-    })
-    // Preflight: check tools exist on remote
-    let pf
-    try {
-      pf = await pool.exec('command -v inotifywait git rg grep || true; uname -s')
-    } catch (e) {
-      await pool.close()
-      const msg = e.message || String(e)
-      if (/host\s*key/i.test(msg) || /verification/i.test(msg)) {
-        throw new Error(`Host key for ${resolved.host} not in ~/.ssh/known_hosts. Run "ssh ${resolved.user || ''}${resolved.user ? '@' : ''}${resolved.host}" in a terminal first to accept the host key.`)
-      }
-      throw new Error('SSH connection failed: ' + msg)
-    }
-    const tools = pf.stdout.split('\n').map((l) => l.trim()).filter(Boolean)
-    const has = (n) => tools.some((p) => p === n || p.endsWith('/' + n))
-    if (!has('inotifywait')) { await pool.close(); throw new Error('remote is missing inotifywait — install inotify-tools') }
-    if (!has('git')) { await pool.close(); throw new Error('remote is missing git') }
-    const rfs = new RemoteFs({
-      pool,
-      rootPath: resolved.path,
-      preflight: { hasRg: has('rg'), hasGrep: has('grep') },
-    })
-    await deps.closeWorkspace()
-    const wsObj = { kind: 'remote', target: resolved, raw, pool, backend: rfs }
-    deps.setWorkspace(wsObj)
-    deps.setHistory(null)
-    deps.onWorkspaceChangedGlobal()
-    wsObj.unsub = rfs.subscribe((ev) => {
-      const win = deps.getMainWindow()
-      if (win && !win.isDestroyed()) win.webContents.send('canvFS:event', ev)
-    })
-    pool.on('disconnect', () => {
-      const win = deps.getMainWindow()
-      if (win && !win.isDestroyed()) win.webContents.send('canvFS:status', { kind: 'remote', state: 'offline' })
-    })
-    pool.on('connected', () => {
-      const win = deps.getMainWindow()
-      if (win && !win.isDestroyed()) win.webContents.send('canvFS:status', { kind: 'remote', state: 'online' })
-    })
-    const rr = deps.getRecentRemotes()
-    if (rr) rr.record(raw)
-    return { kind: 'remote', display: `${resolved.user || ''}@${resolved.host}:${resolved.path}`.replace(/^@/, '') }
-  })
-
   ipcMain.handle('canvFS:getWorkspaceKind', async () => {
     const ws = deps.getWorkspace()
-    if (!ws) return null
-    if (ws.kind === 'local') return { kind: 'local', root: ws.root }
-    return { kind: 'remote', display: `${ws.target.user || ''}@${ws.target.host}:${ws.target.path}`.replace(/^@/, '') }
-  })
-
-  ipcMain.handle('canvFS:reconnect', () => {
-    const ws = deps.getWorkspace()
-    if (ws?.kind === 'remote') ws.pool.reconnectNow()
+    if (!ws?.root) return null
+    return { kind: 'local', root: ws.root }
   })
 }
 

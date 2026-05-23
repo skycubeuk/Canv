@@ -91,14 +91,6 @@ function AppInner({ migrationOpen, setMigrationOpen }: AppInnerProps) {
 
   return (
     <div className="h-full flex flex-col">
-      {workspace.remoteStatus?.state === 'offline' && (
-        <div className="bg-warning-soft text-warning-fg px-3 py-1.5 text-sm flex items-center justify-between border-b border-warning">
-          <span>Remote workspace offline — attempting to reconnect…</span>
-          <button type="button" onClick={() => workspace.reconnect()} className="underline hover:no-underline">
-            Reconnect now
-          </button>
-        </div>
-      )}
       <TopBar
         workspaceName={workspace.root}
         bottomVisible={ideLayout.layout.bottom.visible}

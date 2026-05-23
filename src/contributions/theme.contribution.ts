@@ -1,39 +1,46 @@
 import { DisposableStore, toDisposable } from '../lib/lifecycle'
-import { applyAccent, resolveTheme } from '../lib/accent'
+import { applyTheme } from '../lib/theme'
+import { type ThemeId } from '../lib/themes'
 import { registerContribution, type Contribution } from './index'
 
-const TEMP_LEGACY_TO_NEW: Record<string, string> = {
-  dark: 'canv-dark',
-  light: 'canv-light',
+// Theme CSS vars are stored as space-separated RGB triples (e.g. "10 11 13").
+// Convert to "#rrggbb" for setTitleBarOverlay, which wants a CSS colour string.
+function rgbTripleToHex(triple: string): string | null {
+  const parts = triple.trim().split(/\s+/).map(Number)
+  if (parts.length !== 3 || parts.some((n) => !Number.isFinite(n) || n < 0 || n > 255)) {
+    return null
+  }
+  return '#' + parts.map((n) => Math.round(n).toString(16).padStart(2, '0')).join('')
 }
 
-/**
- * Applies the user's accent colour and theme to `<html>`, and listens for
- * system-theme changes while `theme === 'system'`. Replaces two effects that
- * lived in App.tsx pre-Phase-2.
- */
+function syncTitleBarOverlay(): void {
+  if (typeof document === 'undefined' || typeof window === 'undefined') return
+  if (!window.canvWindow) return
+  const cs = getComputedStyle(document.documentElement)
+  // Match the topbar (`bg-panel`) so the OS-drawn controls sit on the same
+  // surface as the custom title-bar chrome — not the app background.
+  const color = rgbTripleToHex(cs.getPropertyValue('--bg-panel'))
+  const symbolColor = rgbTripleToHex(cs.getPropertyValue('--text-default'))
+  if (!color || !symbolColor) return
+  window.canvWindow.setTitleBarOverlay({ color, symbolColor }).catch(() => {})
+}
+
 export const theme: Contribution = {
   name: 'theme',
   register(services) {
     const store = new DisposableStore()
 
     const apply = () => {
-      const s = services.settings.settings
-      applyAccent(s.accent)
-      const resolved = resolveTheme(s.theme)
-      // Temporary remap until Phase 2 replaces this whole file.
-      document.documentElement.dataset.theme = TEMP_LEGACY_TO_NEW[resolved] ?? resolved
+      applyTheme(services.settings.settings.theme as ThemeId)
+      syncTitleBarOverlay()
     }
     apply()
 
-    // Re-apply whenever any settings field changes. Cheap and idempotent —
-    // overshoots beyond accent/theme but avoids tracking individual fields.
     const unsubSettings = services.settings.subscribe(apply)
     store.add(toDisposable(unsubSettings))
 
-    // System theme listener — only relevant while theme === 'system', but
-    // wiring it unconditionally is harmless. apply() is idempotent and
-    // resolveTheme returns the explicit choice when theme is light/dark.
+    // prefers-color-scheme: only matters when theme === 'system', but always
+    // wiring is harmless — applyTheme is idempotent.
     const mql = window.matchMedia('(prefers-color-scheme: dark)')
     const onSystem = () => {
       if (services.settings.settings.theme === 'system') apply()

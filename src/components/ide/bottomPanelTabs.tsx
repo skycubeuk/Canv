@@ -56,6 +56,7 @@ export interface BottomPanelTabsAdapter {
   closeSession: (id: string) => void
   changeProviderModel: (provider: ChatProvider, model: string) => void
   availableModels: Record<ChatProvider, string[]>
+  workspaceFiles: string[]
 
   // Output tab — chat inspector (optional; popout window omits these for v1)
   getSession?: (id: string) => import('../../hooks/useChatSessions').ChatSession | null
@@ -131,6 +132,7 @@ export function buildBottomPanelTabs(adapter: BottomPanelTabsAdapter): BottomPan
           onCloseSession={adapter.closeSession}
           onChangeProviderModel={adapter.changeProviderModel}
           availableModels={adapter.availableModels}
+          workspaceFiles={adapter.workspaceFiles}
         />
       ),
     },

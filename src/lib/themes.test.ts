@@ -2,11 +2,12 @@ import { describe, it, expect } from 'vitest'
 import { THEMES, DEFAULT_THEME, isThemeId } from './themes'
 
 describe('THEMES catalogue', () => {
-  it('lists 10 themes in declared order', () => {
+  it('lists 11 themes in declared order', () => {
     expect(THEMES.map((t) => t.id)).toEqual([
       'canv-dark',
       'canv-light',
       'dracula',
+      'alucard',
       'synthwave-84',
       'solarized-dark',
       'solarized-light',

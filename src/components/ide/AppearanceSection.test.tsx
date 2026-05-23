@@ -3,34 +3,31 @@ import { render, screen, fireEvent } from '@testing-library/react'
 import { AppearanceSection } from './AppearanceSection'
 
 const baseSettings = {
-  theme: 'dark' as const,
-  accent: '#6366f1',
+  theme: 'canv-dark' as const,
   fontSize: 16,
   chatFontSize: 14,
 }
 
 describe('AppearanceSection', () => {
-  it('renders the six accent swatches in palette order', () => {
+  it('renders the theme dropdown', () => {
     const onUpdate = vi.fn()
     render(<AppearanceSection settings={baseSettings} onUpdate={onUpdate} />)
-    const buttons = screen.getAllByRole('button', { name: /accent/i })
-    expect(buttons.map((b) => b.getAttribute('data-accent'))).toEqual([
-      '#6366f1', '#10b981', '#f59e0b', '#f43f5e', '#a78bfa', '#e2e8f0',
-    ])
+    expect(screen.getByRole('combobox', { name: /theme/i })).toBeTruthy()
   })
 
-  it('clicking a swatch fires onUpdate with the hex', () => {
+  it('theme dropdown includes "Match system" option', () => {
     const onUpdate = vi.fn()
     render(<AppearanceSection settings={baseSettings} onUpdate={onUpdate} />)
-    fireEvent.click(screen.getByRole('button', { name: /accent emerald/i }))
-    expect(onUpdate).toHaveBeenCalledWith({ accent: '#10b981' })
+    const select = screen.getByRole('combobox', { name: /theme/i })
+    expect(select.innerHTML).toContain('Match system')
   })
 
-  it('selecting a theme radio fires onUpdate', () => {
+  it('changing the theme dropdown fires onUpdate', () => {
     const onUpdate = vi.fn()
     render(<AppearanceSection settings={baseSettings} onUpdate={onUpdate} />)
-    fireEvent.click(screen.getByLabelText('Light'))
-    expect(onUpdate).toHaveBeenCalledWith({ theme: 'light' })
+    const select = screen.getByRole('combobox', { name: /theme/i })
+    fireEvent.change(select, { target: { value: 'dracula' } })
+    expect(onUpdate).toHaveBeenCalledWith({ theme: 'dracula' })
   })
 
   it('changing the font-size slider fires onUpdate', () => {

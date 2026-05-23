@@ -3,6 +3,7 @@ import { parseAgentResponse } from '../agents/runner'
 import { getActionById, getModeById } from '../hooks/useModes'
 import { buildChatSystemPreamble } from '../lib/buildChatSystemPreamble'
 import { getAdapter, configuredProviders, type Provider } from '../adapters'
+import { flattenTree } from '../lib/fs'
 import type { ChatProvider, PendingApproval } from '../components/ChatPanel'
 import type { DockRun, DockState, UserAction } from '../lib/dockTypes'
 import { registerContribution, subscribeServicesChange, type Contribution } from './index'
@@ -190,6 +191,13 @@ export const dockBridge: Contribution = {
 
       const streamingRunId = dockRuns.find((r) => r.status === 'streaming' || r.status === 'refining')?.id ?? null
 
+      const workspaceFiles = workspace.tree
+        ? flattenTree(workspace.tree)
+            .filter((n) => n.kind === 'file')
+            .map((n) => n.relPath)
+            .sort()
+        : []
+
       return {
         activeTab: ideLayout.layout.bottom.activeTab,
         activeRunId: selectionAgent.activeTabId,
@@ -208,6 +216,7 @@ export const dockBridge: Contribution = {
         chatSystemPreamble: buildChatSystemPreamble({ activeProfile }),
         activeSessionId: chatSessions.activeId,
         availableModels,
+        workspaceFiles,
         revisionArchaeologyEnabled: latestAppProps.revisionArchaeologyEnabled,
         fileHistoryTarget: latestAppProps.fileHistoryTarget,
         fileHistoryNonce: latestAppProps.fileHistoryNonce,
@@ -217,8 +226,7 @@ export const dockBridge: Contribution = {
         bottomDockExtensionPanels,
         streamingRunId,
         ui: {
-          theme: settingsObj.theme,
-          accent: settingsObj.accent,
+          theme: settingsObj.theme as import('../lib/themes').ThemeId,
           fontSize: settingsObj.fontSize,
           profileLabel: activeProfile?.label ?? null,
         },

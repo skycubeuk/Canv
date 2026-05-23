@@ -1,9 +1,8 @@
-import { ACCENTS } from '../../lib/accent'
-import type { Theme } from '../../hooks/useSettings'
+import { THEMES } from '../../lib/themes'
+import type { ThemeId } from '../../lib/themes'
 
 interface AppearanceSettings {
-  theme: Theme
-  accent: string
+  theme: ThemeId
   fontSize: number
   chatFontSize: number
 }
@@ -13,7 +12,8 @@ interface Props {
   onUpdate: (patch: Partial<AppearanceSettings>) => void
 }
 
-const THEMES: Theme[] = ['dark', 'light', 'system']
+const DARK_THEMES = THEMES.filter((t) => t.kind === 'dark')
+const LIGHT_THEMES = THEMES.filter((t) => t.kind === 'light')
 
 export function AppearanceSection({ settings, onUpdate }: Props) {
   return (
@@ -21,52 +21,25 @@ export function AppearanceSection({ settings, onUpdate }: Props) {
       <h3 className="text-xs uppercase tracking-wider text-subtle font-semibold">Appearance</h3>
 
       <div>
-        <div className="text-sm font-medium mb-2">Theme</div>
-        <div role="radiogroup" aria-label="Theme" className="flex gap-2">
-          {THEMES.map((t) => (
-            <label
-              key={t}
-              className={`px-3 py-1.5 rounded-md text-sm cursor-pointer border ${
-                settings.theme === t
-                  ? 'border-accent bg-elev text-default'
-                  : 'border-default text-muted hover:bg-hover'
-              }`}
-            >
-              <input
-                type="radio"
-                name="theme"
-                value={t}
-                checked={settings.theme === t}
-                onChange={() => onUpdate({ theme: t })}
-                className="sr-only"
-              />
-              {t === 'dark' ? 'Dark' : t === 'light' ? 'Light' : 'System'}
-            </label>
-          ))}
-        </div>
-      </div>
-
-      <div>
-        <div className="text-sm font-medium mb-2">Accent</div>
-        <div className="flex gap-2">
-          {ACCENTS.map((a) => {
-            const selected = settings.accent.toLowerCase() === a.hex.toLowerCase()
-            return (
-              <button
-                key={a.hex}
-                type="button"
-                aria-label={`Accent ${a.name}`}
-                data-accent={a.hex}
-                onClick={() => onUpdate({ accent: a.hex })}
-                className={`w-6 h-6 rounded-full transition ${
-                  selected ? 'ring-2 ring-offset-2 ring-offset-app' : 'hover:scale-110'
-                }`}
-                style={{ backgroundColor: a.hex, ['--tw-ring-color' as string]: a.hex }}
-                title={a.name}
-              />
-            )
-          })}
-        </div>
+        <label htmlFor="appearance-theme" className="block text-sm font-medium mb-2">Theme</label>
+        <select
+          id="appearance-theme"
+          className="input"
+          value={settings.theme}
+          onChange={(e) => onUpdate({ theme: e.target.value as ThemeId })}
+        >
+          <option value="system">Match system</option>
+          <optgroup label="Dark">
+            {DARK_THEMES.map((t) => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </optgroup>
+          <optgroup label="Light">
+            {LIGHT_THEMES.map((t) => (
+              <option key={t.id} value={t.id}>{t.name}</option>
+            ))}
+          </optgroup>
+        </select>
       </div>
 
       <div>

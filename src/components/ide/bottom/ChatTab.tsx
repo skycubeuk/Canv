@@ -26,6 +26,7 @@ interface Props {
   onCloseSession: (id: string) => void
   onChangeProviderModel: (provider: ChatProvider, model: string) => void
   availableModels: Record<ChatProvider, string[]>
+  workspaceFiles: string[]
 }
 
 export function ChatTab(props: Props) {
@@ -54,6 +55,7 @@ export function ChatTab(props: Props) {
       onCloseSession={props.onCloseSession}
       onChangeProviderModel={props.onChangeProviderModel}
       availableModels={props.availableModels}
+      workspaceFiles={props.workspaceFiles}
     />
   )
 }

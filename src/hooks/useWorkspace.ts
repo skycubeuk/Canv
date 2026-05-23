@@ -5,10 +5,9 @@ import {
   isStaleWriteError,
   type DirNode,
   type FsEvent,
-  type WorkspaceKind,
+  type Workspace,
   type WriteResult,
 } from '../lib/fs'
-import type { RemoteStatus } from '../lib/fs'
 import type { OpenTab, PinnedEntry, EditorGroupId, EditorGroupState } from '../types/workspace'
 import { wsKey } from '../lib/wsKey'
 import { tabKey, SETTINGS_TAB_KEY, DIFF_TAB_KEY_PREFIX, EXTENSION_TAB_KEY_PREFIX, isMarkdownTab } from '../lib/tabKey'
@@ -86,7 +85,7 @@ export interface WorkspaceApi {
   ready: boolean
   available: boolean
   root: string | null
-  kind: WorkspaceKind | null
+  kind: Workspace | null
   tree: DirNode | null
   treeTruncated: boolean
   /** Open editor groups (1 or 2). */
@@ -105,7 +104,6 @@ export interface WorkspaceApi {
   writingSet: Set<string>
   pinned: PinnedEntry[]
   pickWorkspace: () => Promise<boolean>
-  openRemote: (raw: string) => Promise<boolean>
   closeWorkspace: () => void
   /** Open a markdown tab. Defaults to the active group; pass groupId to target a specific group. */
   openTab: (rel: string, groupId?: EditorGroupId) => Promise<void>
@@ -158,8 +156,6 @@ export interface WorkspaceApi {
   conflict: ConflictNotice | null
   resolveConflict: () => void
   reloadTabFromDisk: (rel: string) => Promise<void>
-  remoteStatus: RemoteStatus | null
-  reconnect: () => Promise<void>
 }
 
 interface OnQuotaErrorOptions {
@@ -197,7 +193,7 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
   const saveDebounceMs = opts.saveDebounceMs ?? SAVE_DEBOUNCE_MS
 
   const [root, setRoot] = useState<string | null>(null)
-  const [kind, setKind] = useState<WorkspaceKind | null>(null)
+  const [kind, setKind] = useState<Workspace | null>(null)
   const [tree, setTree] = useState<DirNode | null>(null)
   const [treeTruncated, setTreeTruncated] = useState(false)
   const [editorGroups, setEditorGroups] = useState<EditorGroupState[]>([
@@ -222,7 +218,6 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
   // No-op when running outside Electron — start in a "ready" state so the
   // boot effect doesn't have to flip it from inside the effect body.
   const [ready, setReady] = useState(() => !isElectron())
-  const [remoteStatus, setRemoteStatus] = useState<RemoteStatus | null>(null)
 
   const saveTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
   const pendingMarkdown = useRef<Map<string, string>>(new Map())
@@ -915,12 +910,11 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
   const adoptWorkspace = useCallback(async (rt: string) => {
     rootRef.current = rt
     setRoot(rt)
-    setRemoteStatus(null)
     try {
       const k = await getFs().getWorkspaceKind()
       setKind(k)
     } catch {
-      setKind({ kind: 'local', root: rt })
+      setKind({ root: rt })
     }
     try { localStorage.setItem(LAST_WS_KEY, rt) } catch { /* ignore */ }
     const treeRoot = await getFs().listDir('').catch(() => null)
@@ -1118,16 +1112,6 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
     return true
   }, [available, adoptWorkspace])
 
-  const openRemote = useCallback(async (raw: string) => {
-    if (!available) return false
-    await getFs().openRemote(raw)
-    // Use the connection string itself as the workspace identifier (key for
-    // localStorage-persisted tab/pin state). It's stable per remote workspace.
-    await adoptWorkspace(raw)
-    try { localStorage.setItem(SCHEMA_KEY, SCHEMA_VERSION) } catch { /* ignore */ }
-    return true
-  }, [available, adoptWorkspace])
-
   const closeWorkspace = useCallback(() => {
     rootRef.current = null
     setRoot(null)
@@ -1137,15 +1121,10 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
     setActiveGroupIdState('g1')
     setPinned([])
     setDirtySet(new Set())
-    setRemoteStatus(null)
     try { localStorage.removeItem(LAST_WS_KEY) } catch { /* ignore */ }
   }, [])
 
   const resolveConflict = useCallback(() => setConflict(null), [])
-
-  const reconnect = useCallback(async () => {
-    await getFs().reconnect()
-  }, [])
 
   // Boot: try to re-attach the last workspace if present.
   useEffect(() => {
@@ -1276,21 +1255,6 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
     return () => { unsub() }
   }, [available, scheduleTreeRefresh, persistGroups, onToast])
 
-  // Remote status subscription.
-  useEffect(() => {
-    if (!available) return
-    return getFs().onStatus((s) => {
-      setRemoteStatus((prev) => {
-        const wasOffline = prev?.state === 'offline'
-        if (wasOffline && s.state === 'online') {
-          // Re-issue listDir to pick up any changes that happened while disconnected.
-          scheduleTreeRefresh()
-        }
-        return s
-      })
-    })
-  }, [available, scheduleTreeRefresh])
-
   // Flush on unload.
   useEffect(() => {
     const handler = () => {
@@ -1350,7 +1314,6 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
     writingSet,
     pinned,
     pickWorkspace,
-    openRemote,
     closeWorkspace,
     openTab,
     closeTab,
@@ -1378,7 +1341,5 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
     conflict,
     resolveConflict,
     reloadTabFromDisk,
-    remoteStatus,
-    reconnect,
-  }), [ready, available, root, kind, tree, treeTruncated, editorGroups, activeGroupId, activeTabKey, activeMarkdownRel, allOpenKeys, dirtySet, writingSet, pinned, pickWorkspace, openRemote, closeWorkspace, openTab, closeTab, setActiveTab, openSettingsTab, openDiffTab, openExtensionTab, closeTabByKey, setActiveTabByKey, splitRight, moveTab, setActiveGroupId, saveTab, writeFileFromTool, applyEdits, noteOwnDiskWrite, flushAll, pin, unpin, createFile, createFolder, renameOp, remove, refreshTree, conflict, resolveConflict, reloadTabFromDisk, remoteStatus, reconnect])
+  }), [ready, available, root, kind, tree, treeTruncated, editorGroups, activeGroupId, activeTabKey, activeMarkdownRel, allOpenKeys, dirtySet, writingSet, pinned, pickWorkspace, closeWorkspace, openTab, closeTab, setActiveTab, openSettingsTab, openDiffTab, openExtensionTab, closeTabByKey, setActiveTabByKey, splitRight, moveTab, setActiveGroupId, saveTab, writeFileFromTool, applyEdits, noteOwnDiskWrite, flushAll, pin, unpin, createFile, createFolder, renameOp, remove, refreshTree, conflict, resolveConflict, reloadTabFromDisk])
 }

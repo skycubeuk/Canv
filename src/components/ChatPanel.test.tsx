@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeAll } from 'vitest'
 import { render as rtlRender, screen, fireEvent } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import type { ComponentProps, ReactElement, ReactNode } from 'react'
 import { ChatPanel } from './ChatPanel'
@@ -431,5 +432,118 @@ describe('ChatPanel — provider/model picker lock', () => {
     const select = screen.getByLabelText(/provider/i) as HTMLSelectElement
     expect(select).toBeDisabled()
     expect(select.title).toMatch(/locked/i)
+  })
+})
+
+describe('ChatPanel @-mention', () => {
+  it('opens the popover when @ is typed and files are available', async () => {
+    const user = userEvent.setup()
+    render(
+      <ChatPanel
+        {...baseProps}
+        messages={[]}
+        workspaceFiles={['chapters/01.md', 'chapters/02.md']}
+        availableModels={{ anthropic: ['claude-sonnet-4-6'], openai: [], ollama: [] }}
+      />,
+    )
+    const input = screen.getByTestId('chat-input')
+    await user.click(input)
+    await user.keyboard('@')
+    expect(screen.getByTestId('at-mention-popover')).toBeInTheDocument()
+    expect(screen.getByText('01.md')).toBeInTheDocument()
+    expect(screen.getByText('02.md')).toBeInTheDocument()
+  })
+
+  it('does not open the popover when workspaceFiles is empty', async () => {
+    const user = userEvent.setup()
+    render(
+      <ChatPanel
+        {...baseProps}
+        messages={[]}
+        workspaceFiles={[]}
+        availableModels={{ anthropic: ['claude-sonnet-4-6'], openai: [], ollama: [] }}
+      />,
+    )
+    await user.click(screen.getByTestId('chat-input'))
+    await user.keyboard('@')
+    expect(screen.queryByTestId('at-mention-popover')).toBeNull()
+  })
+
+  it('does not open on an email-like @', async () => {
+    const user = userEvent.setup()
+    render(
+      <ChatPanel
+        {...baseProps}
+        messages={[]}
+        workspaceFiles={['a.md', 'b.md']}
+        availableModels={{ anthropic: ['claude-sonnet-4-6'], openai: [], ollama: [] }}
+      />,
+    )
+    await user.click(screen.getByTestId('chat-input'))
+    await user.keyboard('email@foo')
+    expect(screen.queryByTestId('at-mention-popover')).toBeNull()
+  })
+
+  it('Enter inserts the highlighted path and closes the popover', async () => {
+    const user = userEvent.setup()
+    const onSend = vi.fn()
+    render(
+      <ChatPanel
+        {...baseProps}
+        onSend={onSend}
+        messages={[]}
+        workspaceFiles={['chapters/01.md', 'chapters/02.md']}
+        availableModels={{ anthropic: ['claude-sonnet-4-6'], openai: [], ollama: [] }}
+      />,
+    )
+    const input = screen.getByTestId('chat-input') as HTMLTextAreaElement
+    await user.click(input)
+    await user.keyboard('@')
+    const highlighted = screen.getByTestId('at-mention-popover').querySelector('[aria-selected="true"]')
+    const expectedPath = highlighted?.querySelector('span')?.textContent
+    expect(expectedPath).toMatch(/01\.md|02\.md/)
+    await user.keyboard('{Enter}')
+    expect(input.value).toMatch(/^@chapters\/0[12]\.md $/)
+    expect(screen.queryByTestId('at-mention-popover')).toBeNull()
+    expect(onSend).not.toHaveBeenCalled()
+  })
+
+  it('Escape closes the popover without changing the input', async () => {
+    const user = userEvent.setup()
+    render(
+      <ChatPanel
+        {...baseProps}
+        messages={[]}
+        workspaceFiles={['a.md']}
+        availableModels={{ anthropic: ['claude-sonnet-4-6'], openai: [], ollama: [] }}
+      />,
+    )
+    const input = screen.getByTestId('chat-input') as HTMLTextAreaElement
+    await user.click(input)
+    await user.keyboard('@')
+    expect(screen.getByTestId('at-mention-popover')).toBeInTheDocument()
+    await user.keyboard('{Escape}')
+    expect(screen.queryByTestId('at-mention-popover')).toBeNull()
+    expect(input.value).toBe('@')
+  })
+
+  it('clicking a row inserts that path', async () => {
+    const user = userEvent.setup()
+    render(
+      <ChatPanel
+        {...baseProps}
+        messages={[]}
+        workspaceFiles={['a.md', 'b.md', 'c.md']}
+        availableModels={{ anthropic: ['claude-sonnet-4-6'], openai: [], ollama: [] }}
+      />,
+    )
+    const input = screen.getByTestId('chat-input') as HTMLTextAreaElement
+    await user.click(input)
+    await user.keyboard('@')
+    const rows = screen.getByTestId('at-mention-popover').querySelectorAll('[role="option"]')
+    expect(rows.length).toBe(3)
+    await user.click(rows[1] as HTMLElement)
+    expect(input.value).toBe('@b.md ')
+    expect(screen.queryByTestId('at-mention-popover')).toBeNull()
   })
 })

@@ -2,13 +2,9 @@ import type { SearchQuery, SearchResult } from './searchTypes'
 import type { GitStatusPayload, GitDiffPayload } from './gitTypes'
 import type { WorkspaceConfig } from './historyTypes'
 
-export type WorkspaceKind =
-  | { kind: 'local'; root: string }
-  | { kind: 'remote'; display: string }
-
-export interface RecentRemote { raw: string; lastUsedMs: number }
-
-export interface RemoteStatus { kind: 'remote'; state: 'online' | 'offline' }
+export interface Workspace {
+  root: string
+}
 
 export interface DirFile {
   name: string
@@ -75,12 +71,8 @@ export interface CanvFs {
   gitDiff(rel: string, baseRef: string): Promise<GitDiffPayload>
   readWorkspaceConfig(): Promise<WorkspaceConfig | null>
   writeWorkspaceConfig(cfg: WorkspaceConfig): Promise<true>
-  openRemote(raw: string): Promise<{ kind: 'remote'; display: string }>
-  listRecentRemotes(): Promise<RecentRemote[]>
   closeWorkspace(): Promise<void>
-  getWorkspaceKind(): Promise<WorkspaceKind | null>
-  reconnect(): Promise<void>
-  onStatus(cb: (s: RemoteStatus) => void): () => void
+  getWorkspaceKind(): Promise<Workspace | null>
 }
 
 declare global {
@@ -93,6 +85,9 @@ declare global {
       }>
       revealFolder(): Promise<void>
       factoryReset(): Promise<{ ok: true }>
+    }
+    canvWindow?: {
+      setTitleBarOverlay(colors: { color: string; symbolColor: string }): Promise<boolean>
     }
   }
 }

@@ -86,12 +86,8 @@ describe('useLintIssues — scan cancellation', () => {
       search: async () => ({ matches: [], truncated: false }),
       gitStatus: async () => ({ branch: null, changed: [], staged: [], untracked: [], noRepo: true }),
       gitDiff: async () => ({ relPath: '', baseRef: 'HEAD', baseText: '', currentText: '' }),
-      openRemote: async () => ({ kind: 'remote' as const, display: '' }),
-      listRecentRemotes: async () => [],
       closeWorkspace: async () => {},
       getWorkspaceKind: async () => null,
-      reconnect: async () => {},
-      onStatus: () => () => {},
     }
   })
 

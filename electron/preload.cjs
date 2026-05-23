@@ -127,16 +127,13 @@ if (!isDockPopout()) {
       ipcRenderer.on('canvFS:event', listener)
       return () => ipcRenderer.removeListener('canvFS:event', listener)
     },
-    openRemote: (raw) => ipcRenderer.invoke('canvFS:openRemote', raw),
-    listRecentRemotes: () => ipcRenderer.invoke('canvFS:listRecentRemotes'),
     closeWorkspace: () => ipcRenderer.invoke('canvFS:closeWorkspace'),
     getWorkspaceKind: () => ipcRenderer.invoke('canvFS:getWorkspaceKind'),
-    reconnect: () => ipcRenderer.invoke('canvFS:reconnect'),
-    onStatus: (cb) => {
-      const listener = (_e, payload) => { try { cb(payload) } catch { /* ignore subscriber errors */ } }
-      ipcRenderer.on('canvFS:status', listener)
-      return () => ipcRenderer.removeListener('canvFS:status', listener)
-    },
+  })
+
+  contextBridge.exposeInMainWorld('canvWindow', {
+    setTitleBarOverlay: (colors) =>
+      ipcRenderer.invoke('canvWindow:setTitleBarOverlay', colors),
   })
 
   contextBridge.exposeInMainWorld('canvConfig', {

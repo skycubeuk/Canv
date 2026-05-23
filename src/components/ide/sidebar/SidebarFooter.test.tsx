@@ -4,15 +4,16 @@ import userEvent from '@testing-library/user-event'
 import { SidebarFooter } from './SidebarFooter'
 import type { Settings } from '../../../hooks/useSettings'
 
-function makeSettings(): Settings {
+function makeSettings(overrides: Partial<Settings> = {}): Settings {
   return {
     provider: 'anthropic',
-    apiKeys: { anthropic: '', openai: '' },
+    apiKeys: { anthropic: 'sk-test', openai: '' },
     defaultModel: { anthropic: 'claude-sonnet-4-6', openai: 'gpt-4o' },
     perAgentModel: {},
     theme: 'system',
     fontSize: 16,
     lineWidth: 'normal',
+    ...overrides,
   } as Settings
 }
 
@@ -96,6 +97,26 @@ describe('SidebarFooter', () => {
     expect(screen.getByLabelText(/^model$/i)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'outside' }))
     expect(screen.queryByLabelText(/^model$/i)).toBeNull()
+  })
+
+  it('shows a placeholder and disables the selects when no providers are configured', async () => {
+    const user = userEvent.setup()
+    render(
+      <SidebarFooter
+        settings={makeSettings({ apiKeys: { anthropic: '', openai: '' } as Settings['apiKeys'] })}
+        onUpdateSettings={vi.fn()}
+        workspaceName="/home/user/my-project"
+      />,
+    )
+    await user.click(screen.getByTitle('Workspace and model'))
+    const providerSelect = screen.getByLabelText(/^provider$/i) as HTMLSelectElement
+    const modelSelect = screen.getByLabelText(/^model$/i) as HTMLSelectElement
+    expect(providerSelect.disabled).toBe(true)
+    expect(modelSelect.disabled).toBe(true)
+    expect(providerSelect.options).toHaveLength(1)
+    expect(modelSelect.options).toHaveLength(1)
+    expect(providerSelect.options[0].textContent).toMatch(/add a key in settings/i)
+    expect(modelSelect.options[0].textContent).toMatch(/add a key in settings/i)
   })
 
   it('calls onUpdateSettings with new model when user picks from dropdown', async () => {

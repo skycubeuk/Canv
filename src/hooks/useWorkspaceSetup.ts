@@ -15,7 +15,6 @@ interface HistoryLike {
 export interface UseWorkspaceSetupArgs {
   workspaceReady: boolean
   workspaceRoot: string | null
-  remote: boolean
   fs: FsLike
   history: HistoryLike
   defaultModeId: string
@@ -45,7 +44,7 @@ export function useWorkspaceSetup(args: UseWorkspaceSetupArgs): UseWorkspaceSetu
   }, [args.workspaceReady, args.workspaceRoot, args.fs])
 
   const confirm = useCallback(async (r: WorkspaceSetupResult) => {
-    const raEnabled = r.enableRA && !args.remote
+    const raEnabled = r.enableRA
     const cfg: WorkspaceConfig = {
       schemaVersion: 1,
       createdAt: new Date().toISOString(),
@@ -58,7 +57,7 @@ export function useWorkspaceSetup(args: UseWorkspaceSetupArgs): UseWorkspaceSetu
     if (raEnabled) await args.history.init()
     setConfig(cfg)
     setPhase('ready')
-  }, [args.fs, args.history, args.remote])
+  }, [args.fs, args.history])
 
   const cancel = useCallback(() => { setPhase('cancelled') }, [])
 
