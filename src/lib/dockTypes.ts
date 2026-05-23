@@ -58,6 +58,11 @@ export interface DockState {
   lintScanState: ScanState
   lintScanError: string | null
 
+  // Extension-contributed bottom-dock panels. The pop-out renders these as
+  // additional tabs after the built-ins; the WebContentsView for each is
+  // hosted (and reparented) by the main process via canvExtensions:showPanelInSlot.
+  bottomDockExtensionPanels: Array<{ extensionId: string; id: string; title: string }>
+
   // Output / runs streaming
   streamingRunId: string | null
 

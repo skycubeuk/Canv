@@ -16,6 +16,11 @@
   --color-accent-fg: rgb(var(--accent-fg));
   --color-accent-hover: var(--accent-hover);
 
+  /* New: expose border tokens as colour utilities so `bg-border-default`,
+   * `bg-border-strong`, etc. work alongside `border-default`. */
+  --color-border-default: rgb(var(--border-default));
+  --color-border-strong: rgb(var(--border-strong));
+
   --text-color-default: rgb(var(--text-default));
   --text-color-muted: rgb(var(--text-muted));
   --text-color-subtle: rgb(var(--text-subtle));
@@ -34,6 +39,30 @@
   --ring-offset-color-panel: rgb(var(--bg-panel));
   --ring-offset-color-elev: rgb(var(--bg-elev));
 
+  --color-warning: rgb(var(--warning));
+  --color-warning-soft: var(--warning-soft);
+  --color-warning-fg: rgb(var(--warning-fg));
+  --color-danger: rgb(var(--danger));
+  --color-danger-soft: var(--danger-soft);
+  --color-danger-fg: rgb(var(--danger-fg));
+
+  /* New: success + info status families, parallel to warning/danger. */
+  --color-success: rgb(var(--success));
+  --color-success-soft: var(--success-soft);
+  --color-success-fg: rgb(var(--success-fg));
+  --color-info: rgb(var(--info));
+  --color-info-soft: var(--info-soft);
+  --color-info-fg: rgb(var(--info-fg));
+
+  --color-inverse: rgb(var(--inverse));
+  --color-inverse-fg: rgb(var(--inverse-fg));
+
+  --border-color-warning: rgb(var(--warning));
+  --border-color-danger: rgb(var(--danger));
+  --border-color-success: rgb(var(--success));
+  --border-color-info: rgb(var(--info));
+
+  --spacing-side: 0.75rem;
   --shadow-lg: var(--shadow-lg);
 }
 
@@ -71,8 +100,16 @@
   @apply btn text-muted hover:bg-hover;
 }
 
+@utility btn-danger {
+  @apply btn bg-danger text-white hover:opacity-90;
+}
+
 @utility btn-icon {
   @apply inline-flex items-center justify-center w-8 h-8 rounded-md text-muted hover:bg-hover hover:text-default transition-colors;
+}
+
+@utility btn-sm {
+  @apply !text-xs !px-2 !py-1;
 }
 
 @utility input {
@@ -83,42 +120,105 @@
   @apply px-4 py-3 border-b border-default;
 }
 
+@utility accent-gradient {
+  background: linear-gradient(135deg, rgb(var(--accent)), color-mix(in oklab, rgb(var(--accent)) 60%, black));
+  box-shadow: 0 0 0 1px color-mix(in oklab, rgb(var(--accent)) 40%, transparent);
+}
+
 @layer base {
   :root {
     --accent: 99 102 241; /* #6366f1 */
     --accent-fg: 255 255 255; /* #ffffff */
     --accent-soft: color-mix(in oklab, rgb(var(--accent)) 18%, transparent);
     --accent-hover: color-mix(in oklab, rgb(var(--accent)) 80%, white 20%);
+    --warning: 217 119 6;             /* amber-600 */
+    --warning-fg: 251 191 36;         /* amber-300 */
+    --warning-soft: color-mix(in oklab, rgb(var(--warning)) 12%, transparent);
+    --danger: 220 38 38;              /* red-600 */
+    --danger-fg: 248 113 113;         /* red-400 */
+    --danger-soft: color-mix(in oklab, rgb(var(--danger)) 12%, transparent);
   }
 
-  [data-theme='dark'] {
-    --bg-app: 10 11 13; /* #0a0b0d */
-    --bg-panel: 16 18 22; /* #101216 */
-    --bg-elev: 21 24 29; /* #15181d */
-    --bg-hover: 28 32 39; /* #1c2027 */
-    --bg-active: 35 39 50; /* #232732 */
-    --border-default: 29 32 39; /* #1d2027 */
-    --border-strong: 42 46 55; /* #2a2e37 */
-    --text-default: 231 234 240; /* #e7eaf0 */
-    --text-muted: 154 160 171; /* #9aa0ab */
-    --text-subtle: 107 114 128; /* #6b7280 */
+  /* Native form controls — pick up the user-selected accent so sliders,
+   * checkboxes, etc. don't fall back to the browser default blue. */
+  input[type='range'],
+  input[type='checkbox'],
+  input[type='radio'] {
+    accent-color: rgb(var(--accent));
+  }
+
+  [data-theme='canv-dark'] {
+    --bg-app: 10 11 13;
+    --bg-panel: 16 18 22;
+    --bg-elev: 21 24 29;
+    --bg-hover: 28 32 39;
+    --bg-active: 35 39 50;
+    --border-default: 29 32 39;
+    --border-strong: 42 46 55;
+    --text-default: 231 234 240;
+    --text-muted: 154 160 171;
+    --text-subtle: 107 114 128;
+    --inverse: 231 234 240;
+    --inverse-fg: 10 11 13;
+    --accent: 99 102 241;
+    --accent-fg: 255 255 255;
+    --accent-soft: color-mix(in oklab, rgb(var(--accent)) 18%, transparent);
+    --accent-hover: color-mix(in oklab, rgb(var(--accent)) 80%, white 20%);
+    --warning: 217 119 6;
+    --warning-fg: 251 191 36;
+    --warning-soft: color-mix(in oklab, rgb(var(--warning)) 12%, transparent);
+    --danger: 220 38 38;
+    --danger-fg: 248 113 113;
+    --danger-soft: color-mix(in oklab, rgb(var(--danger)) 12%, transparent);
+    --success: 22 163 74;
+    --success-fg: 134 239 172;
+    --success-soft: color-mix(in oklab, rgb(var(--success)) 14%, transparent);
+    --info: 59 130 246;
+    --info-fg: 147 197 253;
+    --info-soft: color-mix(in oklab, rgb(var(--info)) 14%, transparent);
+    --selection-bg: rgba(59, 130, 246, 0.6);
+    --scrollbar-thumb: 64 64 64;
+    --scrollbar-thumb-hover: 82 82 82;
+    --overlay-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
     --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.5), 0 4px 12px rgba(0, 0, 0, 0.4);
     --syntax-string: #c5e3a4;
     --syntax-keyword: #b8a8ff;
     --syntax-comment: #6b7280;
   }
 
-  [data-theme='light'] {
-    --bg-app: 255 255 255; /* #ffffff */
-    --bg-panel: 247 248 250; /* #f7f8fa */
-    --bg-elev: 241 243 246; /* #f1f3f6 */
-    --bg-hover: 235 237 241; /* #ebedf1 */
-    --bg-active: 225 228 234; /* #e1e4ea */
-    --border-default: 232 234 239; /* #e8eaef */
-    --border-strong: 209 213 219; /* #d1d5db */
-    --text-default: 15 23 42; /* #0f172a */
-    --text-muted: 75 85 99; /* #4b5563 */
-    --text-subtle: 156 163 175; /* #9ca3af */
+  [data-theme='canv-light'] {
+    --bg-app: 255 255 255;
+    --bg-panel: 247 248 250;
+    --bg-elev: 241 243 246;
+    --bg-hover: 235 237 241;
+    --bg-active: 225 228 234;
+    --border-default: 232 234 239;
+    --border-strong: 209 213 219;
+    --text-default: 15 23 42;
+    --text-muted: 75 85 99;
+    --text-subtle: 156 163 175;
+    --inverse: 17 22 30;
+    --inverse-fg: 252 252 253;
+    --accent: 99 102 241;
+    --accent-fg: 255 255 255;
+    --accent-soft: color-mix(in oklab, rgb(var(--accent)) 18%, transparent);
+    --accent-hover: color-mix(in oklab, rgb(var(--accent)) 80%, white 20%);
+    --warning: 217 119 6;
+    --warning-fg: 180 83 9;
+    --warning-soft: color-mix(in oklab, rgb(var(--warning)) 12%, transparent);
+    --danger: 220 38 38;
+    --danger-fg: 153 27 27;
+    --danger-soft: color-mix(in oklab, rgb(var(--danger)) 10%, transparent);
+    --success: 22 163 74;
+    --success-fg: 21 128 61;
+    --success-soft: color-mix(in oklab, rgb(var(--success)) 12%, transparent);
+    --info: 37 99 235;
+    --info-fg: 29 78 216;
+    --info-soft: color-mix(in oklab, rgb(var(--info)) 10%, transparent);
+    --selection-bg: rgba(96, 165, 250, 0.45);
+    --scrollbar-thumb: 214 211 209;
+    --scrollbar-thumb-hover: 168 162 158;
+    --overlay-shadow: 0 8px 32px rgba(15, 23, 42, 0.18);
     --shadow-lg:
       0 20px 50px rgba(15, 23, 42, 0.1), 0 4px 12px rgba(15, 23, 42, 0.05);
     --syntax-string: #2f7a3a;
@@ -133,7 +233,7 @@
   }
   body {
     @apply bg-app text-default antialiased;
-    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-family: var(--font-sans-override, 'Inter', system-ui, -apple-system, sans-serif);
     font-feature-settings: 'cv11', 'ss01', 'ss03';
   }
 }
@@ -143,23 +243,30 @@
   @apply text-subtle ml-0.5 animate-pulse;
 }
 
-/* Force a visible selection on rendered markdown. Without this the browser
-   reports the computed ::selection background as transparent, so highlights
-   vanish on mouseup — the selection persists in the DOM but the paint is
-   gone. Scoping to `.prose` keeps CodeMirror's own selection drawing
-   (which deliberately hides the native ::selection inside `.cm-content`)
-   untouched. !important to win against any host stylesheet making it
-   transparent. */
+/* Custom title-bar chrome. The Electron main process is configured with
+ * `titleBarStyle: 'hidden' + titleBarOverlay`, so the OS supplies only the
+ * min/max/close buttons. The renderer's <header> takes over the title-bar
+ * role: the whole header is draggable, interactive children opt out via
+ * `no-drag`, and env(titlebar-area-x|width) reserves space for the
+ * platform-native controls (left on macOS, right on Win/Linux).
+ *
+ * In non-Electron contexts (tests, web preview) the env vars fall back to
+ * their defaults and the drag-region property is a no-op, so this class is
+ * safe to apply unconditionally. */
+.topbar-chrome {
+  -webkit-app-region: drag;
+  padding-left: max(0.625rem, env(titlebar-area-x, 0px));
+  padding-right: max(0.625rem, calc(100% - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100%)));
+}
+.topbar-chrome :is(input, button, a, [role="button"], [role="textbox"], [role="listbox"]) {
+  -webkit-app-region: no-drag;
+}
+
+/* Force a visible selection on rendered markdown. Themes set --selection-bg. */
 .prose ::selection,
 .prose::selection,
 .prose *::selection {
-  background-color: rgba(96, 165, 250, 0.45) !important; /* blue-400 / 45% */
-  color: inherit !important;
-}
-[data-theme="dark"] .prose ::selection,
-[data-theme="dark"] .prose::selection,
-[data-theme="dark"] .prose *::selection {
-  background-color: rgba(59, 130, 246, 0.6) !important; /* blue-500 / 60% */
+  background-color: var(--selection-bg) !important;
   color: inherit !important;
 }
 
@@ -177,7 +284,7 @@
   height: 100%;
 }
 .cm-host .cm-content {
-  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-mono-override, ui-sans-serif, system-ui, sans-serif);
   padding: 0;
   caret-color: currentColor;
   min-height: 100%;
@@ -186,9 +293,9 @@
   padding: 0;
 }
 
-/* Theme-aware scrollbars (light) */
+/* Theme-aware scrollbars. Themes set --scrollbar-thumb / --scrollbar-thumb-hover. */
 * {
-  scrollbar-color: rgb(214 211 209) transparent; /* stone-300 */
+  scrollbar-color: rgb(var(--scrollbar-thumb)) transparent;
   scrollbar-width: thin;
 }
 *::-webkit-scrollbar {
@@ -199,13 +306,13 @@
   background: transparent;
 }
 *::-webkit-scrollbar-thumb {
-  background-color: rgb(214 211 209); /* stone-300 */
+  background-color: rgb(var(--scrollbar-thumb));
   border-radius: 8px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
 *::-webkit-scrollbar-thumb:hover {
-  background-color: rgb(168 162 158); /* stone-400 */
+  background-color: rgb(var(--scrollbar-thumb-hover));
   background-clip: padding-box;
   border: 2px solid transparent;
 }
@@ -218,15 +325,4 @@
 }
 .tabs-scroller::-webkit-scrollbar {
   display: none;
-}
-
-/* Theme-aware scrollbars (dark) */
-[data-theme="dark"] * {
-  scrollbar-color: rgb(64 64 64) transparent; /* neutral-700 */
-}
-[data-theme="dark"] *::-webkit-scrollbar-thumb {
-  background-color: rgb(64 64 64); /* neutral-700 */
-}
-[data-theme="dark"] *::-webkit-scrollbar-thumb:hover {
-  background-color: rgb(82 82 82); /* neutral-600 */
 }

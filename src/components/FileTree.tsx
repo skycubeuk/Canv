@@ -7,6 +7,8 @@ import type { DirEntry, DirFile, DirNode } from '../lib/fs'
 import { useDialogs } from '../lib/dialogs'
 import { useServeStatus } from '../hooks/useServeStatus'
 import { getServe } from '../lib/serve'
+import { useContributions } from '../hooks/useContributions'
+import { FileTreeContextMenuExtensions } from './files/FileTreeContextMenuExtensions'
 
 interface Props {
   root: string | null
@@ -23,11 +25,16 @@ interface Props {
   onRename: (rel: string, newName: string) => void
   onDelete: (rel: string) => void
   onChangeWorkspace: () => void
+  /** Folder currently treated as the default target for sidebar +file / +folder buttons. Empty string = workspace root. */
+  selectedDir?: string
+  onSelectDir?: (rel: string) => void
   revealRel?: string | null
   /** When true, the right-click menu offers a "View history" entry for files. */
   revisionArchaeologyEnabled?: boolean
   /** Called when the user picks "View history" on a file. */
   onViewHistory?: (rel: string) => void
+  /** Called when an extension's "Open with…" item is chosen. extensionId=null means force text editor. */
+  onOpenWith?: (rel: string, extensionId: string | null) => void
 }
 
 interface MenuState {
@@ -51,7 +58,8 @@ export function FileTree(props: Props) {
     root, tree, truncated, openRels, activeRel, pinnedRels,
     onOpen, onPin, onUnpin,
     onCreateFile, onCreateFolder, onRename, onDelete, onChangeWorkspace,
-    revealRel, revisionArchaeologyEnabled, onViewHistory,
+    selectedDir, onSelectDir,
+    revealRel, revisionArchaeologyEnabled, onViewHistory, onOpenWith,
   } = props
 
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
@@ -144,18 +152,23 @@ export function FileTree(props: Props) {
     e.preventDefault()
     e.stopPropagation()
     setMenu({ x: e.clientX, y: e.clientY, target })
+    const dir = target.kind === 'dir' ? target.relPath : dirname(target.relPath)
+    onSelectDir?.(dir)
   }
 
   const renderEntry = (entry: DirEntry, depth: number): React.ReactNode => {
     const indent = depth * 14 + 10
     if (entry.kind === 'dir') {
       const isOpen = expanded.has(entry.relPath)
+      const isSelected = selectedDir === entry.relPath
       return (
         <div key={entry.relPath || '__root__'}>
           <div
-            className="flex items-center gap-1.5 px-1 py-[3px] text-[12.5px] cursor-pointer rounded-sm text-muted hover:bg-hover transition-colors"
+            className={`flex items-center gap-1.5 px-1 py-[3px] text-[12.5px] cursor-pointer rounded-sm transition-colors ${
+              isSelected ? 'bg-active text-default' : 'text-muted hover:bg-hover'
+            }`}
             style={{ paddingLeft: indent }}
-            onClick={() => toggle(entry.relPath)}
+            onClick={() => { onSelectDir?.(entry.relPath); toggle(entry.relPath) }}
             onContextMenu={(e) => handleContextMenu(e, entry)}
           >
             {isOpen
@@ -218,7 +231,7 @@ export function FileTree(props: Props) {
         )}
         {!isRenaming && isPinned && (
           <span
-            className="ml-auto inline-flex items-center gap-0.5 px-1 text-xs text-amber-400 select-none"
+            className="ml-auto inline-flex items-center gap-0.5 px-1 text-xs text-warning-fg select-none"
             title="Pinned — right-click to unpin"
             aria-label={`${file.name} pinned to context`}
           >
@@ -240,7 +253,7 @@ export function FileTree(props: Props) {
           tree.children.map((c) => renderEntry(c, 0))
         )}
         {truncated && (
-          <div className="px-3 py-2 text-xs text-amber-400">
+          <div className="px-3 py-2 text-xs text-warning-fg">
             Folder truncated — too many files to display.
           </div>
         )}
@@ -265,6 +278,7 @@ export function FileTree(props: Props) {
           onCreateFolder={onCreateFolder}
           revisionArchaeologyEnabled={revisionArchaeologyEnabled}
           onViewHistory={onViewHistory}
+          onOpenWith={onOpenWith}
         />
       )}
     </aside>
@@ -283,6 +297,7 @@ function ContextMenu(props: {
   onCreateFolder: (parentRel: string) => void
   revisionArchaeologyEnabled?: boolean
   onViewHistory?: (rel: string) => void
+  onOpenWith?: (rel: string, extensionId: string | null) => void
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const dialogs = useDialogs()
@@ -290,6 +305,7 @@ function ContextMenu(props: {
   const parentRel = isDir ? props.target.relPath : dirname(props.target.relPath)
   const isMd = !isDir && /\.(md|markdown)$/i.test(props.target.relPath)
   const serveStatus = useServeStatus()
+  const contributions = useContributions()
 
   useEffect(() => {
     const el = ref.current
@@ -300,6 +316,9 @@ function ContextMenu(props: {
   return (
     <div
       ref={ref}
+      data-testid="file-tree-context-menu"
+      role="menu"
+      aria-label="File context menu"
       tabIndex={-1}
       style={{ left: props.x, top: props.y }}
       className="fixed z-40 min-w-[180px] bg-elev border border-default rounded-md shadow-lg py-1 text-sm"
@@ -386,7 +405,7 @@ function ContextMenu(props: {
             })()
           }}
         >
-          <span className="text-red-400">Delete</span>
+          <span className="text-danger-fg">Delete</span>
         </MenuItem>
       )}
       {props.target.relPath && (
@@ -399,6 +418,19 @@ function ContextMenu(props: {
           Copy path
         </MenuItem>
       )}
+      <FileTreeContextMenuExtensions
+        target={{ relPath: props.target.relPath, isDir }}
+        menus={contributions.menus}
+        handlers={contributions.fileHandlers}
+        onCommand={(commandId, args) => {
+          void window.canvExtensions?.invokeCommand?.(commandId, args)
+          props.onClose()
+        }}
+        onOpenWith={(extensionId) => {
+          props.onOpenWith?.(props.target.relPath, extensionId)
+          props.onClose()
+        }}
+      />
     </div>
   )
 }
@@ -407,6 +439,7 @@ function MenuItem({ onClick, children }: { onClick: () => void; children: React.
   return (
     <button
       type="button"
+      role="menuitem"
       onClick={onClick}
       className="block w-full text-left px-3 py-1.5 hover:bg-hover"
     >

@@ -94,6 +94,21 @@ npm run electron:build:win    # cross-builds via wine, or run on Windows
 
 Output lands in `release/`.
 
+### Building extensions
+
+Canv extensions are built with [Claude Code](https://docs.anthropic.com/claude-code).
+Install the `canv-extension-author` skill once:
+
+```bash
+npm run skill:install
+```
+
+Then open Claude Code in any workspace and ask it to build an extension. Claude
+Code reads `skills/canv-extension-author/` for the manifest schema, contribution
+types, and working recipes for libraries like pdf.js, marked, and Chart.js.
+
+Install the built extension via Canv's Extensions tab → "Install from folder…".
+
 ### Releasing
 
 Releases are tag-driven:

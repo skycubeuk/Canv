@@ -106,7 +106,7 @@ export function DocumentAgentMenu({ profile, hasMarkdownTab, activeFileName, onR
         title={triggerDisabled ? 'Open a document to run agents' : 'Run on document'}
         aria-haspopup="menu"
         aria-expanded={state.kind !== 'closed'}
-        className="flex items-center h-7 pl-2.5 pr-2 rounded-md bg-accent text-accent-fg font-medium text-[12px] gap-1.5 hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+        className="btn-primary btn-sm gap-1.5 disabled:opacity-50"
       >
         <Play aria-hidden className="w-3 h-3" fill="currentColor" />
         <span className="hidden sm:inline">Run on document</span>
@@ -169,7 +169,7 @@ export function DocumentAgentMenu({ profile, hasMarkdownTab, activeFileName, onR
             type="button"
             onClick={handleInstructionSubmit}
             disabled={!instructionText.trim()}
-            className="btn-primary py-0.5! px-2! text-xs disabled:opacity-50"
+            className="btn-primary btn-sm disabled:opacity-50"
           >
             Run
           </button>

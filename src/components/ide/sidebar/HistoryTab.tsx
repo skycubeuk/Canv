@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { Plus, FileText, ChevronRight, ChevronDown } from 'lucide-react'
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import { FileText, ChevronRight, ChevronDown } from 'lucide-react'
 import type { CanvHistory, SnapshotEntry, CurrentChange, SnapshotDeltaEntry } from '../../../lib/history'
 import { REASON_LABEL, smartTime, fullTime, formatSnapshotLabel } from '../../../lib/historyLabels'
+import { SidebarSectionTitle, SidebarRow, SidebarMeta } from './SidebarChrome'
 
 export type OpenDiffRequest =
   | { kind: 'current'; relPath: string; baseSha: string; baseLabel: string }
@@ -9,6 +10,10 @@ export type OpenDiffRequest =
   | { kind: 'fileHistory'; relPath: string; snapshotId: string; commitSha: string; baseLabel: string }
 
 export interface RestoreRequest { snapshotId: string; relPath: string }
+
+export interface HistoryTabHandle {
+  openCheckpointComposer: () => void
+}
 
 interface Props {
   history: CanvHistory
@@ -28,7 +33,9 @@ function basename(rel: string): string {
   return i >= 0 ? rel.slice(i + 1) : rel
 }
 
-export function HistoryTab({ history, onOpenDiff, onCreateCheckpoint, onRestore }: Props) {
+export const HistoryTab = forwardRef<HistoryTabHandle, Props>(function HistoryTab(
+  { history, onOpenDiff, onCreateCheckpoint, onRestore }, ref,
+) {
   const [changes, setChanges] = useState<CurrentChange[]>([])
   const [snapshots, setSnapshots] = useState<SnapshotEntry[]>([])
   const [tipCommit, setTipCommit] = useState<string | null>(null)
@@ -61,7 +68,6 @@ export function HistoryTab({ history, onOpenDiff, onCreateCheckpoint, onRestore 
     setDeltaCache((prev) => ({ ...prev, [id]: out }))
   }, [history])
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect -- refresh() is async; setState fires after await.
   useEffect(() => { void refresh() }, [refresh])
 
   const latestSnapshot = snapshots[0] ?? null
@@ -74,26 +80,14 @@ export function HistoryTab({ history, onOpenDiff, onCreateCheckpoint, onRestore 
     await refresh()
   }
 
-  return (
-    <aside className="h-full flex flex-col bg-panel overflow-hidden">
-      {/* Workspace header — mirrors the Files tab affordances */}
-      <header className="shrink-0 flex items-center justify-between px-3 pt-2.5 pb-2">
-        <span className="text-[10.5px] font-semibold tracking-wider uppercase text-subtle">
-          History
-        </span>
-        <button
-          type="button"
-          aria-label="Create checkpoint"
-          title="Create checkpoint"
-          className="w-[22px] h-[22px] grid place-items-center rounded-sm text-subtle hover:bg-hover hover:text-default"
-          onClick={() => setComposerOpen((v) => !v)}
-        >
-          <Plus aria-hidden className="w-3 h-3" />
-        </button>
-      </header>
+  useImperativeHandle(ref, () => ({
+    openCheckpointComposer: () => setComposerOpen(true),
+  }), [])
 
+  return (
+    <aside className="h-full flex flex-col bg-panel">
       {composerOpen && (
-        <div className="px-3 pb-2 flex gap-1.5">
+        <div className="px-3 pt-1 pb-2 flex items-center gap-1.5">
           <input
             autoFocus
             value={composerText}
@@ -108,7 +102,7 @@ export function HistoryTab({ history, onOpenDiff, onCreateCheckpoint, onRestore 
           <button
             type="button"
             onClick={submitCheckpoint}
-            className="btn-primary py-1! px-2! text-xs"
+            className="btn-primary btn-sm"
           >
             Save
           </button>
@@ -118,17 +112,14 @@ export function HistoryTab({ history, onOpenDiff, onCreateCheckpoint, onRestore 
       <div className="flex-1 min-h-0 overflow-y-auto">
         {/* Current changes section */}
         <section>
-          <div className="px-3 pt-1 pb-1 text-[10.5px] font-semibold tracking-wider uppercase text-subtle">
-            Current changes
-          </div>
+          <SidebarSectionTitle>Current changes</SidebarSectionTitle>
           {changes.length === 0 ? (
             <div className="px-3 pb-2 text-xs text-subtle">No changes since last checkpoint.</div>
           ) : (
             <ul>
               {changes.map((c) => (
                 <li key={c.relPath}>
-                  <button
-                    type="button"
+                  <SidebarRow
                     onClick={() => {
                       if (!tipCommit) return
                       onOpenDiff({
@@ -139,14 +130,13 @@ export function HistoryTab({ history, onOpenDiff, onCreateCheckpoint, onRestore 
                       })
                     }}
                     title={c.relPath}
-                    className="group w-full flex items-center gap-1.5 pr-2 pl-3 py-[3px] text-[12.5px] rounded-sm text-muted hover:bg-hover hover:text-default transition-colors"
                   >
                     <FileText aria-hidden className="w-3.5 h-3.5 shrink-0" />
                     <span className="truncate flex-1 text-left">{basename(c.relPath)}</span>
-                    <span className="text-[10px] font-mono text-subtle shrink-0" aria-label={c.status}>
+                    <span className="text-[10px] font-mono text-subtle tabular-nums shrink-0" aria-label={c.status}>
                       {STATUS_BADGE[c.status]}
                     </span>
-                  </button>
+                  </SidebarRow>
                 </li>
               ))}
             </ul>
@@ -155,9 +145,7 @@ export function HistoryTab({ history, onOpenDiff, onCreateCheckpoint, onRestore 
 
         {/* Timeline section */}
         <section className="border-t border-default mt-2 pt-2">
-          <div className="px-3 pb-1 text-[10.5px] font-semibold tracking-wider uppercase text-subtle">
-            Timeline
-          </div>
+          <SidebarSectionTitle>Timeline</SidebarSectionTitle>
 
           {snapshots.length === 0 ? (
             <div className="px-3 pb-2 text-xs text-subtle">No snapshots yet.</div>
@@ -167,8 +155,7 @@ export function HistoryTab({ history, onOpenDiff, onCreateCheckpoint, onRestore 
                 const isOpen = expanded === s.id
                 return (
                   <li key={s.id} className={s.hidden ? 'opacity-50' : ''}>
-                    <button
-                      type="button"
+                    <SidebarRow
                       onClick={() => {
                         setExpanded((cur) => {
                           const next = cur === s.id ? null : s.id
@@ -176,22 +163,18 @@ export function HistoryTab({ history, onOpenDiff, onCreateCheckpoint, onRestore 
                         })
                         if (expanded !== s.id) void ensureDelta(s.id)
                       }}
-                      className="w-full flex items-center gap-1.5 pr-2 pl-2 py-[3px] text-[12.5px] rounded-sm text-muted hover:bg-hover hover:text-default transition-colors"
                     >
                       {isOpen
                         ? <ChevronDown aria-hidden className="w-2.5 h-2.5 shrink-0 text-subtle" />
                         : <ChevronRight aria-hidden className="w-2.5 h-2.5 shrink-0 text-subtle" />}
-                      <span
-                        className="text-[10px] font-mono text-subtle tabular-nums shrink-0"
-                        title={fullTime(s.createdAt)}
-                      >
+                      <SidebarMeta title={fullTime(s.createdAt)}>
                         {smartTime(s.createdAt)}
-                      </span>
-                      <span className="text-[9.5px] uppercase tracking-wider text-subtle px-1 py-0 rounded-sm bg-elev shrink-0">
+                      </SidebarMeta>
+                      <span className="text-[10px] uppercase tracking-wider text-subtle px-1 py-0 rounded-sm bg-elev shrink-0">
                         {REASON_LABEL[s.reason]}
                       </span>
                       <span className="truncate flex-1 text-left">{s.summary}</span>
-                    </button>
+                    </SidebarRow>
 
                     {isOpen && (
                       <div className="pb-1.5">
@@ -268,7 +251,7 @@ export function HistoryTab({ history, onOpenDiff, onCreateCheckpoint, onRestore 
         </section>
       </div>
 
-      <footer className="shrink-0 px-3 py-2 border-t border-default">
+      <div className="shrink-0 px-3 py-2 border-t border-default">
         <label className="inline-flex items-center gap-1.5 text-xs text-subtle cursor-pointer">
           <input
             type="checkbox"
@@ -278,7 +261,7 @@ export function HistoryTab({ history, onOpenDiff, onCreateCheckpoint, onRestore 
           />
           Show hidden
         </label>
-      </footer>
+      </div>
     </aside>
   )
-}
+})

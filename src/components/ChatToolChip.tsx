@@ -33,7 +33,7 @@ export function ChatToolChip({ name, inputPath, status, summary, result }: ChatT
     status === 'cancelled'
       ? 'border-default bg-panel text-muted opacity-60 line-through'
       : status === 'error'
-        ? 'border-red-700/60 bg-red-950/40 text-red-200'
+        ? 'border-danger bg-danger-soft text-danger-fg'
         : 'border-default bg-panel text-default'
   return (
     <div data-testid="chip-root" className={`my-1 inline-block max-w-full rounded-md border px-2 py-1 text-[0.85em] ${tone}`}>

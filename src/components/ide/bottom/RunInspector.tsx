@@ -25,7 +25,7 @@ export function RunInspector({ run }: Props) {
       <Section title="Response">{run.response || <em className="text-subtle">(empty)</em>}</Section>
       {run.error && (
         <Section title="Error">
-          <span className="text-red-400">{run.error}</span>
+          <span className="text-danger-fg">{run.error}</span>
         </Section>
       )}
     </div>

@@ -108,8 +108,9 @@ if (!isDockPopout()) {
     getWorkspace: () => ipcRenderer.invoke('canvFS:getWorkspace'),
     listDir: (rel) => ipcRenderer.invoke('canvFS:listDir', rel ?? ''),
     readFile: (rel) => ipcRenderer.invoke('canvFS:readFile', rel),
-    writeFile: (rel, content, expectedMtimeMs) =>
-      ipcRenderer.invoke('canvFS:writeFile', rel, content, expectedMtimeMs),
+    writeFile: (rel, content, expectedMtimeMs, opts) =>
+      ipcRenderer.invoke('canvFS:writeFile', rel, content, expectedMtimeMs, opts),
+    applyEdits: (fileWrites) => ipcRenderer.invoke('canvFS:applyEdits', fileWrites),
     createFile: (rel, content) => ipcRenderer.invoke('canvFS:createFile', rel, content ?? ''),
     createFolder: (rel) => ipcRenderer.invoke('canvFS:createFolder', rel),
     rename: (oldRel, newRel) => ipcRenderer.invoke('canvFS:rename', oldRel, newRel),
@@ -168,6 +169,94 @@ if (!isDockPopout()) {
       ipcRenderer.on('canvSites:registryChanged', listener)
       return () => ipcRenderer.removeListener('canvSites:registryChanged', listener)
     },
+  })
+
+  contextBridge.exposeInMainWorld('canvExtensions', {
+    listInstalled:         () => ipcRenderer.invoke('canvExtensions:listInstalled'),
+    readAllContributions:  () => ipcRenderer.invoke('canvExtensions:readAllContributions'),
+    install:           (folder) => ipcRenderer.invoke('canvExtensions:install', folder),
+    uninstall:         (id) => ipcRenderer.invoke('canvExtensions:uninstall', id),
+    setEnabled:        (id, en) => ipcRenderer.invoke('canvExtensions:setEnabled', id, en),
+    setTrustedAt:      (id, iso) => ipcRenderer.invoke('canvExtensions:setTrustedAt', id, iso),
+    getWorkspaceTrust: () => ipcRenderer.invoke('canvExtensions:getWorkspaceTrust'),
+    setWorkspaceTrust: (s) => ipcRenderer.invoke('canvExtensions:setWorkspaceTrust', s),
+    readSettings:      (id) => ipcRenderer.invoke('canvExtensions:readSettings', id),
+    writeSetting:      (id, key, value) => ipcRenderer.invoke('canvExtensions:writeSetting', id, key, value),
+    readManifest:      (id) => ipcRenderer.invoke('canvExtensions:readManifest', id),
+    listFiles:         (id) => ipcRenderer.invoke('canvExtensions:listFiles', id),
+    readFile:          (id, rel) => ipcRenderer.invoke('canvExtensions:readFile', id, rel),
+    reload:            (id) => ipcRenderer.invoke('canvExtensions:reload', id),
+    pickInstallFolder: () => ipcRenderer.invoke('canvExtensions:pickInstallFolder'),
+    pickInstallFile:   () => ipcRenderer.invoke('canvExtensions:pickInstallFile'),
+    previewInstall:    (source) => ipcRenderer.invoke('canvExtensions:previewInstall', source),
+    requestActivation: (trigger) => ipcRenderer.invoke('canvExtensions:requestActivation', trigger),
+    readActivity: (id) => ipcRenderer.invoke('canvExtensions:readActivity', id),
+    showPanelInSlot: (slotId, bounds) => ipcRenderer.invoke('canvExtensions:showPanelInSlot', slotId, bounds),
+    hidePanelInSlot: (slotId) => ipcRenderer.invoke('canvExtensions:hidePanelInSlot', slotId),
+    showFileInExtension: (extensionId, relPath, mode, bounds) => ipcRenderer.invoke('canvExtensions:showFileInExtension', extensionId, relPath, mode, bounds),
+    hideFileInExtension: (extensionId, relPath) => ipcRenderer.invoke('canvExtensions:hideFileInExtension', extensionId, relPath),
+    onChanged: (cb) => {
+      const listener = () => { try { cb() } catch { /* ignore */ } }
+      ipcRenderer.on('canvExtensions:registryChanged', listener)
+      return () => ipcRenderer.removeListener('canvExtensions:registryChanged', listener)
+    },
+    onCrashed: (cb) => {
+      const listener = (_e, payload) => { try { cb(payload) } catch { /* ignore */ } }
+      ipcRenderer.on('canvExtensions:crashed', listener)
+      return () => ipcRenderer.removeListener('canvExtensions:crashed', listener)
+    },
+    onEngineMismatch: (cb) => {
+      const listener = (_e, payload) => { try { cb(payload) } catch { /* ignore */ } }
+      ipcRenderer.on('canvExtensions:engineMismatch', listener)
+      return () => ipcRenderer.removeListener('canvExtensions:engineMismatch', listener)
+    },
+    devCrash: (id) => ipcRenderer.invoke('canvExtensions:devCrash', id),
+    onPromptRequest: (cb) => {
+      const listener = (_e, reqId, req) => { try { cb(reqId, req) } catch { /* ignore */ } }
+      ipcRenderer.on('canvExtensions:promptRequest', listener)
+      return () => ipcRenderer.removeListener('canvExtensions:promptRequest', listener)
+    },
+    promptResolve: (reqId, value) => ipcRenderer.send('canvExtensions:promptResolve', reqId, value),
+    onStatusBarChanged: (cb) => {
+      const listener = (_e, payload) => { try { cb(payload) } catch { /* ignore */ } }
+      ipcRenderer.on('canvExtensions:statusBarChanged', listener)
+      return () => ipcRenderer.removeListener('canvExtensions:statusBarChanged', listener)
+    },
+    invokeCommand: (commandId, args) => ipcRenderer.invoke('canvExtensions:invokeCommand', commandId, args),
+    getFileHandlerDefaults: () => ipcRenderer.invoke('canvExtensions:getFileHandlerDefaults'),
+    setFileHandlerDefault: (ext, extensionId) => ipcRenderer.invoke('canvExtensions:setFileHandlerDefault', ext, extensionId),
+  })
+
+  contextBridge.exposeInMainWorld('canvMcp', {
+    setServers: (cfgs) => ipcRenderer.invoke('canvMcp:setServers', cfgs),
+    listTools:  () => ipcRenderer.invoke('canvMcp:listTools'),
+    callTool:   (name, args) => ipcRenderer.invoke('canvMcp:callTool', name, args),
+    reconnect:  () => ipcRenderer.invoke('canvMcp:reconnect'),
+    testServer:      (name) => ipcRenderer.invoke('canvMcp:testServer', name),
+    reconnectServer: (name) => ipcRenderer.invoke('canvMcp:reconnectServer', name),
+  })
+
+  contextBridge.exposeInMainWorld('canvExtensionsDev', {
+    spawnTest:   (fixtureName, bounds) => ipcRenderer.invoke('canvExtDev:spawnTest', fixtureName, bounds),
+    destroyTest: (id) => ipcRenderer.invoke('canvExtDev:destroyTest', id),
+    setBounds:   (id, bounds) => ipcRenderer.invoke('canvExtDev:setBounds', id, bounds),
+    onNotification: (cb) => {
+      const listener = (_e, payload) => { try { cb(payload) } catch { /* ignore */ } }
+      ipcRenderer.on('canvExt:notification', listener)
+      return () => ipcRenderer.removeListener('canvExt:notification', listener)
+    },
+    // Main → main-window: extension host RPC. Main asks main-window for editor
+    // state (active doc text, selection, etc.). The renderer answers via
+    // `canvExtHost:reply`. Wired up in the TestExtensionOverlay (Task 18).
+    onHostRequest: (cb) => {
+      const listener = (_e, reqId, method, args) => { try { cb(reqId, method, args) } catch { /* ignore */ } }
+      ipcRenderer.on('canvExtHost:request', listener)
+      return () => ipcRenderer.removeListener('canvExtHost:request', listener)
+    },
+    hostReply: (reqId, ok, payload) => ipcRenderer.send('canvExtHost:reply', reqId, ok, payload),
+    // Main-window pushes events (e.g. activeDocChanged) into the runtime so
+    // every subscribed extension receives them.
+    fireEvent: (type, payload) => ipcRenderer.invoke('canvExtDev:fireEvent', type, payload),
   })
 
 }

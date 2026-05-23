@@ -10,7 +10,9 @@ import { runChatTurn, type WritePreview, type ApprovalDecision } from '../agents
 import { truncateForRetry, truncateForEditAndRetry } from '../agents/retryOrchestrator'
 import { buildInventory, formatInventoryForPrompt } from '../lib/inventory'
 import { buildChatSystemPreamble } from '../lib/buildChatSystemPreamble'
-import { getAdapter } from '../adapters'
+import { getAdapter, configuredProviders } from '../adapters'
+import type { Provider, Settings } from './settingsSchema'
+import { pickDefaultProviderModel } from '../lib/effectiveProvider'
 import { getFs } from '../lib/fs'
 import type { ToolCall } from '../adapters/types'
 import type { CanvHistory } from '../lib/history'
@@ -111,6 +113,41 @@ function readPersisted(): PersistedState | null {
   }
 }
 
+/** Reseed empty sessions when EITHER:
+ *
+ *  1. The session's provider is no longer configured (orphaned by an API
+ *     key removal) — sending would hit a "not configured" error, so we must
+ *     migrate it onto a usable provider.
+ *  2. The user's chosen default changed (`forceToDefault`) — there is
+ *     always at least one empty session in the dock, and editing the
+ *     default in Settings should propagate to it. Without this it'd remain
+ *     pinned to whatever was spawned at boot.
+ *
+ *  Sessions with messages are intentionally locked to their original pair.
+ *  Manual picks via the chat-header model picker survive incidental
+ *  settings re-renders because the caller only sets `forceToDefault` when
+ *  the resolved default actually changed value (not just reference). */
+function reseedEmptyToDefault(
+  state: PersistedState,
+  settings: Settings,
+  forceToDefault: boolean,
+): PersistedState {
+  const configured = new Set<Provider>(configuredProviders(settings))
+  if (configured.size === 0) return state  // nothing to reseed against
+  const def = pickDefaultProviderModel(settings)
+  let changed = false
+  const next = state.sessions.map((s) => {
+    if (s.messages.length > 0) return s
+    const orphan = !configured.has(s.provider as Provider)
+    if (!orphan && !forceToDefault) return s
+    if (s.provider === def.provider && s.model === def.model) return s
+    changed = true
+    return { ...s, provider: def.provider, model: def.model }
+  })
+  if (!changed) return state
+  return { ...state, sessions: next }
+}
+
 function deriveTitle(session: ChatSession): string {
   const firstUser = session.messages.find((m) => m.role === 'user')
   if (!firstUser) return 'New chat'
@@ -123,10 +160,32 @@ export function useChatSessions(args: UseChatSessionsArgs): UseChatSessionsApi {
 
   const [state, setState] = useState<PersistedState>(() => {
     const persisted = readPersisted()
-    if (persisted) return persisted
-    const seed = makeEmptySession(settings.provider, settings.defaultModel[settings.provider])
-    return { sessions: [seed], activeId: seed.id }
+    if (persisted) return reseedEmptyToDefault(persisted, settings, true)
+    const seed = pickDefaultProviderModel(settings)
+    const session = makeEmptySession(seed.provider, seed.model)
+    return { sessions: [session], activeId: session.id }
   })
+
+  // Keep empty sessions aligned with the current effective default.
+  //
+  // `lastDefaultRef` tracks the last default we applied so we can distinguish
+  // a real change ("user edited the default" / "an API key flip moved the
+  // effective default") from incidental re-renders where the resolved pair
+  // is unchanged. Without this guard, every parent re-render would clobber
+  // a user's chat-header model picker selection — that picker calls
+  // `setActiveSessionProviderModel` to override the per-session pair
+  // without touching settings, and those overrides must survive.
+  const lastDefaultRef = useRef<{ provider: ChatProvider; model: string } | null>(null)
+  useEffect(() => {
+    const def = pickDefaultProviderModel(settings)
+    const last = lastDefaultRef.current
+    const defaultChanged = !last || last.provider !== def.provider || last.model !== def.model
+    lastDefaultRef.current = { provider: def.provider as ChatProvider, model: def.model }
+    setState((prev) => reseedEmptyToDefault(prev, settings, defaultChanged))
+    // Narrow deps on purpose — broader settings shifts (theme, font size)
+    // must not churn the chat session shape.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional narrow deps
+  }, [settings.apiKeys, settings.baseUrls, settings.ollamaModels, settings.provider, settings.defaultModel])
 
   useEffect(() => {
     try {
@@ -203,10 +262,11 @@ export function useChatSessions(args: UseChatSessionsArgs): UseChatSessionsApi {
 
   const createSession = useCallback(() => {
     setState((prev) => {
-      const seed = makeEmptySession(settings.provider, settings.defaultModel[settings.provider])
+      const pick = pickDefaultProviderModel(settings)
+      const seed = makeEmptySession(pick.provider, pick.model)
       return { sessions: [...prev.sessions, seed], activeId: seed.id }
     })
-  }, [settings.provider, settings.defaultModel])
+  }, [settings])
 
   const selectSession = useCallback((id: ChatSessionId) => {
     setState((prev) => (prev.sessions.some((s) => s.id === id) ? { ...prev, activeId: id } : prev))
@@ -223,14 +283,15 @@ export function useChatSessions(args: UseChatSessionsArgs): UseChatSessionsApi {
     setState((prev) => {
       const remaining = prev.sessions.filter((s) => s.id !== id)
       if (remaining.length === 0) {
-        const seed = makeEmptySession(settings.provider, settings.defaultModel[settings.provider])
+        const pick = pickDefaultProviderModel(settings)
+        const seed = makeEmptySession(pick.provider, pick.model)
         return { sessions: [seed], activeId: seed.id }
       }
       if (prev.activeId !== id) return { ...prev, sessions: remaining }
       const newest = remaining[remaining.length - 1]
       return { sessions: remaining, activeId: newest.id }
     })
-  }, [settings.provider, settings.defaultModel])
+  }, [settings])
 
   const setActiveSessionProviderModel = useCallback((provider: ChatProvider, model: string) => {
     setState((prev) => {
@@ -350,6 +411,7 @@ export function useChatSessions(args: UseChatSessionsArgs): UseChatSessionsApi {
               if (path !== args.workspace.activeMarkdownRel) throw new Error(`Cannot apply editor edit to non-active path: ${path}`)
               v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: newContent } })
             },
+            workspace: { applyEdits: args.workspace.applyEdits },
             signal: rt.abort.signal,
           },
           requestApproval: (call, preview) => requestApproval(sessionId, call, preview),

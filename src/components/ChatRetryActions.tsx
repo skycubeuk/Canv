@@ -61,7 +61,7 @@ export function ChatRetryActions({
         onClick={onRetry}
         disabled={retryDisabled}
         title={title}
-        className="inline-flex items-center px-2.5 py-1 text-[0.85em] rounded-md border border-default bg-elev text-default hover:bg-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        className="btn-secondary btn-sm gap-1.5 disabled:opacity-50"
       >
         {retryLabel}
       </button>
@@ -71,7 +71,7 @@ export function ChatRetryActions({
           onClick={onEditAndRetry}
           disabled={disabled}
           title={title}
-          className="inline-flex items-center px-2.5 py-1 text-[0.85em] rounded-md border border-default text-muted hover:bg-hover hover:text-default disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="btn-ghost btn-sm gap-1.5 disabled:opacity-50"
         >
           Edit & retry
         </button>

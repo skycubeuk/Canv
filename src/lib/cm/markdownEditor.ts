@@ -1,10 +1,31 @@
-import { EditorState, type Extension } from '@codemirror/state'
+import { EditorState, Compartment, type Extension } from '@codemirror/state'
 import { EditorView, keymap, lineNumbers } from '@codemirror/view'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
 import { syntaxHighlighting, defaultHighlightStyle, indentUnit } from '@codemirror/language'
 import { markdown } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
 import { searchKeymap } from '@codemirror/search'
+
+/**
+ * Shared compartment instance for the language extension.
+ * Exported so callers can dispatch a reconfigure after an async language load
+ * (e.g. from a workspace extension).
+ *
+ * One compartment is enough because only one EditorView is active per Canvas
+ * mount; when Canvas unmounts it destroys the view and recreates it, which
+ * always seeds a fresh compartment slot from the same singleton.
+ */
+export const languageCompartment = new Compartment()
+
+export interface ActiveEditorUpdateInfo {
+  rel: string | null
+  /** Document length in chars. Use this for cheap presence/size checks.
+   * The full text is intentionally not materialised on every update — on a
+   * large doc, toString() on every cursor move was a multi-MB allocation. */
+  length: number
+  selection: { from: number; to: number; text: string }
+  docChanged: boolean
+}
 
 export interface MarkdownEditorOptions {
   initialDoc: string
@@ -15,6 +36,14 @@ export interface MarkdownEditorOptions {
   onFocusChange?: (focused: boolean) => void
   /** When true, adds line numbers to the gutter. Default: false. */
   showLineNumbers?: boolean
+  /**
+   * When set, called on every doc/selection change for the active editor only.
+   * The caller is responsible for only passing this when `isActive` is true —
+   * it is wired through Canvas via the onActiveEditorUpdate prop.
+   */
+  onActiveEditorUpdate?: (info: ActiveEditorUpdateInfo) => void
+  /** Rel path of the current file — forwarded verbatim in ActiveEditorUpdateInfo. */
+  activeRel?: string | null
 }
 
 /**
@@ -32,12 +61,21 @@ export function markdownEditorExtensions(opts: MarkdownEditorOptions): Extension
     if (update.focusChanged && opts.onFocusChange) {
       opts.onFocusChange(update.view.hasFocus)
     }
+    if (opts.onActiveEditorUpdate && (update.docChanged || update.selectionSet)) {
+      const sel = update.state.selection.main
+      opts.onActiveEditorUpdate({
+        rel: opts.activeRel ?? null,
+        length: update.state.doc.length,
+        selection: { from: sel.from, to: sel.to, text: update.state.sliceDoc(sel.from, sel.to) },
+        docChanged: update.docChanged,
+      })
+    }
   })
 
   return [
     history(),
     keymap.of([indentWithTab, ...defaultKeymap, ...historyKeymap, ...searchKeymap]),
-    markdown({ codeLanguages: languages }),
+    languageCompartment.of(markdown({ codeLanguages: languages })),
     syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
     EditorView.lineWrapping,
     indentUnit.of('  '),

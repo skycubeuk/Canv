@@ -14,8 +14,8 @@ interface Props {
 }
 
 const SEVERITY_BADGE: Record<'warn' | 'error', { Icon: LucideIcon; className: string }> = {
-  warn:  { Icon: AlertTriangle, className: 'text-amber-400' },
-  error: { Icon: XCircle,       className: 'text-red-400' },
+  warn:  { Icon: AlertTriangle, className: 'text-warning-fg' },
+  error: { Icon: XCircle,       className: 'text-danger-fg' },
 }
 
 const RULE_LABEL: Record<LintRuleId, string> = {
@@ -54,7 +54,7 @@ export function ProblemsTab({ issues, scanState, scanError, onScan, onClear, onJ
       </div>
 
       {scanError && (
-        <p className="px-3 py-2 text-red-400">Scan error: {scanError}</p>
+        <p className="px-3 py-2 text-danger-fg">Scan error: {scanError}</p>
       )}
 
       <div className="flex-1 overflow-y-auto py-1">

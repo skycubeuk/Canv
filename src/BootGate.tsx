@@ -5,14 +5,17 @@ import { DialogProvider } from './lib/dialogs'
 import { ContextMenuProvider } from './lib/contextMenu'
 import { DockPopoutBoot } from './components/ide/DockPopoutBoot'
 
-function isPopoutMode(): boolean {
-  if (typeof window === 'undefined') return false
+function readMode(): 'dock' | 'main' {
+  if (typeof window === 'undefined') return 'main'
   const params = new URLSearchParams(window.location.search)
-  return params.get('mode') === 'dock'
+  if (params.get('mode') === 'dock') return 'dock'
+  return 'main'
 }
 
 export function BootGate() {
-  return isPopoutMode() ? <DockPopoutBoot /> : <MainBoot />
+  const mode = readMode()
+  if (mode === 'dock') return <DockPopoutBoot />
+  return <MainBoot />
 }
 
 function MainBoot() {

@@ -15,6 +15,8 @@ const baseProps = {
     relPath: 'test.md',
     loadedMarkdown: '',
     mtimeMs: 0,
+    eol: 'lf' as const,
+    bom: false,
   } satisfies MarkdownTab,
   isActive: true,
   fontSize: 16,
@@ -61,6 +63,8 @@ describe('Canvas', () => {
             relPath: 'foo.md',
             loadedMarkdown: '**Summary:**\nA paragraph.\n\n- one\n\n- two\n',
             mtimeMs: 1,
+            eol: 'lf',
+            bom: false,
           }}
           viewMode="edit"
           onChange={onChange}
@@ -135,6 +139,8 @@ describe('Canvas', () => {
       relPath: 'doc.md',
       loadedMarkdown: 'original',
       mtimeMs: 1,
+      eol: 'lf',
+      bom: false,
     }
     const { unmount } = render(
       <ContextMenuProvider>
@@ -167,7 +173,7 @@ describe('Canvas', () => {
       <ContextMenuProvider>
         <Canvas
           {...baseProps}
-          tab={{ kind: 'markdown', relPath: 'doc.md', loadedMarkdown: 'from disk', mtimeMs: 0 }}
+          tab={{ kind: 'markdown', relPath: 'doc.md', loadedMarkdown: 'from disk', mtimeMs: 0, eol: 'lf', bom: false }}
           onEditorReady={onEditorReady}
           getInitialBuffer={() => undefined}
         />

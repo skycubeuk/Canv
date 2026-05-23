@@ -1,226 +1,181 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useLocalStorage } from './useLocalStorage'
 import type { Mode } from '../config/types'
 import { adapters, providerForModel } from '../adapters'
-import type { Provider } from '../adapters'
-import type { ModelPricing } from '../config/pricing'
-import { DEFAULT_ACCENT } from '../lib/accent'
+import {
+  SettingsSchema,
+  type Settings,
+  type AgentModelRef,
+  type McpServerConfig,
+  type Provider,
+  type Theme,
+  type LineWidth,
+  type StreamChunkDelayMs,
+  type ModelPricing,
+} from './settingsSchema'
+import { salvage } from '../lib/zodSalvage'
 
-const ALLOWED_DELAYS = [0, 50, 100, 200] as const
-export type StreamChunkDelayMs = (typeof ALLOWED_DELAYS)[number]
-
-export type { Provider }
-
-/**
- * Per-action model overrides store the provider explicitly so a future
- * adapter that lists the same model id (e.g. AWS Bedrock exposing a Claude
- * model name already used by the direct Anthropic adapter) can be selected
- * unambiguously. Older storage held just the model string; the merge step
- * upgrades those values via providerForModel.
- */
-export interface AgentModelRef {
-  provider: Provider
-  model: string
-}
-export type Theme = 'light' | 'dark' | 'system'
-export type LineWidth = 'narrow' | 'normal' | 'wide'
-
-export interface Settings {
-  provider: Provider
-  apiKeys: Record<Provider, string>
-  defaultModel: Record<Provider, string>
-  useDefaultModelForAll: boolean
-  perAgentModel: Record<string, Record<string, AgentModelRef>>
-  fontSize: number
-  /** Base font size (px) for the chat panel. Bubbles use 1em; smaller chrome
-   *  scales proportionally. Independent of the editor's `fontSize` so writing
-   *  density and chat-reading density can be tuned separately. */
-  chatFontSize: number
-  lineWidth: LineWidth
-  theme: Theme
-  streaming: boolean
-  maxOutputTokens: Record<Provider, number>
-  /** Provider-specific endpoint URLs. Only Ollama uses this today. */
-  baseUrls: Partial<Record<Provider, string>>
-  /** Cached list of models fetched from a live Ollama instance via /api/tags.
-   *  Empty until the user clicks Refresh in Settings; falls back to the adapter's
-   *  static seed list when empty. */
-  ollamaModels: string[]
-  chatToolBudget: number
-  pricingOverrides: Record<string, ModelPricing>
-  streamChunkDelayMs: StreamChunkDelayMs
-  autoScroll: boolean
-  lintRules: {
-    brokenLinks: boolean
-    frontMatter: boolean
-    headingSkip: boolean
-    deadImages: boolean
-  }
-  accent: string
-}
+export type { Settings, AgentModelRef, McpServerConfig, Provider, Theme, LineWidth, StreamChunkDelayMs }
 
 const SETTINGS_KEY = 'canv:settings'
 
-const DEFAULT_SETTINGS: Settings = {
-  provider: 'anthropic',
-  apiKeys: { anthropic: '', openai: '', ollama: '' },
-  baseUrls: { ollama: '' },
-  ollamaModels: [],
-  defaultModel: { anthropic: 'claude-sonnet-4-6', openai: 'gpt-5.5', ollama: 'llama3.1' },
-  useDefaultModelForAll: true,
-  perAgentModel: {},
-  fontSize: 16,
-  chatFontSize: 14,
-  lineWidth: 'normal',
-  theme: 'system',
-  streaming: true,
-  maxOutputTokens: { anthropic: 8192, openai: 8192, ollama: 4096 },
-  chatToolBudget: 10,
-  pricingOverrides: {},
-  streamChunkDelayMs: 0,
-  autoScroll: true,
-  lintRules: {
-    brokenLinks: true,
-    frontMatter: true,
-    headingSkip: true,
-    deadImages: true,
-  },
-  accent: DEFAULT_ACCENT,
+/** Post-salvage normalisation that depends on React/adapter data.
+ *  Mirrors the runtime-data-dependent passes the old hand-coded `merged`
+ *  builder used to do: legacy perAgentModel upgrade, bare-key pricing
+ *  override re-keying, defaultModel clamp against live adapter models. */
+type SettingsLoose = Omit<Settings, 'perAgentModel' | 'pricingOverrides' | 'mcpServers'> & {
+  perAgentModel: Record<string, Record<string, unknown>>
+  pricingOverrides: Record<string, unknown>
+  mcpServers: unknown[]
 }
 
-function purgeLegacyOnce() {
-  try {
-    const raw = localStorage.getItem(SETTINGS_KEY)
-    if (!raw) return
-    const parsed = JSON.parse(raw) as Record<string, unknown>
-    if (!parsed || typeof parsed !== 'object') return
-    let changed = false
-    if ('prompts' in parsed) { delete parsed.prompts; changed = true }
-    if ('promptOverrides' in parsed) { delete parsed.promptOverrides; changed = true }
-    // perAgentModel was previously flat (Record<actionId, model>); if any value
-    // is a string, the map is flat — drop it so it gets re-seeded as nested.
-    if (parsed.perAgentModel && typeof parsed.perAgentModel === 'object') {
-      const m = parsed.perAgentModel as Record<string, unknown>
-      const flat = Object.values(m).some((v) => typeof v === 'string')
-      if (flat) { parsed.perAgentModel = {}; changed = true }
+function postProcess(s: SettingsLoose): Settings {
+  // Shallow clone so the caller's input stays referentially stable across renders.
+  const out: Settings = {
+    ...s,
+    pricingOverrides: {},
+    perAgentModel: {},
+    mcpServers: [],
+  }
+
+  // mcpServers: storage shape is z.array(z.unknown()) so a partially-typed
+  // in-progress row (e.g. an empty new entry the user just added via the
+  // auto-gen UI) doesn't fail the whole-array parse and wipe valid siblings.
+  // We pass entries through untouched here — the editor needs to see the
+  // in-progress shape so the user can complete it. Downstream consumers
+  // (the MCP service in electron/services/mcp/index.cjs) filter at their
+  // boundary by safeParse-ing against McpServerConfigSchema before
+  // attempting to connect. Items that don't validate are silently ignored
+  // there and never reach the subprocess spawn.
+  out.mcpServers = s.mcpServers as McpServerConfig[]
+
+  // Re-key pricingOverrides bare keys -> provider/model. Drop unresolvable
+  // bare keys and any entry whose numbers are non-finite.
+  const cleanedPricing: Record<string, ModelPricing> = {}
+  for (const [k, rawV] of Object.entries(s.pricingOverrides)) {
+    if (!rawV || typeof rawV !== 'object') continue
+    const v = rawV as { input?: unknown; output?: unknown }
+    if (typeof v.input !== 'number' || !Number.isFinite(v.input)) continue
+    if (typeof v.output !== 'number' || !Number.isFinite(v.output)) continue
+    const entry: ModelPricing = { input: v.input, output: v.output }
+    if (k.includes('/')) { cleanedPricing[k] = entry; continue }
+    const ownedBy = providerForModel(k)
+    if (ownedBy) cleanedPricing[`${ownedBy}/${k}`] = entry
+  }
+  out.pricingOverrides = cleanedPricing
+
+  // perAgentModel: upgrade legacy string entries; replace unresolved with the
+  // user's current default ref so the action stays linked.
+  const modelsForProvider = (p: Provider): string[] =>
+    p === 'ollama' ? out.ollamaModels : (adapters[p]?.models ?? [])
+  const fallback: AgentModelRef = {
+    provider: out.provider,
+    model: out.defaultModel[out.provider] ?? '',
+  }
+  const upgraded: Record<string, Record<string, AgentModelRef>> = {}
+  for (const [modeId, innerRaw] of Object.entries(s.perAgentModel)) {
+    if (!innerRaw || typeof innerRaw !== 'object') continue
+    const innerOut: Record<string, AgentModelRef> = {}
+    const inner = innerRaw as Record<string, unknown>
+    for (const [actionId, v] of Object.entries(inner)) {
+      if (typeof v === 'string') {
+        const p = providerForModel(v)
+        innerOut[actionId] = p ? { provider: p, model: v } : fallback
+      } else if (v && typeof v === 'object' && 'provider' in v && 'model' in v) {
+        const ref = v as AgentModelRef
+        innerOut[actionId] = modelsForProvider(ref.provider).includes(ref.model) ? ref : fallback
+      } else {
+        innerOut[actionId] = fallback
+      }
     }
-    if (changed) localStorage.setItem(SETTINGS_KEY, JSON.stringify(parsed))
-  } catch { /* ignore */ }
+    upgraded[modeId] = innerOut
+  }
+  out.perAgentModel = upgraded
+
+  // Clamp defaultModel[provider] against live models (Ollama uses the refreshed
+  // ollamaModels cache, not the static adapter seed).
+  const dm: Record<string, string> = { ...out.defaultModel }
+  for (const p of Object.keys(dm) as Provider[]) {
+    const avail = modelsForProvider(p)
+    if (avail.length > 0 && !avail.includes(dm[p])) {
+      dm[p] = avail[0]
+    }
+  }
+  out.defaultModel = dm as Settings['defaultModel']
+
+  return out
 }
 
-purgeLegacyOnce()
+export interface UseSettingsOptions {
+  /** Called once on first mount if salvage dropped any fields. Wired by
+   *  ServicesProvider to `notifications.showToast` so the boot warning surfaces
+   *  in the canonical toast UI. */
+  onDropped?: (dropped: string[]) => void
+}
 
-export function useSettings() {
-  const [settings, setSettings] = useLocalStorage<Settings>(SETTINGS_KEY, DEFAULT_SETTINGS)
+export function useSettings(opts: UseSettingsOptions = {}) {
+  const [raw, setRaw] = useLocalStorage<Settings>(SETTINGS_KEY, {} as Settings)
 
-  // Build the fully-defaulted settings once per stored-settings change. Without
-  // useMemo, every consumer render returned a new `merged` (and a new
-  // `merged.lintRules`, etc.), which fed unstable refs into downstream hooks
-  // like useLintIssues and triggered a render loop via its 300ms debounce.
-  const merged: Settings = useMemo(() => {
-    const m: Settings = {
-      ...DEFAULT_SETTINGS,
-      ...settings,
-      apiKeys: { ...DEFAULT_SETTINGS.apiKeys, ...(settings?.apiKeys || {}) },
-      defaultModel: { ...DEFAULT_SETTINGS.defaultModel, ...(settings?.defaultModel || {}) },
-      perAgentModel: { ...DEFAULT_SETTINGS.perAgentModel, ...(settings?.perAgentModel || {}) },
-      maxOutputTokens: { ...DEFAULT_SETTINGS.maxOutputTokens, ...(settings?.maxOutputTokens || {}) },
-      baseUrls: { ...DEFAULT_SETTINGS.baseUrls, ...(settings?.baseUrls || {}) },
-      ollamaModels: Array.isArray(settings?.ollamaModels) ? settings!.ollamaModels : DEFAULT_SETTINGS.ollamaModels,
-      lintRules: { ...DEFAULT_SETTINGS.lintRules, ...(settings?.lintRules || {}) },
-      pricingOverrides: { ...DEFAULT_SETTINGS.pricingOverrides, ...(settings?.pricingOverrides || {}) },
+  // Single salvage + postProcess per change of raw. useMemo so consumers don't
+  // get a fresh `settings` identity per render (the same render-loop concern
+  // the original file documented for `merged`).
+  const { settings, dropped } = useMemo(() => {
+    const sal = salvage(SettingsSchema, raw)
+    // The schema is intentionally permissive on `perAgentModel` /
+    // `pricingOverrides` value shapes so a single bad entry can't wipe the
+    // whole map. The structural cast here moves us into `SettingsLoose` so
+    // `postProcess` can do per-entry recovery.
+    return { settings: postProcess(sal.value as unknown as SettingsLoose), dropped: sal.dropped }
+  }, [raw])
+
+  // Boot-only: persist salvaged shape + invoke dropped callback once if
+  // anything was actually dropped. Effect runs with [] deps intentionally —
+  // this is a one-shot boot report. The salvaged `settings` is the value at
+  // first commit; React's StrictMode double-invoke is gated by didReportRef.
+  const onDroppedRef = useRef(opts.onDropped)
+  // eslint-disable-next-line react-hooks/refs -- intentional latest-value ref; the boot-only effect (deps []) must reach the freshest callback, so writing in an effect would lag by one render
+  onDroppedRef.current = opts.onDropped
+  const didReportRef = useRef(false)
+  useEffect(() => {
+    if (didReportRef.current) return
+    didReportRef.current = true
+    // Two reasons to persist back on first mount:
+    //  1. Salvage dropped fields (broken values replaced by defaults) — surface
+    //     the toast so the user knows.
+    //  2. Raw shape carries legacy top-level keys the schema doesn't know
+    //     about (e.g. `prompts`, `promptOverrides`). Without an active cleanup
+    //     these stick around forever because `update()` spreads from `prev`,
+    //     not the post-processed `settings`. Strip them silently — they were
+    //     never "reset", they just no longer exist.
+    const rawObj = (raw && typeof raw === 'object' && !Array.isArray(raw))
+      ? (raw as Record<string, unknown>)
+      : {}
+    const knownKeys = SettingsSchema.shape
+    const hasLegacyKeys = Object.keys(rawObj).some((k) => !(k in knownKeys))
+    if (dropped.length === 0 && !hasLegacyKeys) return
+    setRaw(settings)
+    if (dropped.length > 0) {
+      const cb = onDroppedRef.current
+      if (cb) cb(dropped)
     }
-    // For Ollama the adapter's static `models` array is just a pre-refresh seed;
-    // once the user has hit Refresh, settings.ollamaModels is the source of
-    // truth for what's actually installed. Validate against that exclusively so
-    // a stale seed entry (e.g. 'qwen2.5') can't survive into a model send and
-    // produce an "Ollama 404: model not found" at runtime.
-    for (const provider of Object.keys(m.defaultModel) as Provider[]) {
-      const available = provider === 'ollama'
-        ? m.ollamaModels
-        : (adapters[provider]?.models ?? [])
-      if (!available.includes(m.defaultModel[provider])) {
-        m.defaultModel[provider] = available[0] ?? DEFAULT_SETTINGS.defaultModel[provider]
-      }
-    }
-    // Clamp out-of-range streamChunkDelayMs from older builds or hand-edited storage.
-    if (!(ALLOWED_DELAYS as readonly number[]).includes(m.streamChunkDelayMs)) {
-      m.streamChunkDelayMs = 0
-    }
-    // Clamp font sizes to the slider range; default if nonsense.
-    if (!Number.isFinite(m.fontSize)) m.fontSize = DEFAULT_SETTINGS.fontSize
-    else m.fontSize = Math.min(24, Math.max(12, Math.round(m.fontSize)))
-    if (!Number.isFinite(m.chatFontSize)) m.chatFontSize = DEFAULT_SETTINGS.chatFontSize
-    else m.chatFontSize = Math.min(24, Math.max(12, Math.round(m.chatFontSize)))
-    // pricingOverrides: drop entries whose values are not finite numbers.
-    // Also upgrade legacy bare-model-id keys to `${provider}/${model}` so two
-    // adapters listing the same model id can carry independent overrides.
-    const cleaned: Record<string, ModelPricing> = {}
-    for (const [k, v] of Object.entries(m.pricingOverrides)) {
-      if (!v || !Number.isFinite(v.input) || !Number.isFinite(v.output)) continue
-      if (k.includes('/')) {
-        cleaned[k] = v
-        continue
-      }
-      const ownedBy = providerForModel(k)
-      if (ownedBy) {
-        cleaned[`${ownedBy}/${k}`] = v
-      }
-      // No adapter claims this bare model id — drop. Legacy entries for
-      // models that no longer exist were never resolvable anyway.
-    }
-    m.pricingOverrides = cleaned
-    // Normalize per-action overrides. Old storage held a bare model-id
-    // string per action; new storage holds { provider, model }. Upgrade
-    // bare strings via providerForModel; replace anything that no adapter
-    // claims with the user's current default ref so the action stays linked.
-    const fallbackRef: AgentModelRef = {
-      provider: m.provider,
-      model: m.defaultModel[m.provider],
-    }
-    // Same "ollamaModels supersedes seed once refreshed" rule the defaultModel
-    // validator above uses, applied provider-aware so the seed of one adapter
-    // can't accidentally validate a model owned by another.
-    const modelsForProvider = (p: Provider): string[] =>
-      p === 'ollama'
-        ? m.ollamaModels
-        : (adapters[p]?.models ?? [])
-    for (const modeId of Object.keys(m.perAgentModel)) {
-      const inner = m.perAgentModel[modeId] as unknown as Record<string, AgentModelRef | string>
-      for (const actionId of Object.keys(inner)) {
-        const v = inner[actionId]
-        if (typeof v === 'string') {
-          const provider = providerForModel(v)
-          if (provider) {
-            inner[actionId] = { provider, model: v }
-          } else {
-            inner[actionId] = fallbackRef
-          }
-        } else if (v && typeof v === 'object' && 'provider' in v && 'model' in v) {
-          // Validate the composite still resolves to an extant model under its own provider.
-          if (!modelsForProvider(v.provider as Provider).includes(v.model)) {
-            inner[actionId] = fallbackRef
-          }
-        } else {
-          inner[actionId] = fallbackRef
-        }
-      }
-    }
-    return m
-  }, [settings])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const update = useCallback((patch: Partial<Settings>) => {
-    setSettings((prev) => ({ ...prev, ...patch }))
-  }, [setSettings])
+    setRaw((prev) => {
+      const prevObj = (prev && typeof prev === 'object') ? prev : ({} as Settings)
+      return { ...prevObj, ...patch }
+    })
+  }, [setRaw])
 
   const modelForAgent = useCallback((modeId: string, agentId: string): AgentModelRef => {
     const fallback: AgentModelRef = {
-      provider: merged.provider,
-      model: merged.defaultModel[merged.provider],
+      provider: settings.provider,
+      model: settings.defaultModel[settings.provider] ?? '',
     }
-    if (merged.useDefaultModelForAll) return fallback
-    return merged.perAgentModel[modeId]?.[agentId] ?? fallback
-  }, [merged])
+    if (settings.useDefaultModelForAll) return fallback
+    return settings.perAgentModel[modeId]?.[agentId] ?? fallback
+  }, [settings])
 
   const getActionPrompt = useCallback((mode: Mode, actionId: string): string => {
     const action = mode.actions.find((a) => a.id === actionId)
@@ -228,10 +183,35 @@ export function useSettings() {
     return action.prompt
   }, [])
 
+  // Listener registry for contributions that live outside React's render tree.
+  // Hook consumers re-render via the `settings` value; non-React code (e.g.
+  // theme.contribution.ts) subscribes and re-reads on each fire.
+  const listenersRef = useRef<Set<() => void>>(new Set())
+
+  const subscribe = useCallback((cb: () => void): (() => void) => {
+    listenersRef.current.add(cb)
+    return () => { listenersRef.current.delete(cb) }
+  }, [])
+
+  // Fire listeners after commit so they observe the latest settings.
+  // Skip the initial mount notification — contributions call apply() once
+  // themselves on register and don't need a no-op refresh.
+  const didMountRef = useRef(false)
+  useEffect(() => {
+    if (!didMountRef.current) {
+      didMountRef.current = true
+      return
+    }
+    for (const l of listenersRef.current) {
+      try { l() } catch (e) { console.error('settings listener threw', e) }
+    }
+  }, [settings])
+
   return useMemo(() => ({
-    settings: merged,
+    settings,
     update,
     getActionPrompt,
     modelForAgent,
-  }), [merged, update, getActionPrompt, modelForAgent])
+    subscribe,
+  }), [settings, update, getActionPrompt, modelForAgent, subscribe])
 }

@@ -1,7 +1,15 @@
 export type OpenTab =
-  | { kind: 'markdown'; relPath: string; loadedMarkdown: string; mtimeMs: number }
+  | {
+      kind: 'markdown'
+      relPath: string
+      loadedMarkdown: string
+      mtimeMs: number
+      eol: 'lf' | 'crlf'
+      bom: boolean
+    }
   | { kind: 'settings' }
   | { kind: 'diff'; relPath: string; baseRef: string; baseLabel?: string }
+  | { kind: 'extension'; relPath: string; extensionId: string; mode: 'viewer' | 'editor' }
 
 export interface PinnedEntry {
   relPath: string

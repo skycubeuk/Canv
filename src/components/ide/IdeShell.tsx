@@ -90,7 +90,7 @@ function HorizontalShell(props: {
         {editor}
       </Panel>
       {dockSlot === 'right' && (
-        <Separator className="w-px bg-[rgb(var(--border-default))] hover:bg-[rgb(var(--border-strong))] transition-colors cursor-col-resize" />
+        <Separator className="w-px bg-border-default hover:bg-border-strong transition-colors cursor-col-resize" />
       )}
       {dockSlot === 'right' && (
         <Panel id="dockRight" minSize="20%" maxSize="50%" className="h-full">
@@ -115,7 +115,7 @@ function HorizontalShell(props: {
         {editorWithRight}
       </Panel>
       {dockSlot === 'bottom' && (
-        <Separator className="h-px bg-[rgb(var(--border-default))] hover:bg-[rgb(var(--border-strong))] transition-colors cursor-row-resize" />
+        <Separator className="h-px bg-border-default hover:bg-border-strong transition-colors cursor-row-resize" />
       )}
       {dockSlot === 'bottom' && (
         <Panel id="bottom" minSize="15%" maxSize="70%" className="min-h-0">
@@ -143,7 +143,7 @@ function HorizontalShell(props: {
       <Panel id="sidebar" minSize="12%" maxSize="40%" className="h-full">
         {sidebar}
       </Panel>
-      <Separator className="w-px bg-[rgb(var(--border-default))] hover:bg-[rgb(var(--border-strong))] transition-colors cursor-col-resize" />
+      <Separator className="w-px bg-border-default hover:bg-border-strong transition-colors cursor-col-resize" />
       <Panel id="main" minSize="40%" className="h-full min-w-0">
         {main}
       </Panel>

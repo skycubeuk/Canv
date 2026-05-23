@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
-import { BottomPanel } from './BottomPanel'
+import { Puzzle } from 'lucide-react'
+import { BottomPanel, type BottomPanelTabDef } from './BottomPanel'
 import { DockPlacementMenu } from './DockPlacementMenu'
 import { buildBottomPanelTabs, type BottomPanelTabsAdapter } from './bottomPanelTabs'
+import { BottomExtensionPanelSlot } from '../extensions/BottomExtensionPanelSlot'
 import { useDockBridge } from '../../hooks/useDockBridge'
 import { useModesState } from '../../hooks/useModes'
 import type { DockState, UserAction } from '../../lib/dockTypes'
 import type { PendingApproval, ChatProvider } from '../ChatPanel'
 import type { RunRecord } from '../ResultsPanel'
 import type { LintIssue } from '../../lib/lintTypes'
-import { applyAccent, applyTheme, resolveTheme } from '../../lib/accent'
+import { applyAccent, resolveTheme } from '../../lib/accent'
 import { DialogProvider } from '../../lib/dialogs'
 import { ContextMenuProvider } from '../../lib/contextMenu'
 import { getCanvHistory } from '../../lib/history'
@@ -34,7 +36,9 @@ export function DockPopoutBoot() {
   // accent rails) falls back to undefined and the window renders unstyled.
   useEffect(() => {
     if (!state) return
-    applyTheme(resolveTheme(state.ui.theme))
+    const resolved = resolveTheme(state.ui.theme)
+    // TEMP: legacy 'dark'/'light' remap until Phase 2 (Tasks 11-14) replaces this with applyTheme(state.ui.theme)
+    document.documentElement.dataset.theme = resolved === 'dark' ? 'canv-dark' : resolved === 'light' ? 'canv-light' : resolved
     applyAccent(state.ui.accent)
   }, [state])
 
@@ -44,7 +48,10 @@ export function DockPopoutBoot() {
   useEffect(() => {
     if (theme !== 'system') return
     const mq = window.matchMedia('(prefers-color-scheme: dark)')
-    const apply = (matches: boolean) => applyTheme(matches ? 'dark' : 'light')
+    const apply = (matches: boolean) => {
+      // TEMP: same legacy remap until Phase 2 rewires this to applyTheme('system')
+      document.documentElement.dataset.theme = matches ? 'canv-dark' : 'canv-light'
+    }
     apply(mq.matches)
     const handler = (e: MediaQueryListEvent) => apply(e.matches)
     mq.addEventListener('change', handler)
@@ -124,7 +131,20 @@ export function DockPopoutBoot() {
     }
   }, [state, bridge, pendingApprovalsMap])
 
-  const tabs = useMemo(() => (adapter ? buildBottomPanelTabs(adapter) : []), [adapter])
+  const tabs = useMemo<BottomPanelTabDef[]>(() => {
+    if (!adapter) return []
+    const builtin = buildBottomPanelTabs(adapter)
+    // Mirror WorkspaceShell.tsx's extensionBottomTabs mapping. Bounds reported
+    // by BottomExtensionPanelSlot are window-local; main reparents the
+    // WebContentsView to this popout window when it first sees a slot here.
+    const ext = (state?.bottomDockExtensionPanels ?? []).map((p) => ({
+      id: `ext:${p.extensionId}:${p.id}`,
+      label: p.title,
+      icon: Puzzle,
+      render: () => <BottomExtensionPanelSlot slotId={`ext:${p.extensionId}:${p.id}`} />,
+    }))
+    return [...builtin, ...ext]
+  }, [adapter, state?.bottomDockExtensionPanels])
 
   // Modes config not yet ready (cold-load race) — show a placeholder. Same
   // gate the main window applies; without it RunsTab's useModes() would throw.

@@ -54,7 +54,7 @@ export function OutputTab({ runs, sessions, activeSessionId, getSession, chatSys
         {chatAvailable && (
           <select
             aria-label="Output source"
-            className="input text-xs"
+            className="input w-auto text-xs"
             value={source}
             onChange={(e) => setSource(e.target.value as Source)}
           >
@@ -66,7 +66,7 @@ export function OutputTab({ runs, sessions, activeSessionId, getSession, chatSys
         {source === 'runs' ? (
           runs.length > 0 ? (
             <select
-              className="input text-xs"
+              className="input w-auto text-xs"
               value={activeRun?.id ?? ''}
               onChange={(e) => setSelectedRunId(e.target.value)}
               aria-label="Select run"
@@ -82,7 +82,7 @@ export function OutputTab({ runs, sessions, activeSessionId, getSession, chatSys
           )
         ) : sessions && sessions.length > 0 ? (
           <select
-            className="input text-xs"
+            className="input w-auto text-xs"
             value={activeSession?.id ?? ''}
             onChange={(e) => setSelectedSessionId(e.target.value)}
             aria-label="Select chat session"

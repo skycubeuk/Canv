@@ -28,7 +28,7 @@ export function BottomPanel({ tabs, activeTab, onSelectTab, onClose, headerRight
       aria-label="Bottom panel"
       className="h-full flex flex-col bg-panel border-t border-default min-h-0"
     >
-      <header className="shrink-0 flex items-center h-9 px-1.5 border-b border-default text-[11.5px]">
+      <header className="shrink-0 flex items-center h-9 px-1.5 border-b border-default text-xs">
         {tabs.map((t) => {
           const isActive = t.id === active.id
           return (

@@ -54,7 +54,7 @@ export function ChatMeter({ messages, provider, model, overrides, defaults, busy
     >
       <span>{turnText}</span>
       <span>
-        {busy && <span className="text-emerald-500">● streaming · </span>}
+        {busy && <span className="text-success-fg">● streaming · </span>}
         session: {fmtCost(sessionCost)}
       </span>
     </div>

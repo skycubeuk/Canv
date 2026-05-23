@@ -33,7 +33,7 @@ export function OutlinePanel(props: OutlinePanelProps) {
       <button
         type="button"
         onClick={onToggleSectionCollapsed}
-        className="shrink-0 flex items-center gap-1 px-3 py-2 text-[10.5px] font-semibold tracking-wider uppercase text-subtle hover:bg-hover border-b border-default"
+        className="shrink-0 flex items-center gap-1 px-3 pt-2.5 pb-2 min-h-[40px] text-[10.5px] font-semibold tracking-wider uppercase text-subtle hover:bg-hover border-b border-default"
         aria-expanded={!collapsed}
       >
         {collapsed ? (

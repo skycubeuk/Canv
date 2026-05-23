@@ -26,7 +26,7 @@ export function ErrorScreen({ errors, configDir, onReveal }: Props) {
     <div className="min-h-screen bg-app text-default p-8 overflow-auto">
       <div className="max-w-3xl mx-auto">
         <header className="flex items-start gap-3 mb-6">
-          <AlertTriangle className="w-7 h-7 text-amber-600 shrink-0 mt-1" />
+          <AlertTriangle className="w-7 h-7 text-warning shrink-0 mt-1" />
           <div>
             <h1 className="text-xl font-semibold">Canv could not start</h1>
             <p className="text-sm text-muted mt-1">

@@ -175,7 +175,7 @@ export function RunView({
       )}
 
       {run.status === 'error' && (
-        <div className="px-4 py-3 m-3 bg-red-950/30 border border-red-900 rounded-sm text-sm text-red-300">
+        <div className="px-4 py-3 m-3 bg-danger-soft border border-danger rounded-sm text-sm text-danger-fg">
           {run.error || 'Something went wrong.'}
         </div>
       )}
@@ -187,7 +187,7 @@ export function RunView({
       )}
 
       {run.truncated && run.status !== 'error' && !busy && (
-        <div className="px-4 py-3 m-3 bg-amber-950/30 border border-amber-900 rounded-sm text-sm text-amber-200">
+        <div className="px-4 py-3 m-3 bg-warning-soft border border-warning rounded-sm text-sm text-warning-fg">
           <strong>Response was cut short.</strong> The model hit the output token
           limit before finishing. Raise <em>Max output tokens</em> in settings, or
           split the selection into smaller chunks. The result below is incomplete —
@@ -348,14 +348,14 @@ function DiffView({ original, updated }: { original: string; updated: string }) 
         {parts.map((p, i) => {
           if (p.added) {
             return (
-              <span key={i} className="bg-green-900/40 text-green-200">
+              <span key={i} className="bg-success-soft text-success-fg">
                 {p.value}
               </span>
             )
           }
           if (p.removed) {
             return (
-              <span key={i} className="bg-red-900/40 text-red-200 line-through">
+              <span key={i} className="bg-danger-soft text-danger-fg line-through">
                 {p.value}
               </span>
             )
@@ -368,11 +368,11 @@ function DiffView({ original, updated }: { original: string; updated: string }) 
 }
 
 const STATUS_PILL: Record<RunRecord['status'], { label: string; className: string }> = {
-  streaming: { label: 'Streaming', className: 'bg-blue-900/40 text-blue-300' },
-  refining:  { label: 'Refining',  className: 'bg-purple-900/40 text-purple-300' },
-  done:      { label: 'Done',      className: 'bg-green-900/40 text-green-300' },
-  error:     { label: 'Error',     className: 'bg-red-900/40 text-red-300' },
-  aborted:   { label: 'Stopped',   className: 'bg-neutral-700/60 text-neutral-300' },
+  streaming: { label: 'Streaming', className: 'bg-info-soft text-info-fg' },
+  refining:  { label: 'Refining',  className: 'bg-accent-soft text-accent' },
+  done:      { label: 'Done',      className: 'bg-success-soft text-success-fg' },
+  error:     { label: 'Error',     className: 'bg-danger-soft text-danger-fg' },
+  aborted:   { label: 'Stopped',   className: 'bg-elev text-muted' },
 }
 
 export function StatusPill({ status }: { status: RunRecord['status'] }) {

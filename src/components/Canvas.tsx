@@ -1,6 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { EditorView } from '@codemirror/view'
-import { makeMarkdownState } from '../lib/cm/markdownEditor'
+import type { Extension } from '@codemirror/state'
+import { makeMarkdownState, languageCompartment, type ActiveEditorUpdateInfo } from '../lib/cm/markdownEditor'
+import { loadLanguageFor } from '../extensions-runtime/languageLoader'
 import { markdownToHtml } from '../lib/markdown'
 import type { LineWidth } from '../hooks/useSettings'
 import type { OpenTab, EditorGroupId } from '../types/workspace'
@@ -30,6 +32,11 @@ interface Props {
   // user's in-flight edits, while loadedMarkdown is only the disk snapshot.
   // Without this, a layout-driven remount resets the view to the disk text.
   getInitialBuffer?: (groupId: EditorGroupId, rel: string) => string | undefined
+  /**
+   * When provided and this tab isActive, fired on every doc/selection
+   * transaction. Used by the extensions bridge to replace the 400ms poll.
+   */
+  onActiveEditorUpdate?: (info: ActiveEditorUpdateInfo) => void
 }
 
 const widthClass: Record<LineWidth, string> = {
@@ -51,7 +58,7 @@ const editorTypographyTheme = EditorView.theme({
 export function Canvas({
   groupId, tab, isActive, fontSize, lineWidth, viewMode,
   onChange, onSelectionChange, onEditorReady, onEditorDestroy,
-  onJumperReady, onJumperDestroy, getInitialBuffer,
+  onJumperReady, onJumperDestroy, getInitialBuffer, onActiveEditorUpdate,
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const viewRef = useRef<EditorView | null>(null)
@@ -70,14 +77,18 @@ export function Canvas({
   // Latest callbacks via ref so the editor construction doesn't capture stale closures.
   const onChangeRef = useRef(onChange)
   const onSelectionChangeRef = useRef(onSelectionChange)
+  const onActiveEditorUpdateRef = useRef(onActiveEditorUpdate)
   // The jumper closes over the latest viewMode so a single registered function
   // routes correctly across edit↔preview toggles without re-registration.
   const viewModeRef = useRef<ViewMode>(viewMode)
+  const isActiveRef = useRef(isActive)
   useEffect(() => {
     onChangeRef.current = onChange
     onSelectionChangeRef.current = onSelectionChange
+    onActiveEditorUpdateRef.current = onActiveEditorUpdate
     viewModeRef.current = viewMode
-  }, [onChange, onSelectionChange, viewMode])
+    isActiveRef.current = isActive
+  }, [onChange, onSelectionChange, onActiveEditorUpdate, viewMode, isActive])
 
   useLayoutEffect(() => {
     const container = containerRef.current
@@ -92,10 +103,26 @@ export function Canvas({
         onChangeRef.current(groupId, tab.relPath, doc)
       },
       onSelectionChange: () => onSelectionChangeRef.current?.(groupId, tab.relPath),
+      onActiveEditorUpdate: (info) => {
+        if (!isActiveRef.current) return
+        onActiveEditorUpdateRef.current?.(info)
+      },
+      activeRel: tab.relPath,
     }, [editorTypographyTheme])
     const view = new EditorView({ state, parent: container })
     viewRef.current = view
     onEditorReady(groupId, tab.relPath, view)
+
+    // Asynchronously load a LanguageSupport from a workspace extension if one
+    // claims this file's extension. Reconfigures the language compartment in-place
+    // so the built-in markdown support is replaced without rebuilding the view.
+    // We guard with `viewRef.current === view` so a stale promise from a
+    // previous mount can never reconfigure a different file's editor.
+    void loadLanguageFor(tab.relPath).then((extLang) => {
+      if (extLang && viewRef.current === view) {
+        view.dispatch({ effects: languageCompartment.reconfigure(extLang as Extension) })
+      }
+    })
 
     const jumper: Jumper = (line, index) => {
       if (viewModeRef.current === 'preview') {
@@ -171,8 +198,7 @@ export function Canvas({
 
   return (
     <div
-      className="h-full flex flex-col min-h-0"
-      style={{ display: isActive ? 'flex' : 'none' }}
+      className={`h-full flex-col min-h-0 ${isActive ? 'flex' : 'hidden'}`}
     >
       <div className="flex-1 overflow-auto bg-app min-h-0">
         <div
@@ -181,8 +207,7 @@ export function Canvas({
         >
           <div
             ref={containerRef}
-            className="cm-host flex-1 min-h-0"
-            style={{ display: viewMode === 'edit' ? 'block' : 'none' }}
+            className={`cm-host flex-1 min-h-0 ${viewMode === 'edit' ? 'block' : 'hidden'}`}
           />
           {viewMode === 'preview' && (
             // TODO(0.7.1): light-theme prose colours — currently always renders prose-invert; light-theme preview will look off.

@@ -21,6 +21,26 @@ export function SidebarFooter({ settings, onUpdateSettings, workspaceName }: Pro
   )
 }
 
+/** Resolve the "what gets used right now" provider+model pair from the settings
+ *  shape. Falls back to the first configured provider when the user's chosen
+ *  default provider has no API key. Returns the provider's model from
+ *  `defaultModel`, clamped to the adapter's models list when it's stale (e.g.
+ *  a previously-saved Anthropic model name still sitting on the openai entry
+ *  before postProcess catches up). */
+function resolveEffectivePair(settings: Settings): { provider: Provider; model: string; configured: boolean } {
+  const configuredIds = new Set<Provider>(configuredProviders(settings))
+  const configured = configuredIds.has(settings.provider)
+  const provider: Provider = configured
+    ? settings.provider
+    : ((adapterList.find((a) => configuredIds.has(a.id as Provider))?.id as Provider | undefined) ?? settings.provider)
+  const models = provider === 'ollama' ? settings.ollamaModels : getAdapter(provider).models
+  const candidate = settings.defaultModel[provider]
+  const model = models.length === 0
+    ? candidate
+    : (models.includes(candidate) ? candidate : (models[0] ?? candidate))
+  return { provider, model, configured }
+}
+
 function WorkspaceSwitcherButton({
   settings,
   onUpdate,
@@ -32,7 +52,8 @@ function WorkspaceSwitcherButton({
 }) {
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement | null>(null)
-  const currentModel = settings.defaultModel[settings.provider]
+  const effective = resolveEffectivePair(settings)
+  const currentModel = effective.model
   const rawName = workspaceName
     ? (Math.max(workspaceName.lastIndexOf('/'), workspaceName.lastIndexOf('\\')) >= 0
         ? workspaceName.slice(Math.max(workspaceName.lastIndexOf('/'), workspaceName.lastIndexOf('\\')) + 1)
@@ -88,20 +109,23 @@ function WorkspaceSwitcherButton({
         const visibleProviders = configuredIds.size > 0
           ? adapterList.filter((a) => configuredIds.has(a.id as Provider))
           : adapterList // empty-state fallback so the picker isn't empty
-        // Settings → Default provider remembers an unconfigured choice; the sidebar
-        // dropdown clamps display to a visible option so the <select> value matches
-        // a rendered <option>. settings.provider itself is never overwritten here.
-        const providerVisible = visibleProviders.some((a) => a.id === settings.provider)
-        const displayProvider: Provider = providerVisible
-          ? settings.provider
-          : ((visibleProviders[0]?.id as Provider | undefined) ?? settings.provider)
-        const displayAdapter = getAdapter(displayProvider)
+        // settings.provider may point at an unconfigured provider (e.g. user
+        // removed the API key after first run). Dropdown displays the
+        // effective provider's pair so the controls reflect what's actually
+        // in use; the chosen provider is left intact in settings so the user's
+        // earlier preference is remembered if they re-add the key.
+        const displayProvider: Provider = effective.provider
         const displayModels = displayProvider === 'ollama'
           ? settings.ollamaModels
-          : displayAdapter.models
-        const displayModel = providerVisible
-          ? currentModel
-          : (displayModels[0] ?? currentModel)
+          : getAdapter(displayProvider).models
+        // The <select> `value` must read from defaultModel[displayProvider] so
+        // user clicks in the dropdown are reflected back. Reading from a
+        // hard-coded `displayModels[0]` previously made every click look like
+        // a no-op even though the update persisted correctly.
+        const persistedForProvider = settings.defaultModel[displayProvider]
+        const displayModel = displayModels.length === 0
+          ? persistedForProvider
+          : (displayModels.includes(persistedForProvider) ? persistedForProvider : displayModels[0])
         return (
           <div className="absolute left-0 right-0 bottom-full mb-1 bg-elev border border-default rounded-lg shadow-lg z-30 p-3 space-y-2">
             <div>

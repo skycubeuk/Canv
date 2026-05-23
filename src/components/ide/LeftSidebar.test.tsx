@@ -1,7 +1,10 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { useState } from 'react'
+import { Plus, FolderPlus, FolderOpen } from 'lucide-react'
 import { LeftSidebar } from './LeftSidebar'
+import type { SidebarPanelDef } from './LeftSidebar'
+import { SidebarIconButton } from './sidebar/SidebarChrome'
 import type { Settings } from '../../hooks/useSettings'
 
 vi.mock('react-resizable-panels', () => ({
@@ -30,132 +33,154 @@ const SETTINGS: Settings = {
   },
 } as Settings
 
+function makePanels(overrides: Partial<Record<string, React.ReactNode>> = {}): SidebarPanelDef[] {
+  return [
+    {
+      id: 'files' as const,
+      title: 'Workspace',
+      headerActions: (
+        <>
+          <SidebarIconButton aria-label="New file" icon={Plus} onClick={vi.fn()} />
+          <SidebarIconButton aria-label="New folder" icon={FolderPlus} onClick={vi.fn()} />
+          <SidebarIconButton aria-label="Change workspace" icon={FolderOpen} onClick={vi.fn()} />
+        </>
+      ),
+      body: overrides.files ?? <div data-testid="files-tab">FILES</div>,
+    },
+    {
+      id: 'search' as const,
+      title: 'Search',
+      body: overrides.search ?? <div data-testid="search-tab">SEARCH</div>,
+    },
+    {
+      id: 'history' as const,
+      title: 'History',
+      body: overrides.history ?? <div data-testid="history-tab">HISTORY</div>,
+    },
+    {
+      id: 'sites' as const,
+      title: 'Sites',
+      body: overrides.sites ?? <div data-testid="sites-tab">SITES</div>,
+    },
+    {
+      id: 'extensions' as const,
+      title: 'Extensions',
+      body: overrides.extensions ?? <div data-testid="extensions-tab">EXT</div>,
+    },
+  ]
+}
+
 function baseProps() {
   return {
     activeTab: 'files' as const,
-    onSelectTab: vi.fn(),
-    files: <div data-testid="files-tab">FILES</div>,
-    search: <div data-testid="search-tab">SEARCH</div>,
-    history: <div data-testid="history-tab">HISTORY</div>,
-    historyEnabled: true,
+    panels: makePanels(),
     settings: SETTINGS,
     onUpdateSettings: vi.fn(),
     workspaceName: 'test-workspace',
+    outline: null,
     outlineSize: 40,
     onOutlineSizeChange: vi.fn(),
-    onNewFile: vi.fn(),
-    onNewFolder: vi.fn(),
-    onChangeWorkspace: vi.fn(),
   }
 }
 
-describe('LeftSidebar', () => {
-  it('renders the active tab body without splitter when outline-solid is null', () => {
-    render(<LeftSidebar {...baseProps()} outline={null} />)
+describe('LeftSidebar (panel-def API)', () => {
+  it('renders the active panel body', () => {
+    render(<LeftSidebar {...baseProps()} />)
     expect(screen.getByTestId('files-tab')).toBeInTheDocument()
-    expect(screen.queryByTestId('outline-section')).not.toBeInTheDocument()
   })
 
-  it('renders the outline-solid section beside the file tree when on Files tab', () => {
+  it('renders the active panel title in the shared header', () => {
+    render(<LeftSidebar {...baseProps()} />)
+    expect(screen.getByText('Workspace')).toBeInTheDocument()
+  })
+
+  it('renders header actions declared by the active panel', () => {
+    render(<LeftSidebar {...baseProps()} />)
+    expect(screen.getByRole('button', { name: /new file/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /new folder/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /change workspace/i })).toBeInTheDocument()
+  })
+
+  it('switches body and title when activeTab changes', () => {
+    render(<LeftSidebar {...{ ...baseProps(), activeTab: 'sites' as const }} />)
+    expect(screen.getByTestId('sites-tab')).toBeInTheDocument()
+    expect(screen.getByText('Sites')).toBeInTheDocument()
+  })
+
+  it('renders the outline split panel only when on files tab + outline provided', () => {
     const props = baseProps()
-    render(
-      <LeftSidebar
-        {...props}
-        outline={<div data-testid="outline-section">OUTLINE</div>}
-      />,
+    const { rerender } = render(
+      <LeftSidebar {...props} outline={<div data-testid="outline-section">OUTLINE</div>} />,
     )
-    expect(screen.getByTestId('files-tab')).toBeInTheDocument()
     expect(screen.getByTestId('outline-section')).toBeInTheDocument()
-  })
-
-  it('does not render outline-solid when active tab is search', () => {
-    const props = { ...baseProps(), activeTab: 'search' as const }
-    render(
+    rerender(
       <LeftSidebar
-        {...props}
+        {...{ ...props, activeTab: 'search' as const }}
         outline={<div data-testid="outline-section">OUTLINE</div>}
       />,
     )
     expect(screen.queryByTestId('outline-section')).not.toBeInTheDocument()
-    expect(screen.getByTestId('search-tab')).toBeInTheDocument()
   })
 
-  it('does not render outline-solid when active tab is history', () => {
-    const props = { ...baseProps(), activeTab: 'history' as const }
-    render(
-      <LeftSidebar
-        {...props}
-        outline={<div data-testid="outline-section">OUTLINE</div>}
-      />,
-    )
-    expect(screen.queryByTestId('outline-section')).not.toBeInTheDocument()
-    expect(screen.getByTestId('history-tab')).toBeInTheDocument()
-  })
-
-  it('shows search body when activeTab is search', () => {
-    const props = { ...baseProps(), activeTab: 'search' as const }
-    render(<LeftSidebar {...props} outline={null} />)
-    expect(screen.getByTestId('search-tab')).toBeInTheDocument()
-  })
-
-  it('renders a Change workspace button that calls onChangeWorkspace when clicked', () => {
-    const onChangeWorkspace = vi.fn()
-    render(
-      <LeftSidebar
-        {...baseProps()}
-        onChangeWorkspace={onChangeWorkspace}
-        outline={null}
-      />,
-    )
-    fireEvent.click(screen.getByRole('button', { name: /change workspace/i }))
-    expect(onChangeWorkspace).toHaveBeenCalledTimes(1)
-  })
-
-  it('shows the Sites tab body when activeTab=sites', () => {
-    const props = { ...baseProps(), activeTab: 'sites' as const }
-    render(
-      <LeftSidebar
-        {...props}
-        sites={<div data-testid="sites-body">sites body</div>}
-        outline={null}
-      />,
-    )
-    expect(screen.getByTestId('sites-body')).toBeInTheDocument()
-  })
-
-  it('preserves the file tree subtree when the outline-solid appears', () => {
-    // Regression: the outline panel spawning would unmount FileTree and
-    // wipe its expanded-folders local state. Verify that a stateful child
-    // mounted inside the `files` slot survives the outline transition.
+  it('preserves the files subtree when the outline appears (no remount)', () => {
     function FilesWithCounter() {
       const [count, setCount] = useState(0)
       return (
         <div>
-          <button data-testid="bump" onClick={() => setCount((c) => c + 1)}>
-            bump
-          </button>
+          <button data-testid="bump" onClick={() => setCount((c) => c + 1)}>bump</button>
           <span data-testid="count">{count}</span>
         </div>
       )
     }
-    const props = baseProps()
     const filesNode = <FilesWithCounter />
-    const { rerender } = render(
-      <LeftSidebar {...props} files={filesNode} outline={null} />,
-    )
+    const props = { ...baseProps(), panels: makePanels({ files: filesNode }) }
+    const { rerender } = render(<LeftSidebar {...props} />)
     fireEvent.click(screen.getByTestId('bump'))
     fireEvent.click(screen.getByTestId('bump'))
     expect(screen.getByTestId('count').textContent).toBe('2')
 
-    // Outline appears — FilesWithCounter must keep its state.
+    const nextProps = { ...props, panels: makePanels({ files: filesNode }) }
     rerender(
-      <LeftSidebar
-        {...props}
-        files={filesNode}
-        outline={<div data-testid="outline-section">OUTLINE</div>}
-      />,
+      <LeftSidebar {...nextProps} outline={<div data-testid="outline-section">OUTLINE</div>} />,
     )
     expect(screen.getByTestId('outline-section')).toBeInTheDocument()
     expect(screen.getByTestId('count').textContent).toBe('2')
+  })
+
+  it('renders an optional panel-level footer', () => {
+    const panels = makePanels()
+    panels[2] = { ...panels[2], footer: <div data-testid="history-footer">FT</div> }
+    render(<LeftSidebar {...{ ...baseProps(), panels, activeTab: 'history' as const }} />)
+    expect(screen.getByTestId('history-footer')).toBeInTheDocument()
+  })
+})
+
+describe('LeftSidebar — all panels share the same chrome', () => {
+  it('every panel renders its title in the SidebarHeader slot', () => {
+    const cases = [
+      { tab: 'files' as const, title: 'Workspace' },
+      { tab: 'search' as const, title: 'Search' },
+      { tab: 'history' as const, title: 'History' },
+      { tab: 'sites' as const, title: 'Sites' },
+      { tab: 'extensions' as const, title: 'Extensions' },
+    ]
+    for (const c of cases) {
+      const { unmount } = render(<LeftSidebar {...{ ...baseProps(), activeTab: c.tab }} />)
+      expect(screen.getByText(c.title)).toBeInTheDocument()
+      const aside = screen.getByRole('complementary')
+      const header = aside.querySelector('header')
+      expect(header).toBeTruthy()
+      expect(header!.textContent).toContain(c.title)
+      unmount()
+    }
+  })
+
+  it('panels declaring headerActions render them in the header (not the body)', () => {
+    render(<LeftSidebar {...baseProps()} />)
+    const aside = screen.getByRole('complementary')
+    const header = aside.querySelector('header')!
+    expect(header.querySelector('button[aria-label="New file"]')).toBeTruthy()
+    expect(header.querySelector('button[aria-label="New folder"]')).toBeTruthy()
+    expect(header.querySelector('button[aria-label="Change workspace"]')).toBeTruthy()
   })
 })

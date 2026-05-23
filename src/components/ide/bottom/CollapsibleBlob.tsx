@@ -34,9 +34,9 @@ export function CollapsibleBlob({ name, body, error, denied, defaultOpen }: Prop
         <span className="text-subtle">·</span>
         <span className="text-subtle">{size}</span>
         {denied ? (
-          <span className="ml-1 px-1 rounded-sm bg-amber-700/40 text-amber-200">denied</span>
+          <span className="ml-1 px-1 rounded-sm bg-warning-soft text-warning-fg">denied</span>
         ) : error ? (
-          <span className="ml-1 px-1 rounded-sm bg-red-800/40 text-red-200">err</span>
+          <span className="ml-1 px-1 rounded-sm bg-danger-soft text-danger-fg">err</span>
         ) : null}
       </button>
       {open && (

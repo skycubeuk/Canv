@@ -7,27 +7,36 @@ on:
       - main
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.ref }}-${{ github.workflow }}
   cancel-in-progress: true
 
 jobs:
   test:
-    name: Lint, test, build
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+    name: Lint, test, build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: 20
+          # Track .nvmrc so dev and CI stay in lock-step. Bump the version
+          # there, not here.
+          node-version-file: '.nvmrc'
           cache: npm
 
       - name: Install dependencies
-        run: npm ci
+        # macOS runners occasionally hit an EEXIST symlink race in electron's
+        # postinstall (extract-zip racing on Electron.framework symlinks).
+        # On failure, wipe the partial electron install and retry once.
+        run: npm ci || (echo "first npm ci failed; cleaning + retrying" && rm -rf node_modules/electron && npm ci)
 
       - name: Lint (non-blocking)
         run: npm run lint
@@ -38,3 +47,7 @@ jobs:
 
       - name: Build (renderer)
         run: npm run build
+
+      - name: Keystroke benchmark (warning-only)
+        run: npm run test:bench
+        continue-on-error: true

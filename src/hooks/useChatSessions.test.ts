@@ -126,6 +126,38 @@ describe('useChatSessions — lifecycle', () => {
     expect(result.current.sessions[0].title).toBe('New chat')
     expect(result.current.sessions[0].provider).toBe('anthropic')
   })
+
+  it('closing the last session when settings.provider is unconfigured falls back to a configured provider', () => {
+    // Repro: user's default provider is openai but only anthropic has a key.
+    // The init path uses pickDefaultProviderModel and lands on anthropic, but
+    // closing the last session must do the same — not fall back to the raw
+    // settings.provider, which would leave the user staring at an openai
+    // session they can't send to.
+    const args = makeArgs()
+    args.settings.provider = 'openai'
+    args.settings.apiKeys = { anthropic: 'k', openai: '', ollama: '' }
+    args.settings.baseUrls = {}
+    const { result } = renderHook(() => useChatSessions(args))
+    // Init already correctly chose anthropic — verify, then exercise the close path.
+    expect(result.current.sessions[0].provider).toBe('anthropic')
+    const only = result.current.activeId
+    act(() => { result.current.closeSession(only) })
+    expect(result.current.sessions).toHaveLength(1)
+    expect(result.current.sessions[0].provider).toBe('anthropic')
+    expect(result.current.sessions[0].model).toBe('claude-sonnet-4-6')
+  })
+
+  it('createSession when settings.provider is unconfigured falls back to a configured provider', () => {
+    const args = makeArgs()
+    args.settings.provider = 'openai'
+    args.settings.apiKeys = { anthropic: 'k', openai: '', ollama: '' }
+    args.settings.baseUrls = {}
+    const { result } = renderHook(() => useChatSessions(args))
+    act(() => { result.current.createSession() })
+    const created = result.current.sessions.find((s) => s.id === result.current.activeId)!
+    expect(created.provider).toBe('anthropic')
+    expect(created.model).toBe('claude-sonnet-4-6')
+  })
 })
 
 describe('useChatSessions — per-session model lock', () => {
@@ -178,9 +210,21 @@ describe('useChatSessions — active-session selectors', () => {
     expect(result.current.apiKeyMissing).toBe(false)
   })
 
-  it('sendChat short-circuits when the active session provider lacks credentials, even if another provider is configured', async () => {
+  it('sendChat short-circuits when a LOCKED active session is on an unconfigured provider, even if another provider is configured', async () => {
+    // Pre-seed a locked anthropic session before openai becomes the only
+    // configured provider. Empty sessions are auto-reseeded to a configured
+    // provider at boot (see "useChatSessions — bootstrap"), so this scenario
+    // is only reachable for sessions that have already accrued messages.
+    const lockedSession = {
+      id: 'cs-locked',
+      createdAt: 1000,
+      provider: 'anthropic' as const,
+      model: 'claude-sonnet-4-6',
+      messages: [{ id: 'm-1', role: 'user' as const, content: 'earlier' }],
+    }
+    localStorage.setItem('canv:chatSessions', JSON.stringify({ sessions: [lockedSession], activeId: 'cs-locked' }))
+
     const args = makeArgs()
-    // Global apiKeyMissing is false (openai has a key) but active session is anthropic (no key).
     args.settings.apiKeys = { anthropic: '', openai: 'sk-x', ollama: '' }
     args.settings.baseUrls = {}
     const openSettingsTab = vi.fn()
@@ -188,10 +232,60 @@ describe('useChatSessions — active-session selectors', () => {
     args.openSettingsTab = openSettingsTab
     args.showToast = showToast
     const { result } = renderHook(() => useChatSessions(args))
+    // Session stayed locked on anthropic (messages.length > 0); reseed skips it.
+    expect(result.current.sessions[0].provider).toBe('anthropic')
     expect(result.current.apiKeyMissing).toBe(false)
     await act(async () => { await result.current.sendChat('hello') })
     expect(openSettingsTab).toHaveBeenCalledTimes(1)
     expect(showToast).toHaveBeenCalledWith('Add an API key first.')
+  })
+
+  it('empty sessions follow settings.provider/defaultModel changes after boot', () => {
+    const args = makeArgs()
+    args.settings.apiKeys = { anthropic: 'k', openai: 'k', ollama: '' }
+    args.settings.baseUrls = {}
+    args.settings.provider = 'anthropic'
+    args.settings.defaultModel = { anthropic: 'claude-sonnet-4-6', openai: 'gpt-4o', ollama: 'llama3.1' }
+    const { result, rerender } = renderHook(({ s }) => useChatSessions({ ...args, settings: s }), {
+      initialProps: { s: args.settings },
+    })
+    expect(result.current.sessions[0].provider).toBe('anthropic')
+    expect(result.current.sessions[0].model).toBe('claude-sonnet-4-6')
+
+    rerender({ s: { ...args.settings, provider: 'openai' } as typeof args.settings })
+
+    expect(result.current.sessions[0].provider).toBe('openai')
+    expect(result.current.sessions[0].model).toBe('gpt-4o')
+
+    rerender({ s: { ...args.settings, provider: 'openai', defaultModel: { anthropic: 'claude-sonnet-4-6', openai: 'gpt-4o-mini', ollama: 'llama3.1' } } as typeof args.settings })
+
+    expect(result.current.sessions[0].provider).toBe('openai')
+    expect(result.current.sessions[0].model).toBe('gpt-4o-mini')
+  })
+
+  it('an EMPTY active session whose provider is unconfigured is reseeded to the configured default at boot', async () => {
+    // Pre-seed an empty anthropic session, then boot with only openai
+    // configured. The reseed should migrate the empty session to openai.
+    const emptySession = {
+      id: 'cs-empty',
+      createdAt: 1000,
+      provider: 'anthropic' as const,
+      model: 'claude-opus-4-7',
+      messages: [],
+    }
+    localStorage.setItem('canv:chatSessions', JSON.stringify({ sessions: [emptySession], activeId: 'cs-empty' }))
+
+    const args = makeArgs()
+    args.settings.apiKeys = { anthropic: '', openai: 'sk-x', ollama: '' }
+    args.settings.baseUrls = {}
+    const { result } = renderHook(() => useChatSessions(args))
+    expect(result.current.sessions[0].id).toBe('cs-empty')
+    expect(result.current.sessions[0].provider).toBe('openai')
+    // The full session (via getSession) keeps the empty messages array — the
+    // reseed only touches provider/model. The exposed `sessions` array on the
+    // hook surface is a SessionSummary so we round-trip via getSession.
+    const full = result.current.getSession('cs-empty')
+    expect(full?.messages).toHaveLength(0)
   })
 
   it('meterTotals are computed from the active session messages', () => {
@@ -221,11 +315,27 @@ import { vi } from 'vitest'
 import { runChatTurn } from '../agents/chatRunner'
 
 vi.mock('../adapters', () => ({
-  getAdapter: () => ({
+  getAdapter: (id: string) => ({
     name: 'Mock',
-    id: 'anthropic',
-    models: ['claude-sonnet-4-6'],
+    id,
+    // Provider-aware so pickDefaultProviderModel's "clamp model against the
+    // adapter's models" step doesn't cross-contaminate (clamping an openai
+    // default against an anthropic-only list).
+    models: id === 'openai' ? ['gpt-4o', 'gpt-4o-mini'] : ['claude-sonnet-4-6'],
   }),
+  // Mirror the real surface — useChatSessions reseeds empty sessions whose
+  // provider isn't configured, and that path runs `configuredProviders` to
+  // pick the effective default. The mock returns whatever providers the
+  // test's settings shape claims to have api keys for, falling back to the
+  // settings.provider so empty-state tests still see their default pair.
+  configuredProviders: (input: { apiKeys?: Partial<Record<string, string>>; baseUrls?: { ollama?: string }; ollamaModels?: string[] }) => {
+    const out: string[] = []
+    for (const p of ['anthropic', 'openai'] as const) {
+      if (input.apiKeys?.[p]) out.push(p)
+    }
+    if (input.baseUrls?.ollama && (input.ollamaModels?.length ?? 0) > 0) out.push('ollama')
+    return out
+  },
 }))
 
 vi.mock('../agents/chatRunner', () => ({

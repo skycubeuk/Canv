@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Group, Panel, Separator, type Layout } from 'react-resizable-panels'
 import { EditorGroup } from './EditorGroup'
 import type { OpenTab, EditorGroupId, EditorGroupState } from '../../types/workspace'
+import type { Action, Mode } from '../../config/types'
 
 interface Props {
   workspaceRoot: string | null
@@ -22,6 +23,11 @@ interface Props {
     viewMode: 'edit' | 'preview',
   ) => ReactNode
   emptyState: ReactNode
+  // Doc-agent button shown in each group's SubToolbar. The callback is
+  // group-aware so a Split layout's two SubToolbars operate on the
+  // document local to their own group.
+  profile?: Mode
+  onRunDocAgent?: (groupId: EditorGroupId, agent: Action, instruction?: string) => void
 }
 
 export function EditorArea(props: Props) {
@@ -35,6 +41,7 @@ export function EditorArea(props: Props) {
 
 function SoloGroup(props: Props) {
   const g = props.groups[0]
+  const { profile, onRunDocAgent } = props
   return (
     <div className="h-full min-w-0">
       <EditorGroup
@@ -53,6 +60,8 @@ function SoloGroup(props: Props) {
           props.renderTabContent(g.id, tab, isActive, viewMode)
         }
         emptyState={props.emptyState}
+        profile={profile}
+        onRunDocAgent={onRunDocAgent ? (a, i) => onRunDocAgent(g.id, a, i) : undefined}
       />
     </div>
   )
@@ -60,6 +69,7 @@ function SoloGroup(props: Props) {
 
 function SplitGroups(props: Props) {
   const [g1, g2] = props.groups
+  const { profile, onRunDocAgent } = props
   const defaultLayout: Layout = { g1: props.groupSizes[0], g2: props.groupSizes[1] }
   return (
     <Group
@@ -89,9 +99,11 @@ function SplitGroups(props: Props) {
             props.renderTabContent(g1.id, tab, isActive, viewMode)
           }
           emptyState={props.emptyState}
+          profile={profile}
+          onRunDocAgent={onRunDocAgent ? (a, i) => onRunDocAgent(g1.id, a, i) : undefined}
         />
       </Panel>
-      <Separator className="w-px bg-[rgb(var(--border-default))] hover:bg-[rgb(var(--border-strong))] transition-colors cursor-col-resize" />
+      <Separator className="w-px bg-border-default hover:bg-border-strong transition-colors cursor-col-resize" />
       <Panel id="g2" minSize="20%" className="h-full min-w-0">
         <EditorGroup
           groupId={g2.id}
@@ -109,6 +121,8 @@ function SplitGroups(props: Props) {
             props.renderTabContent(g2.id, tab, isActive, viewMode)
           }
           emptyState={props.emptyState}
+          profile={profile}
+          onRunDocAgent={onRunDocAgent ? (a, i) => onRunDocAgent(g2.id, a, i) : undefined}
         />
       </Panel>
     </Group>

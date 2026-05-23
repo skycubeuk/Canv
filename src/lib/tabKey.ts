@@ -2,11 +2,13 @@ import type { OpenTab } from '../types/workspace'
 
 export const SETTINGS_TAB_KEY = '__settings__'
 export const DIFF_TAB_KEY_PREFIX = 'diff:'
+export const EXTENSION_TAB_KEY_PREFIX = 'ext:'
 
-/** Canonical key for a tab. Diff tabs use 'diff:<rel>@<baseRef>'. */
+/** Canonical key for a tab. Diff tabs use 'diff:<rel>@<baseRef>'. Extension tabs use 'ext:<extensionId>:<rel>'. */
 export function tabKey(tab: OpenTab): string {
   if (tab.kind === 'markdown') return tab.relPath
   if (tab.kind === 'settings') return SETTINGS_TAB_KEY
+  if (tab.kind === 'extension') return `${EXTENSION_TAB_KEY_PREFIX}${tab.extensionId}:${tab.relPath}`
   // diff
   return `${DIFF_TAB_KEY_PREFIX}${tab.relPath}@${tab.baseRef}`
 }
@@ -27,6 +29,12 @@ export function isDiffTab(
   tab: OpenTab,
 ): tab is Extract<OpenTab, { kind: 'diff' }> {
   return tab.kind === 'diff'
+}
+
+export function isExtensionTab(
+  tab: OpenTab,
+): tab is Extract<OpenTab, { kind: 'extension' }> {
+  return tab.kind === 'extension'
 }
 
 /**

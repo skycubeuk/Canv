@@ -99,7 +99,7 @@ export function RestorePreviewDialog({
               type="button"
               onClick={confirm}
               disabled={busy || !preview}
-              className="btn-primary py-1! px-3! text-xs disabled:opacity-50"
+              className="btn-primary btn-sm px-3 disabled:opacity-50"
             >
               {busy ? 'Restoring…' : 'Restore'}
             </button>

@@ -27,37 +27,45 @@ describe('SitesTab', () => {
     }
   })
 
-  it('renders entries and shows description', async () => {
+  it('renders one row per site with the site name', async () => {
     render(<SitesTab onRegenerate={() => {}} />)
     await screen.findByText('Story Timeline')
-    expect(screen.getByText(/desc/)).toBeInTheDocument()
   })
 
-  it('shows stale badge when stale=true', async () => {
+  it('shows a stale indicator when stale=true', async () => {
     ;(window.canvSites!.listWithStaleness as ReturnType<typeof vi.fn>).mockResolvedValueOnce([mkEntry({ stale: true })])
     render(<SitesTab onRegenerate={() => {}} />)
-    await screen.findByText(/stale/i)
+    await waitFor(() => expect(screen.getByLabelText(/stale/i)).toBeInTheDocument())
   })
 
-  it('Open dispatches canvSites.open', async () => {
+  it('clicking the row body opens the site', async () => {
     render(<SitesTab onRegenerate={() => {}} />)
-    await screen.findByText('Story Timeline')
-    fireEvent.click(screen.getByRole('button', { name: /open/i }))
+    const row = await screen.findByRole('button', { name: /story timeline/i })
+    fireEvent.click(row)
     await waitFor(() => expect(window.canvSites!.open).toHaveBeenCalledWith('a3f2'))
   })
 
-  it('Regenerate fires onRegenerate with the prompt', async () => {
+  it('clicking the pin indicator toggles pinned state', async () => {
+    render(<SitesTab onRegenerate={() => {}} />)
+    await screen.findByText('Story Timeline')
+    fireEvent.click(screen.getByRole('button', { name: /pin/i }))
+    await waitFor(() => expect(window.canvSites!.setPinned).toHaveBeenCalledWith('a3f2', true))
+  })
+
+  it('overflow menu exposes Regenerate which fires onRegenerate with the prompt', async () => {
     const onRegenerate = vi.fn()
     render(<SitesTab onRegenerate={onRegenerate} />)
     await screen.findByText('Story Timeline')
-    fireEvent.click(screen.getByRole('button', { name: /regenerate/i }))
+    fireEvent.click(screen.getByRole('button', { name: /more actions/i }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /regenerate/i }))
     expect(onRegenerate).toHaveBeenCalledWith('orig prompt')
   })
 
-  it('Delete dispatches canvSites.delete', async () => {
+  it('overflow menu exposes Delete which calls canvSites.delete', async () => {
     render(<SitesTab onRegenerate={() => {}} />)
     await screen.findByText('Story Timeline')
-    fireEvent.click(screen.getByRole('button', { name: /delete/i }))
+    fireEvent.click(screen.getByRole('button', { name: /more actions/i }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /delete/i }))
     await waitFor(() => expect(window.canvSites!.delete).toHaveBeenCalledWith('a3f2'))
   })
 
@@ -68,6 +76,27 @@ describe('SitesTab', () => {
     list.mockResolvedValueOnce([mkEntry({ id: 'b9', name: 'Other' })])
     listeners.forEach((cb) => cb())
     await screen.findByText('Other')
+  })
+
+  it('Escape closes the overflow menu', async () => {
+    render(<SitesTab onRegenerate={() => {}} />)
+    await screen.findByText('Story Timeline')
+    fireEvent.click(screen.getByRole('button', { name: /more actions/i }))
+    expect(screen.getByRole('menu')).toBeInTheDocument()
+    fireEvent.keyDown(document, { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument())
+  })
+
+  it('clicking the More-actions trigger a second time closes the menu', async () => {
+    render(<SitesTab onRegenerate={() => {}} />)
+    await screen.findByText('Story Timeline')
+    const trigger = screen.getByRole('button', { name: /more actions/i })
+    fireEvent.mouseDown(trigger)
+    fireEvent.click(trigger)
+    expect(screen.getByRole('menu')).toBeInTheDocument()
+    fireEvent.mouseDown(trigger)
+    fireEvent.click(trigger)
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
   })
 
   it('empty state is shown when no entries', async () => {

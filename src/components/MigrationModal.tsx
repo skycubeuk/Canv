@@ -113,8 +113,16 @@ export function MigrationModal({ onComplete }: Props) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="max-w-lg w-full bg-elev rounded-lg shadow-xl p-6 space-y-4">
+    <div
+      data-testid="migration-modal-backdrop"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Welcome to Canv 0.2"
+        className="max-w-lg w-full bg-elev rounded-lg shadow-xl p-6 space-y-4"
+      >
         <div className="space-y-1">
           <h2 className="text-lg font-semibold">Welcome to Canv 0.2</h2>
           <p className="text-sm text-muted">
@@ -123,19 +131,19 @@ export function MigrationModal({ onComplete }: Props) {
           </p>
         </div>
         {!electron && (
-          <div className="rounded-md bg-amber-950/40 text-amber-200 px-3 py-2 text-sm">
+          <div className="rounded-md bg-warning-soft text-warning-fg px-3 py-2 text-sm">
             File workspaces need the desktop app. Use the button below to export your existing data so
             you can restore it later.
           </div>
         )}
         {error && (
-          <div className="rounded-md bg-red-950/40 text-red-200 px-3 py-2 text-sm">
+          <div className="rounded-md bg-danger-soft text-danger-fg px-3 py-2 text-sm">
             {error}
           </div>
         )}
         <ol className="space-y-3 text-sm">
           <li className="flex items-start gap-3">
-            <span className={`mt-0.5 inline-flex items-center justify-center w-5 h-5 rounded-full text-xs ${exported ? 'bg-emerald-500 text-white' : 'bg-active'}`}>1</span>
+            <span className={`mt-0.5 inline-flex items-center justify-center w-5 h-5 rounded-full text-xs ${exported ? 'bg-success text-white' : 'bg-active'}`}>1</span>
             <div className="flex-1">
               <button
                 type="button"

@@ -1,4 +1,6 @@
 import { ChevronRight } from 'lucide-react'
+import { DocumentAgentMenu } from '../DocumentAgentMenu'
+import type { Action, Mode } from '../../config/types'
 
 type ViewMode = 'edit' | 'preview'
 
@@ -9,6 +11,12 @@ interface Props {
   viewMode: ViewMode | null
   onChangeViewMode: (mode: ViewMode) => void
   showViewToggle: boolean
+  // Optional doc-agent button — only shown when all three are provided.
+  // Lives in the SubToolbar (per editor group) so split editors get their
+  // own button operating on the group-local document.
+  profile?: Mode
+  activeFileName?: string | null
+  onRunDocAgent?: (agent: Action, instruction?: string) => void
 }
 
 function basename(p: string): string {
@@ -33,11 +41,15 @@ function buildSegments(workspaceName: string | null, relPath: string | null): Se
 }
 
 export function SubToolbar(props: Props) {
-  const { workspaceName, relPath, onClickFolder, viewMode, onChangeViewMode, showViewToggle } = props
+  const {
+    workspaceName, relPath, onClickFolder, viewMode, onChangeViewMode, showViewToggle,
+    profile, activeFileName, onRunDocAgent,
+  } = props
   const segments = buildSegments(workspaceName, relPath)
+  const showDocAgent = profile != null && onRunDocAgent != null
 
   return (
-    <div className="shrink-0 h-8 flex items-center px-4 gap-3 border-b border-default text-[11.5px]">
+    <div className="shrink-0 h-8 flex items-center px-4 gap-3 border-b border-default text-xs">
       <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 min-w-0 text-subtle whitespace-nowrap">
         {segments.map((s, i) => {
           const isLast = i === segments.length - 1
@@ -63,8 +75,17 @@ export function SubToolbar(props: Props) {
 
       <div className="flex-1" />
 
+      {showDocAgent && (
+        <DocumentAgentMenu
+          profile={profile!}
+          hasMarkdownTab={showViewToggle}
+          activeFileName={activeFileName ?? null}
+          onRunAgent={onRunDocAgent!}
+        />
+      )}
+
       {showViewToggle && viewMode != null && (
-        <div className="inline-flex p-0.5 bg-elev border border-default rounded-md">
+        <div className="inline-flex p-0.5 bg-elev border border-default rounded-sm">
           {(['edit', 'preview'] as const).map((m) => {
             const selected = m === viewMode
             return (
@@ -73,7 +94,7 @@ export function SubToolbar(props: Props) {
                 type="button"
                 aria-pressed={selected}
                 onClick={() => onChangeViewMode(m)}
-                className={`px-2.5 py-0.5 text-[11.5px] rounded font-medium ${
+                className={`px-2.5 py-0.5 text-xs rounded-[2px] font-medium ${
                   selected ? 'bg-app text-default shadow-sm' : 'text-muted hover:text-default'
                 }`}
               >

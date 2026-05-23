@@ -174,7 +174,7 @@ function PromptDialog({
           className="w-full px-3 py-2 text-sm rounded-md border border-default bg-elev text-default focus:outline-hidden focus:ring-2 focus:ring-accent"
         />
         {error && (
-          <p className="mt-2 text-xs text-red-400">{error}</p>
+          <p className="mt-2 text-xs text-danger-fg">{error}</p>
         )}
         <div className="mt-4 flex items-center justify-end gap-2">
           <button type="button" className="btn-secondary text-sm" onClick={onCancel}>
@@ -221,7 +221,7 @@ function ConfirmDialog({
   }, [])
 
   const confirmClassName = opts.danger
-    ? 'btn-primary text-sm bg-red-600 hover:bg-red-700 focus:ring-red-400'
+    ? 'btn-danger text-sm focus:ring-danger'
     : 'btn-primary text-sm'
 
   return (

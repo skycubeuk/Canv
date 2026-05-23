@@ -1,0 +1,13 @@
+{
+  "id": "phase5a-kitchen-sink",
+  "name": "Phase 5a Kitchen Sink",
+  "version": "1.0.0",
+  "engines": { "canv": "^1.0.0" },
+  "description": "Exercises panel (sidebar tab), statusBar, command + palette + keybinding.",
+  "capabilities": ["activeDoc.read", "events.docChanged", "ui", "notify"],
+  "contributions": [
+    { "type": "panel", "id": "main", "title": "Phase 5a Sink", "icon": "info", "location": "left-sidebar", "entry": "panels/main.html" },
+    { "type": "statusBar", "id": "wc", "alignment": "right", "priority": 30, "text": "P5a: —", "tooltip": "Updated from active doc", "command": "p5a.refresh" },
+    { "type": "command", "id": "p5a.refresh", "title": "P5a: Refresh status bar", "entry": "panels/main.html", "keybinding": "Ctrl+Shift+R" }
+  ]
+}

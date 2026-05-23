@@ -1,8 +1,9 @@
 import { useCallback, useState, type ReactNode } from 'react'
 import { EditorTabs } from '../EditorTabs'
 import { SubToolbar } from './SubToolbar'
-import { tabKey, isMarkdownTab, isDiffTab } from '../../lib/tabKey'
+import { tabKey, isMarkdownTab, isDiffTab, isExtensionTab } from '../../lib/tabKey'
 import type { OpenTab, EditorGroupId } from '../../types/workspace'
+import type { Action, Mode } from '../../config/types'
 
 type ViewMode = 'edit' | 'preview'
 
@@ -24,6 +25,9 @@ interface Props {
     viewMode: ViewMode,
   ) => ReactNode
   emptyState: ReactNode
+  // Doc-agent button (optional — only this group's SubToolbar shows it).
+  profile?: Mode
+  onRunDocAgent?: (agent: Action, instruction?: string) => void
 }
 
 export function EditorGroup(props: Props) {
@@ -31,10 +35,11 @@ export function EditorGroup(props: Props) {
     groupId, isActive, workspaceRoot, tabs, activeKey, dirtySet,
     onSelect, onClose, onClickFolder, onFocusGroup, onDropTab,
     renderTabContent, emptyState,
+    profile, onRunDocAgent,
   } = props
 
   const activeTab = tabs.find((t) => tabKey(t) === activeKey) ?? null
-  const breadcrumbRel = activeTab && isMarkdownTab(activeTab) ? activeTab.relPath : null
+  const breadcrumbRel = activeTab && (isMarkdownTab(activeTab) || isExtensionTab(activeTab)) ? activeTab.relPath : null
   const breadcrumbDiff = activeTab && isDiffTab(activeTab) ? activeTab : null
   const hasMarkdownTab = activeTab !== null && isMarkdownTab(activeTab)
 
@@ -84,6 +89,9 @@ export function EditorGroup(props: Props) {
         viewMode={activeTabViewMode}
         onChangeViewMode={handleChangeActiveTabViewMode}
         showViewToggle={hasMarkdownTab}
+        profile={profile}
+        activeFileName={breadcrumbRel ? breadcrumbRel.split('/').pop() ?? null : null}
+        onRunDocAgent={onRunDocAgent}
       />
       <div className="flex-1 min-h-0 relative">
         {tabs.length === 0 ? (

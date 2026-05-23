@@ -106,7 +106,14 @@ export function makeMockFs(initial: Record<string, MockFile>): CanvFs {
     readFile: async (rel): Promise<ReadResult> => {
       const f = files.get(rel)
       if (!f) throw new Error(`ENOENT: ${rel}`)
-      return { content: f.content, mtimeMs: f.mtimeMs }
+      return {
+        ok: true,
+        content: f.content,
+        mtimeMs: f.mtimeMs,
+        eol: 'lf',
+        bom: false,
+        size: f.size,
+      }
     },
     writeFile: async (rel, content, expectedMtimeMs): Promise<WriteResult> => {
       const f = files.get(rel)
@@ -154,7 +161,16 @@ export function makeCtx(overrides: Partial<ToolCtx> & { fs: CanvFs }): ToolCtx {
     activeDocPath: null,
     getEditorContent: () => null,
     applyEditorEdit: async () => {},
+    workspace: { applyEdits: async () => ({ ok: false, error: { reason: 'write-failed', path: '?', detail: 'no test stub' } }) },
     signal: new AbortController().signal,
     ...overrides,
   }
 }
+
+// ---------------------------------------------------------------------------
+// Services test helpers — JSX lives in services-fixtures.tsx so this file
+// stays .ts. Re-exported here so tests can `import { renderWithServices }
+// from '../test/fixtures'` regardless.
+// ---------------------------------------------------------------------------
+
+export { makeStubServices, renderWithServices } from './services-fixtures'

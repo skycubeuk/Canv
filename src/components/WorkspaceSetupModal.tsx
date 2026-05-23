@@ -88,7 +88,7 @@ export function WorkspaceSetupModal(p: WorkspaceSetupModalProps) {
           <button
             type="button"
             onClick={() => p.onConfirm({ defaultProfile: profile, enableRA })}
-            className="btn-primary py-1! px-3! text-xs"
+            className="btn-primary btn-sm px-3"
           >
             Set up workspace
           </button>

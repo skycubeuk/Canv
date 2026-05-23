@@ -1,0 +1,159 @@
+/* electron/extensions/shared-assets/canv-ui.css
+ * Auto-injected into every Canv extension renderer. Exposes Canv's design
+ * tokens under the --canv-* namespace so extensions visually match the app.
+ * See docs/superpowers/specs/2026-05-17-workspace-extensions-design.md §6.
+ */
+
+:root {
+  --canv-font-sans:  'Inter', system-ui, -apple-system, sans-serif;
+  --canv-font-serif: 'Source Serif 4', 'Source Serif Pro', Georgia, serif;
+
+  --canv-color-app:    rgb(10 11 13);
+  --canv-color-panel:  rgb(16 18 22);
+  --canv-color-elev:   rgb(21 24 29);
+  --canv-color-hover:  rgb(28 32 39);
+  --canv-color-active: rgb(35 39 50);
+  --canv-color-accent: rgb(99 102 241);
+  --canv-color-accent-fg: rgb(255 255 255);
+
+  --canv-text:        rgb(231 234 240);
+  --canv-text-muted:  rgb(154 160 171);
+  --canv-text-subtle: rgb(107 114 128);
+  --canv-border:      rgb(29 32 39);
+  --canv-border-strong: rgb(42 46 55);
+
+  --canv-radius:    6px;
+  --canv-radius-lg: 10px;
+
+  --canv-space-1: 4px;
+  --canv-space-2: 8px;
+  --canv-space-3: 12px;
+  --canv-space-4: 16px;
+  --canv-space-5: 24px;
+  --canv-space-6: 32px;
+
+  --canv-font-size-xs: 11px;
+  --canv-font-size-sm: 12px;
+  --canv-font-size-md: 13px;
+  --canv-font-size-lg: 15px;
+
+  --canv-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --canv-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--canv-color-panel);
+  color: var(--canv-text);
+  font-family: var(--canv-font-sans);
+  font-size: var(--canv-font-size-md);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+* { box-sizing: border-box; }
+
+/* Default-margin reset: prevent a leading <h1>/<p>'s user-agent margin from
+ * poking past body and forcing a scrollbar on short panels. */
+body > :first-child { margin-top: 0; }
+body > :last-child  { margin-bottom: 0; }
+
+.canv-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--canv-space-2);
+  background: var(--canv-color-elev);
+  color: var(--canv-text);
+  border: 1px solid var(--canv-border);
+  border-radius: var(--canv-radius);
+  padding: var(--canv-space-2) var(--canv-space-3);
+  font: inherit;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+.canv-button:hover { background: var(--canv-color-hover); }
+.canv-button:active { background: var(--canv-color-active); }
+.canv-button[data-variant="accent"] {
+  background: var(--canv-color-accent);
+  color: var(--canv-color-accent-fg);
+  border-color: transparent;
+}
+.canv-button:focus-visible {
+  outline: 2px solid var(--canv-color-accent);
+  outline-offset: 2px;
+}
+
+.canv-input, .canv-textarea {
+  background: var(--canv-color-app);
+  color: var(--canv-text);
+  border: 1px solid var(--canv-border);
+  border-radius: var(--canv-radius);
+  padding: var(--canv-space-2) var(--canv-space-3);
+  font: inherit;
+  width: 100%;
+}
+.canv-input:focus, .canv-textarea:focus {
+  outline: none;
+  border-color: var(--canv-color-accent);
+}
+
+.canv-card {
+  background: var(--canv-color-elev);
+  border: 1px solid var(--canv-border);
+  border-radius: var(--canv-radius-lg);
+  padding: var(--canv-space-4);
+}
+
+.canv-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.canv-list > li {
+  padding: var(--canv-space-2) var(--canv-space-3);
+  border-bottom: 1px solid var(--canv-border);
+}
+.canv-list > li:last-child { border-bottom: none; }
+
+.canv-muted   { color: var(--canv-text-muted); }
+.canv-subtle  { color: var(--canv-text-subtle); }
+.canv-heading { font-weight: 600; font-size: var(--canv-font-size-lg); margin: 0 0 var(--canv-space-3) 0; }
+
+canv-icon {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.125em;
+  color: currentColor;
+}
+canv-icon[hidden] { display: none; }
+
+/* Scrollbars — match Canv's dark theme so extension panels blend in with the
+ * sidebar. Mirrors the dark-theme rules in src/index.css. */
+* {
+  scrollbar-color: rgb(64 64 64) transparent;
+  scrollbar-width: thin;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: rgb(64 64 64);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: rgb(96 96 96);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}

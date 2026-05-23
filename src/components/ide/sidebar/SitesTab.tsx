@@ -1,5 +1,7 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
+import { Circle, CircleDot, AlertTriangle, MoreVertical } from 'lucide-react'
 import type { SiteEntryWithStaleness } from '../../../lib/sites'
+import { SidebarRowIcon, SidebarEmpty, SidebarIconButton, SidebarRowFrame } from './SidebarChrome'
 
 interface Props {
   onRegenerate: (prompt: string) => void
@@ -8,6 +10,7 @@ interface Props {
 export function SitesTab({ onRegenerate }: Props) {
   const [entries, setEntries] = useState<SiteEntryWithStaleness[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [menuOpenId, setMenuOpenId] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
     if (!window.canvSites) { setEntries([]); return }
@@ -34,57 +37,129 @@ export function SitesTab({ onRegenerate }: Props) {
   }, [refresh])
 
   if (error) {
-    return <div className="p-4 text-sm text-red-500">Sites registry error: {error}</div>
+    return <SidebarEmpty>Sites registry error: {error}</SidebarEmpty>
   }
-  if (entries === null) return <div className="p-4 text-sm text-muted">Loading…</div>
+  if (entries === null) return <SidebarEmpty>Loading…</SidebarEmpty>
   if (entries.length === 0) {
     return (
-      <div className="p-4 text-sm text-muted">
+      <div className="px-3 py-3 text-xs text-subtle space-y-2">
         <p>No sites yet.</p>
-        <p className="mt-2">Ask the chat agent to build a view of your work — for example: <em>&quot;Show me a timeline of every scene with POV and location.&quot;</em></p>
+        <p>Ask the chat agent to build a view of your work — for example: <em>&quot;Show me a timeline of every scene with POV and location.&quot;</em></p>
       </div>
     )
   }
 
   return (
-    <ul className="flex flex-col gap-2 p-2">
+    <ul role="list" className="py-1 m-0 p-0 list-none">
       {entries.map((e) => (
-        <li key={e.id} className="rounded-sm border border-default bg-panel px-3 py-2 text-sm">
-          <div className="flex items-center justify-between gap-2">
-            <div className="font-medium text-default">{e.name}</div>
-            <button
-              type="button"
-              aria-label={e.pinned ? 'Unpin' : 'Pin'}
-              onClick={() => { void window.canvSites?.setPinned(e.id, !e.pinned) }}
-              className="text-xs text-muted hover:text-default"
-            >
-              {e.pinned ? '📌' : '📍'}
-            </button>
-          </div>
-          {e.description && <div className="mt-0.5 text-xs text-muted">{e.description}</div>}
-          {e.stale && <div className="mt-0.5 text-xs text-amber-500">⚠ stale</div>}
-          <div className="mt-2 flex gap-2">
-            <button
-              type="button"
-              aria-label="Open"
-              onClick={() => { void window.canvSites?.open(e.id) }}
-              className="rounded-sm border border-default px-2 py-0.5 text-xs text-default hover:bg-hover"
-            >Open</button>
-            <button
-              type="button"
-              aria-label="Regenerate"
-              onClick={() => onRegenerate(e.prompt)}
-              className="rounded-sm border border-default px-2 py-0.5 text-xs text-default hover:bg-hover"
-            >Regenerate</button>
-            <button
-              type="button"
-              aria-label="Delete"
-              onClick={() => { void window.canvSites?.delete(e.id) }}
-              className="rounded-sm border border-default px-2 py-0.5 text-xs text-default hover:bg-hover"
-            >Delete</button>
-          </div>
-        </li>
+        <SitesRow
+          key={e.id}
+          entry={e}
+          onOpen={() => { void window.canvSites?.open(e.id) }}
+          onTogglePin={() => { void window.canvSites?.setPinned(e.id, !e.pinned) }}
+          onRegenerate={() => onRegenerate(e.prompt)}
+          onDelete={() => { void window.canvSites?.delete(e.id) }}
+          menuOpen={menuOpenId === e.id}
+          onMenuOpenChange={(open) => setMenuOpenId(open ? e.id : null)}
+        />
       ))}
     </ul>
+  )
+}
+
+interface RowProps {
+  entry: SiteEntryWithStaleness
+  onOpen: () => void
+  onTogglePin: () => void
+  onRegenerate: () => void
+  onDelete: () => void
+  menuOpen: boolean
+  onMenuOpenChange: (open: boolean) => void
+}
+
+function SitesRow({
+  entry, onOpen, onTogglePin, onRegenerate, onDelete, menuOpen, onMenuOpenChange,
+}: RowProps) {
+  const menuRef = useRef<HTMLDivElement | null>(null)
+  const triggerRef = useRef<HTMLButtonElement | null>(null)
+  const onMenuOpenChangeRef = useRef(onMenuOpenChange)
+  useEffect(() => { onMenuOpenChangeRef.current = onMenuOpenChange })
+  useEffect(() => {
+    if (!menuOpen) return
+    const onDoc = (e: MouseEvent) => {
+      if (triggerRef.current && e.target instanceof Node && triggerRef.current.contains(e.target)) return
+      if (menuRef.current && e.target instanceof Node && !menuRef.current.contains(e.target)) {
+        onMenuOpenChangeRef.current(false)
+      }
+    }
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onMenuOpenChangeRef.current(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDoc)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [menuOpen])
+
+  return (
+    <SidebarRowFrame
+      leading={
+        <SidebarIconButton
+          aria-label={entry.pinned ? 'Unpin' : 'Pin'}
+          icon={entry.pinned ? CircleDot : Circle}
+          onClick={onTogglePin}
+        />
+      }
+      trailing={
+        <SidebarIconButton
+          ref={triggerRef}
+          aria-label="More actions"
+          icon={MoreVertical}
+          onClick={() => onMenuOpenChange(!menuOpen)}
+        />
+      }
+      menu={menuOpen ? (
+        <div
+          ref={menuRef}
+          role="menu"
+          className="absolute right-1 top-full z-30 bg-elev border border-default rounded-sm shadow-lg p-1 min-w-[140px]"
+        >
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => { onMenuOpenChange(false); onOpen() }}
+            className="block w-full text-left px-2 py-1 text-xs text-default hover:bg-hover rounded-sm"
+          >Open</button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => { onMenuOpenChange(false); onRegenerate() }}
+            className="block w-full text-left px-2 py-1 text-xs text-default hover:bg-hover rounded-sm"
+          >Regenerate</button>
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => { onMenuOpenChange(false); onDelete() }}
+            className="block w-full text-left px-2 py-1 text-xs text-default hover:bg-hover rounded-sm"
+          >Delete</button>
+        </div>
+      ) : undefined}
+    >
+      <button
+        type="button"
+        onClick={onOpen}
+        title={entry.description || entry.name}
+        className="flex-1 flex items-center gap-1.5 px-1.5 py-[3px] text-[12.5px] rounded-sm text-muted hover:bg-hover hover:text-default transition-colors text-left min-w-0"
+      >
+        <span className="flex-1 truncate">{entry.name}</span>
+        {entry.stale && (
+          <span aria-label="stale" title="This site is stale">
+            <SidebarRowIcon icon={AlertTriangle} />
+          </span>
+        )}
+      </button>
+    </SidebarRowFrame>
   )
 }

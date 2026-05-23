@@ -28,6 +28,7 @@ release
 .claude/
 docs/superpowers/
 .env.screenshots
+.env.keys
 docs/screenshots/.tmp/
 
 # Local milestone planning notes (never committed)
@@ -37,3 +38,9 @@ canv-0.6.0/
 site/node_modules/
 site/dist/
 site/.astro/
+
+# Local-only brainstorming input
+PLAN.md
+
+# Coverage reports
+coverage/

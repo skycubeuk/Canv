@@ -40,7 +40,7 @@ export default function OpenRemoteDialog({ open, recent, onConnect, onClose }: O
           className="w-full border border-default rounded-sm px-3 py-2 mb-3 bg-elev"
           onKeyDown={(e) => { if (e.key === 'Enter') submit() }}
         />
-        {error && <div className="text-sm text-red-600 mb-3">{error}</div>}
+        {error && <div className="text-sm text-danger-fg mb-3">{error}</div>}
         {recent.length > 0 && (
           <div className="mb-3">
             <div className="text-xs uppercase tracking-wide text-muted mb-1">Recent</div>
@@ -72,7 +72,7 @@ export default function OpenRemoteDialog({ open, recent, onConnect, onClose }: O
             type="button"
             onClick={submit}
             disabled={busy || !value.trim()}
-            className="px-3 py-1.5 rounded-sm bg-blue-600 text-white disabled:opacity-50"
+            className="px-3 py-1.5 rounded-sm bg-accent text-accent-fg disabled:opacity-50"
           >
             {busy ? 'Connecting…' : 'Connect'}
           </button>

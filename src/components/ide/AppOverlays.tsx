@@ -1,61 +1,48 @@
+import { ExtensionPromptModal } from '../extensions/ExtensionPromptModal'
 import { ProfilePicker } from '../ProfilePicker'
 import { MigrationModal } from '../MigrationModal'
-import { CommandPalette, type PaletteMode, type PaletteFile } from './CommandPalette'
 import OpenRemoteDialog from '../dialogs/OpenRemoteDialog'
 import { DocumentAgentInstructionModal } from '../DocumentAgentInstructionModal'
+import { WorkspaceSetupModal } from '../WorkspaceSetupModal'
+import { RestorePreviewDialog } from './sidebar/RestorePreviewDialog'
+import { getCanvHistory } from '../../lib/history'
+import { getFs } from '../../lib/fs'
 import type { Action as AgentDef } from '../../config/types'
-import type { useWorkspace } from '../../hooks/useWorkspace'
-import type { useProfilePicker } from '../../hooks/useProfilePicker'
-import type { useWorkspaceFileOps } from '../../hooks/useWorkspaceFileOps'
-import type { useNotifications } from '../../hooks/useNotifications'
-import type { useCommands } from '../../hooks/useCommands'
 import { editorMapKey } from '../../hooks/useEditorRegistry'
-import type { EditorView } from '@codemirror/view'
-import type React from 'react'
-
-type WorkspaceApi = ReturnType<typeof useWorkspace>
-type ProfilePickerApi = ReturnType<typeof useProfilePicker>
-type FileOpsApi = ReturnType<typeof useWorkspaceFileOps>
-type NotificationsApi = ReturnType<typeof useNotifications>
-type CommandsApi = ReturnType<typeof useCommands>
+import { useService } from '../../services/useService'
 
 export interface AppOverlaysProps {
-  // Profile picker
-  profilePicker: ProfilePickerApi
-  // Migration
+  // Migration (App-local UI state)
   migrationOpen: boolean
   onMigrationComplete: () => void
-  // Workspace conflict
-  workspace: WorkspaceApi
-  editorsRef: React.MutableRefObject<Map<string, EditorView>>
-  // Remote workspace dialog (file ops)
-  fileOps: FileOpsApi
-  // Document-agent instruction
+  // Document-agent instruction (App-local UI state)
   pendingDocAgent: AgentDef | null
   onSubmitDocAgent: (instruction: string) => void
   onCancelDocAgent: () => void
-  // Notifications + retry undo
-  notifications: NotificationsApi
-  onUndoRetry: () => void
-  // Palette
-  paletteOpen: boolean
-  paletteMode: PaletteMode
-  paletteFiles: PaletteFile[]
-  paletteRecents: PaletteFile[]
-  onClosePalette: () => void
-  commands: CommandsApi
-  onOpenFile: (rel: string) => void
+  // File-history restore — App-local UI state, set via dock-bridge events
+  // or the HistoryTab's onRestore prop; cleared when the dialog closes.
+  restoreTarget: { snapshotId: string; relPath: string } | null
+  onCloseRestore: () => void
 }
 
 export function AppOverlays(props: AppOverlaysProps) {
   const {
-    profilePicker, migrationOpen, onMigrationComplete,
-    workspace, editorsRef,
-    fileOps, pendingDocAgent, onSubmitDocAgent, onCancelDocAgent,
-    notifications, onUndoRetry,
-    paletteOpen, paletteMode, paletteFiles, paletteRecents, onClosePalette,
-    commands, onOpenFile,
+    migrationOpen, onMigrationComplete,
+    pendingDocAgent, onSubmitDocAgent, onCancelDocAgent,
+    restoreTarget, onCloseRestore,
   } = props
+
+  const profilePicker = useService('profilePicker')
+  const workspace = useService('workspace')
+  const editorRegistry = useService('editorRegistry')
+  const fileOps = useService('workspaceFileOps')
+  const notifications = useService('notifications')
+  const chatSessions = useService('chatSessions')
+  const setup = useService('setup')
+  const modesSvc = useService('modes')
+  const { showToast } = notifications
+
+  const editorsRef = editorRegistry.editorsRef
 
   return (
     <>
@@ -104,34 +91,70 @@ export function AppOverlays(props: AppOverlaysProps) {
       )}
 
       {notifications.toast && (
-        <div className="fixed bottom-7 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-[rgb(var(--text-default))] text-[rgb(var(--bg-app))] text-sm rounded-md shadow-lg">
+        <div
+          data-testid="toast"
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-7 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-inverse text-inverse-fg text-sm rounded-md shadow-lg"
+        >
           {notifications.toast}
         </div>
       )}
 
       {notifications.retryUndo && (
-        <div className="fixed bottom-7 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-[rgb(var(--text-default))] text-[rgb(var(--bg-app))] text-sm rounded-md shadow-lg flex items-center gap-3">
+        <div
+          data-testid="retry-undo-toast"
+          role="status"
+          aria-live="polite"
+          className="fixed bottom-7 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-inverse text-inverse-fg text-sm rounded-md shadow-lg flex items-center gap-3"
+        >
           <span>Discarded {notifications.retryUndo.count} turn{notifications.retryUndo.count === 1 ? '' : 's'}</span>
           <button
             type="button"
+            aria-label="Undo retry"
             className="underline font-medium"
-            onClick={onUndoRetry}
+            onClick={() => chatSessions.undoRetry()}
           >
             Undo
           </button>
         </div>
       )}
 
-      <CommandPalette
-        open={paletteOpen}
-        mode={paletteMode}
-        commands={commands.list()}
-        files={paletteFiles}
-        recentFiles={paletteRecents}
-        onClose={onClosePalette}
-        onRunCommand={(id) => { commands.runById(id) }}
-        onOpenFile={onOpenFile}
-      />
+      {restoreTarget && getCanvHistory() && (
+        <RestorePreviewDialog
+          history={getCanvHistory()!}
+          snapshotId={restoreTarget.snapshotId}
+          relPath={restoreTarget.relPath}
+          onCancel={onCloseRestore}
+          onRestored={async (rollbackId, mtimeMs) => {
+            const rel = restoreTarget.relPath
+            // Suppress the conflict popup for our own write — must run before the
+            // chokidar 'change' event echoes back from the disk watcher.
+            workspace.noteOwnDiskWrite(rel, mtimeMs)
+            onCloseRestore()
+            showToast(`Restored ${rel}. Safety snapshot: ${rollbackId}`)
+            try { await workspace.reloadTabFromDisk(rel) } catch { /* tab may not be open */ }
+          }}
+          saveDirtyBuffer={async () => { await workspace.flushAll() }}
+        />
+      )}
+
+      {setup.phase === 'needs-setup' && (
+        <WorkspaceSetupModal
+          modes={modesSvc.modes.map((m) => ({ id: m.id, label: m.label }))}
+          defaultProfile={modesSvc.defaultModeId ?? modesSvc.modes[0]?.id ?? 'fiction'}
+          remote={workspace.kind?.kind === 'remote' ? true : false}
+          onConfirm={async (r) => {
+            try { await setup.confirm(r) } catch (e) { showToast(`Setup failed: ${(e as Error).message}`) }
+          }}
+          onCancel={async () => {
+            setup.cancel()
+            try { await getFs().closeWorkspace() } catch { /* ignore */ }
+          }}
+        />
+      )}
+
+      <ExtensionPromptModal />
     </>
   )
 }
@@ -148,8 +171,16 @@ function ConflictDialog({
   onDismiss: () => void
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="max-w-sm w-full bg-elev rounded-lg shadow-xl p-5 space-y-3">
+    <div
+      data-testid="conflict-dialog-backdrop"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="File changed on disk"
+        className="max-w-sm w-full bg-elev rounded-lg shadow-xl p-5 space-y-3"
+      >
         <h3 className="text-base font-semibold">File changed on disk</h3>
         <p className="text-sm text-muted">
           "{rel}" was modified outside Canv. Choose what to keep.

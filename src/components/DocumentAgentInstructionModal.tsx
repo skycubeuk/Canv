@@ -76,7 +76,7 @@ export function DocumentAgentInstructionModal({ agent, canRun, onSubmit, onCance
             type="button"
             onClick={submit}
             disabled={!runEnabled}
-            className="btn-primary py-1! px-3! text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+            className="btn-primary btn-sm px-3 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Run
           </button>

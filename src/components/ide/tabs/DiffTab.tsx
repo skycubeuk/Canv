@@ -106,7 +106,7 @@ export function DiffTab({ relPath, baseRef, baseLabel, isActive }: Props) {
           <p className="px-4 py-3 text-muted">Loading diff…</p>
         )}
         {state.error && (
-          <p className="px-4 py-3 text-red-400">Error: {state.error}</p>
+          <p className="px-4 py-3 text-danger-fg">Error: {state.error}</p>
         )}
         {!state.loading && !state.error && state.payload && changes.length === 0 && (
           <p className="px-4 py-3 text-muted">No differences.</p>
@@ -133,9 +133,9 @@ function InlineDiff({ changes }: { changes: Change[] }) {
         {changes.map((change, ci) => {
           const lines = splitLines(change.value)
           const bg = change.added
-            ? 'bg-green-950/40 text-green-300'
+            ? 'bg-success-soft text-success-fg'
             : change.removed
-              ? 'bg-red-950/40 text-red-300 line-through opacity-70'
+              ? 'bg-danger-soft text-danger-fg line-through opacity-70'
               : 'text-default'
           const marker = change.added ? '+' : change.removed ? '-' : ' '
           return lines.map((line, li) => (
@@ -220,7 +220,7 @@ function SideBySideDiff({ changes }: { changes: Change[] }) {
             <td
               className={`pl-3 pr-2 py-px whitespace-pre-wrap break-all border-r border-default align-top ${
                 row.kind === 'removed' || row.kind === 'changed'
-                  ? 'bg-red-950/40 text-red-300'
+                  ? 'bg-danger-soft text-danger-fg'
                   : 'text-default'
               }`}
             >
@@ -229,7 +229,7 @@ function SideBySideDiff({ changes }: { changes: Change[] }) {
             <td
               className={`pl-3 pr-2 py-px whitespace-pre-wrap break-all align-top ${
                 row.kind === 'added' || row.kind === 'changed'
-                  ? 'bg-green-950/40 text-green-300'
+                  ? 'bg-success-soft text-success-fg'
                   : 'text-default'
               }`}
             >

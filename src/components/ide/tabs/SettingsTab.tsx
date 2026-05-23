@@ -8,6 +8,8 @@ import type { Provider, Settings } from '../../../hooks/useSettings'
 import { importBackup } from '../../../lib/backup'
 import { useDialogs } from '../../../lib/dialogs'
 import { AppearanceSection } from '../AppearanceSection'
+import { SchemaSettingsForm } from '../../settings/SchemaSettingsForm'
+import { SettingsSchema } from '../../../hooks/settingsSchema'
 
 interface Props {
   settings: Settings
@@ -403,7 +405,7 @@ export function SettingsTab(props: Props) {
                   onClick={() => onUpdate({ lineWidth: w })}
                   className={`flex-1 px-3 py-1.5 text-sm rounded-md ${
                     settings.lineWidth === w
-                      ? 'bg-[rgb(var(--text-default))] text-[rgb(var(--bg-app))]'
+                      ? 'bg-inverse text-inverse-fg'
                       : 'bg-active hover:bg-hover'
                   }`}
                 >
@@ -442,7 +444,7 @@ export function SettingsTab(props: Props) {
                   onClick={() => onUpdate({ streamChunkDelayMs: d })}
                   className={`flex-1 px-3 py-1.5 text-sm rounded-md ${
                     settings.streamChunkDelayMs === d
-                      ? 'bg-[rgb(var(--text-default))] text-[rgb(var(--bg-app))]'
+                      ? 'bg-inverse text-inverse-fg'
                       : 'bg-active hover:bg-hover'
                   }`}
                 >
@@ -514,6 +516,23 @@ export function SettingsTab(props: Props) {
       ),
     },
     {
+      id: 'mcp-servers',
+      title: 'MCP servers',
+      keywords: ['mcp', 'model context protocol', 'tools', 'server', 'integration', 'stdio', 'http'],
+      body: (
+        <SchemaSettingsForm
+          schema={SettingsSchema}
+          value={settings}
+          // `Settings` narrows perAgentModel / pricingOverrides post-process; the
+          // schema's raw inferred shape is wider. The auto-gen form only ever
+          // emits patches for fields with meta.ui === 'auto', which are all in
+          // the structurally compatible subset — cast is safe.
+          onChange={(patch) => onUpdate(patch as Partial<Settings>)}
+          sectionFilter={(section) => section === 'mcp'}
+        />
+      ),
+    },
+    {
       id: 'backup',
       title: 'Backup & Restore',
       keywords: ['backup', 'restore', 'export', 'import', 'json'],
@@ -556,7 +575,7 @@ export function SettingsTab(props: Props) {
           </p>
           <button
             type="button"
-            className="px-3 py-1.5 text-sm rounded-md bg-red-600 text-white hover:bg-red-500"
+            className="px-3 py-1.5 text-sm rounded-md bg-danger text-white hover:opacity-90"
             onClick={handleFactoryReset}
             data-testid="factory-reset-button"
           >

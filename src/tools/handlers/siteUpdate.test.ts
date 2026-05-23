@@ -6,6 +6,7 @@ const makeCtx = (): ToolCtx => ({
   fs: {} as never, activeDocPath: null,
   getEditorContent: () => null,
   applyEditorEdit: async () => {},
+  workspace: { applyEdits: async () => ({ ok: false, error: { reason: 'write-failed', path: '?', detail: 'no test stub' } }) },
   signal: new AbortController().signal,
 })
 

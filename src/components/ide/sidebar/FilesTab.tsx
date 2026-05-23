@@ -16,9 +16,12 @@ interface Props {
   onRename: (rel: string, newRel: string) => void
   onDelete: (rel: string) => void
   onChangeWorkspace: () => void
+  selectedDir?: string
+  onSelectDir?: (rel: string) => void
   revealRel?: string | null
   revisionArchaeologyEnabled?: boolean
   onViewHistory?: (rel: string) => void
+  onOpenWith?: (rel: string, extensionId: string | null) => void
 }
 
 export function FilesTab(props: Props) {
@@ -39,9 +42,12 @@ export function FilesTab(props: Props) {
       onRename={props.onRename}
       onDelete={props.onDelete}
       onChangeWorkspace={props.onChangeWorkspace}
+      selectedDir={props.selectedDir}
+      onSelectDir={props.onSelectDir}
       revealRel={props.revealRel}
       revisionArchaeologyEnabled={props.revisionArchaeologyEnabled}
       onViewHistory={props.onViewHistory}
+      onOpenWith={props.onOpenWith}
     />
   )
 }

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { getFs, isElectron } from '../../../lib/fs'
 import type { SearchMatch, SearchResult } from '../../../lib/searchTypes'
+import { SidebarSectionTitle, SidebarRow, SidebarMeta, SidebarEmpty } from './SidebarChrome'
 
 interface Props {
   onJumpToMatch: (
@@ -111,45 +112,47 @@ export function SearchTab({ onJumpToMatch }: Props) {
           aria-label="Folder scope"
         />
         {regexInvalid && (
-          <p className="text-xs text-red-400">Invalid regular expression.</p>
+          <p className="text-xs text-danger-fg">Invalid regular expression.</p>
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto py-1 text-xs">
+      <div className="flex-1 overflow-y-auto py-1">
         {!ui.query && (
-          <p className="px-3 py-3 text-muted">Type to search markdown files.</p>
+          <SidebarEmpty>Type to search markdown files.</SidebarEmpty>
         )}
         {ui.query && busy && (
-          <p className="px-3 py-3 text-muted">Searching…</p>
+          <SidebarEmpty>Searching…</SidebarEmpty>
         )}
         {ui.query && !busy && result && result.matches.length === 0 && (
-          <p className="px-3 py-3 text-muted">No matches.</p>
+          <SidebarEmpty>No matches.</SidebarEmpty>
         )}
         {result && result.matches.length > 0 && (
           <ul role="list">
             {grouped.map(([rel, matches]) => (
               <li key={rel}>
-                <div className="px-3 py-1 sticky top-0 bg-panel text-[11px] font-medium text-default border-b border-default truncate">
-                  {rel} <span className="text-subtle">({matches.length})</span>
+                <div className="sticky top-0 bg-panel border-b border-default">
+                  <SidebarSectionTitle>
+                    <span className="truncate inline-block max-w-full">
+                      {rel} <span className="opacity-70">({matches.length})</span>
+                    </span>
+                  </SidebarSectionTitle>
                 </div>
                 {matches.map((m, i) => (
-                  <button
+                  <SidebarRow
                     key={`${rel}:${m.line}:${m.col}:${i}`}
-                    type="button"
                     onClick={() => onJumpToMatch(m, { query: ui.query, regex: ui.regex, caseSensitive: ui.caseSensitive }, i)}
-                    className="block w-full text-left px-3 py-1 hover:bg-hover"
                     title={`Line ${m.line + 1}, column ${m.col + 1}`}
                   >
-                    <span className="text-subtle mr-2">{m.line + 1}:{m.col + 1}</span>
-                    <Snippet match={m} />
-                  </button>
+                    <SidebarMeta>{m.line + 1}:{m.col + 1}</SidebarMeta>
+                    <span className="flex-1 min-w-0 truncate"><Snippet match={m} /></span>
+                  </SidebarRow>
                 ))}
               </li>
             ))}
           </ul>
         )}
         {result?.truncated && (
-          <p className="px-3 py-2 text-amber-400">
+          <p className="px-3 py-2 text-warning-fg">
             Showing the first 1,000 matches. Narrow your search to see more.
           </p>
         )}
@@ -171,7 +174,7 @@ function Snippet({ match }: { match: SearchMatch }) {
   const after = match.snippet.slice(idx + match.matchLen)
   return (
     <span className="font-mono">
-      {before}<span className="font-bold text-default bg-amber-800/60">{hit}</span>{after}
+      {before}<span className="font-bold text-default bg-warning-soft">{hit}</span>{after}
     </span>
   )
 }

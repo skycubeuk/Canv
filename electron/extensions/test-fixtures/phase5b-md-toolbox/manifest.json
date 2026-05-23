@@ -1,0 +1,13 @@
+{
+  "id": "phase5b-md-toolbox",
+  "name": "Phase 5b MD Toolbox",
+  "version": "1.0.0",
+  "engines": { "canv": "^1.0.0" },
+  "description": "Adds 'Count words of this file' to the file-tree right-click on .md files.",
+  "capabilities": ["workspace.read", "ui", "notify"],
+  "contributions": [
+    { "type": "panel", "id": "main", "title": "MD Toolbox", "icon": "info", "location": "left-sidebar", "entry": "panels/main.html" },
+    { "type": "command", "id": "md.count.file", "title": "MD Toolbox: Count words of this file", "entry": "panels/main.html" },
+    { "type": "menu", "menu": "fileTree.context", "command": "md.count.file", "title": "Count words of this file", "when": "fileExt:.md" }
+  ]
+}

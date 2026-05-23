@@ -75,7 +75,7 @@ export function FileHistoryTab({ target, nonce, history, onOpenDiff, onRestore }
                 >
                   {smartTime(e.createdAt)}
                 </span>
-                <span className="text-[9.5px] uppercase tracking-wider text-subtle px-1 py-0 rounded-sm bg-elev shrink-0">
+                <span className="text-[10px] uppercase tracking-wider text-subtle px-1 py-0 rounded-sm bg-elev shrink-0">
                   {REASON_LABEL[e.reason]}
                 </span>
                 <span className="text-[10px] font-mono text-subtle shrink-0" aria-label="modified">M</span>

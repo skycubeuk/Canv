@@ -1,0 +1,20 @@
+{
+  "id": "daily-notes-watcher",
+  "name": "Daily Notes Watcher",
+  "version": "1.0.0",
+  "engines": { "canv": "^1.0.0" },
+  "description": "Phase 3 smoke fixture — activates only when the vault contains daily-notes/*.md.",
+  "author": "canv-internal",
+  "capabilities": ["notify", "ui"],
+  "activationEvents": ["workspaceContains:daily-notes/*.md"],
+  "contributions": [
+    {
+      "type": "panel",
+      "id": "main",
+      "title": "Daily Notes",
+      "icon": "info",
+      "location": "left-sidebar",
+      "entry": "panels/main.html"
+    }
+  ]
+}

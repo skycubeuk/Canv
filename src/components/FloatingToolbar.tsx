@@ -1,14 +1,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react'
-import { EditorView } from '@codemirror/view'
 import { Zap } from 'lucide-react'
-import type { Action, Mode as ModeConfig } from '../config/types'
+import type { Action } from '../config/types'
 import { useContextMenu } from '../lib/contextMenu'
+import { useService } from '../services/useService'
 
 interface Props {
-  view: EditorView | null
-  /** Bumped every time the parent observes a CM update. */
-  selectionVersion: number
-  profile: ModeConfig
   onAgent: (agent: Action, range: { from: number; to: number }, text: string, instruction?: string) => void
 }
 
@@ -20,7 +16,14 @@ interface Pos {
 type Mode = { kind: 'idle' } | { kind: 'presets' } | { kind: 'instruction'; agent: Action }
 
 export function FloatingToolbar(props: Props) {
-  const { view, selectionVersion, profile, onAgent } = props
+  const { onAgent } = props
+  const editorRegistry = useService('editorRegistry')
+  const view = editorRegistry.getActiveEditor()
+  const modesSvc = useService('modes')
+  const activeProfileId = modesSvc.profile ?? modesSvc.defaultModeId
+  const profile =
+    modesSvc.modes.find((m) => m.id === activeProfileId) ??
+    modesSvc.modes.find((m) => m.id === modesSvc.defaultModeId)!
   const [pos, setPos] = useState<Pos | null>(null)
   const [selection, setSelection] = useState<{ from: number; to: number; text: string } | null>(null)
   const [mode, setMode] = useState<Mode>({ kind: 'idle' })
@@ -66,9 +69,31 @@ export function FloatingToolbar(props: Props) {
     setSelection({ from: sel.from, to: sel.to, text })
   }, [view])
 
-  // Re-evaluate when parent says selection or doc changed.
-  // eslint-disable-next-line react-hooks/set-state-in-effect -- recompute calls setState; that's the whole point of this effect — drive toolbar state from external CM updates signalled by selectionVersion bumps
-  useEffect(() => { recompute() }, [recompute, selectionVersion])
+  // Self-subscribe to selection changes via a rAF poll on the view's selection
+  // range. Previously the parent (App.tsx) held a `selectionTick` useState that
+  // bumped on every CM selection event and re-rendered the entire 782-LOC App
+  // tree just so the toolbar could see the new selection. Polling locally
+  // keeps the render contained to this component.
+  useEffect(() => {
+    if (!view) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: clear toolbar state when the active editor goes away
+      recompute()
+      return
+    }
+    let raf = 0
+    let lastKey = `${view.state.selection.main.from}-${view.state.selection.main.to}-${view.state.doc.length}`
+    recompute()
+    const tick = () => {
+      const key = `${view.state.selection.main.from}-${view.state.selection.main.to}-${view.state.doc.length}`
+      if (key !== lastKey) {
+        lastKey = key
+        recompute()
+      }
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [view, recompute])
 
   // Layout-only events (window resize, scroll) — same as before.
   useEffect(() => {
@@ -177,7 +202,7 @@ export function FloatingToolbar(props: Props) {
             type="button"
             onClick={handleInstructionSubmit}
             disabled={!instructionText.trim()}
-            className="btn-primary py-1! px-2! text-xs disabled:opacity-50"
+            className="btn-primary btn-sm disabled:opacity-50"
           >
             Run
           </button>
@@ -195,7 +220,7 @@ export function FloatingToolbar(props: Props) {
               <agent.icon aria-hidden className="w-4 h-4" />
             </button>
           ))}
-          {presets.length > 0 && <div className="w-px h-5 bg-[rgb(var(--border-default))] mx-1" />}
+          {presets.length > 0 && <div className="w-px h-5 bg-border-default mx-1" />}
           {presets.length > 0 && <div className="relative">
             <button
               type="button"

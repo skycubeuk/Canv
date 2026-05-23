@@ -1,3 +1,4 @@
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { IdeShell, type DockSlot } from './IdeShell'
 import { LeftSidebar } from './LeftSidebar'
 import { EditorArea } from './EditorArea'
@@ -9,20 +10,30 @@ import { SearchTab } from './sidebar/SearchTab'
 import { HistoryTab } from './sidebar/HistoryTab'
 import { getCanvHistory } from '../../lib/history'
 import { SitesTab } from './sidebar/SitesTab'
+import { ExtensionsTab } from '../extensions/ExtensionsTab'
+import { InstallExtensionMenu } from '../extensions/InstallExtensionMenu'
+import type { ExtensionsTabHandle } from '../extensions/ExtensionsTab'
+import { TrustWorkspaceBanner } from '../extensions/TrustWorkspaceBanner'
+import { BottomExtensionPanelSlot } from '../extensions/BottomExtensionPanelSlot'
 import { OutlinePanel } from './sidebar/OutlinePanel'
 import { Canvas } from '../Canvas'
 import { SettingsTab } from './tabs/SettingsTab'
 import { DiffTab } from './tabs/DiffTab'
-import type { Mode } from '../../config/types'
-import type { UseIdeLayoutApi, BottomLayout } from '../../hooks/useIdeLayout'
-import type { WorkspaceApi } from '../../hooks/useWorkspace'
-import type { Settings } from '../../hooks/useSettings'
+import { ActivityBar, type BuiltinTab } from './ActivityBar'
+import { Folder, Search, History as HistoryIcon, LayoutDashboard, Puzzle, Plus, FolderPlus, FolderOpen } from 'lucide-react'
+import { SidebarIconButton } from './sidebar/SidebarChrome'
+import type { SidebarPanelDef } from './LeftSidebar'
+import type { HistoryTabHandle } from './sidebar/HistoryTab'
+import { useContributions } from '../../hooks/useContributions'
+import { useFileHandlerRouting } from '../../hooks/useFileHandlerRouting'
+import { editorMapKey } from '../../hooks/useEditorRegistry'
+import { ExtensionEditorTab } from '../extensions/ExtensionEditorTab'
+import type { BottomLayout } from '../../hooks/useIdeLayout'
 import type { OutlineNode } from '../../lib/outline'
-import type { SearchMatch } from '../../lib/searchTypes'
-import type { Jumper } from '../Canvas'
-import type { EditorGroupId } from '../../types/workspace'
 import { EditorView } from '@codemirror/view'
 import { isElectron } from '../../lib/fs'
+import { exportBackup } from '../../lib/backup'
+import { useService } from '../../services/useService'
 
 function dockSlotForPlacement(bottom: BottomLayout): DockSlot {
   if (!bottom.visible) return 'none'
@@ -31,167 +42,322 @@ function dockSlotForPlacement(bottom: BottomLayout): DockSlot {
 }
 
 export interface WorkspaceShellProps {
-  // Layout
-  ideLayout: UseIdeLayoutApi
-  // Workspace
-  workspace: WorkspaceApi
-  openRels: Set<string>
-  pinnedRels: Set<string>
-  // Editor registry callbacks
-  onEditorReady: (groupId: EditorGroupId, rel: string, view: EditorView) => void
-  onEditorDestroy: (groupId: EditorGroupId, rel: string) => void
-  onJumperReady: (groupId: EditorGroupId, rel: string, jumper: Jumper) => void
-  onJumperDestroy: (groupId: EditorGroupId, rel: string) => void
-  onEditorChange: (groupId: EditorGroupId, rel: string, markdown: string) => void
-  onEditorSelectionChange: () => void
-  readLiveBuffer: (groupId: EditorGroupId, rel: string) => string | undefined
-  onJumpToMatch: (match: SearchMatch, q: { query: string; regex: boolean; caseSensitive: boolean }, ordinalInFile: number) => Promise<void>
-  // Outline
-  outlineNodes: OutlineNode[]
-  focusedKey: string | null
-  onOutlineJump: (node: OutlineNode) => void
-  // Files / breadcrumbs
-  onClickBreadcrumbFolder: (folderRel: string) => void
-  revealFolderRel: string | null
-  onCreateFile: (parentRel: string) => Promise<void>
-  onCreateFolder: (parentRel: string) => Promise<void>
-  onRename: (oldRel: string, newRel: string) => Promise<void>
-  onDelete: (rel: string) => Promise<void>
-  onChangeWorkspace: () => Promise<void>
-  // Diff
-  onOpenDiff: (rel: string, baseRef?: string, baseLabel?: string) => void
-  // Revision Archaeology
-  raEnabled: boolean
+  /** Opens the restore-preview dialog; target is App-local UI state. */
   onOpenRestore: (r: { snapshotId: string; relPath: string }) => void
   /** Triggers when the Files-tab context menu fires "View history" on a file. */
   onViewHistory?: (rel: string) => void
-  // Settings
-  settings: Settings
-  onUpdateSettings: (patch: Partial<Settings>) => void
-  // Settings tab callbacks
-  onExportBackup: () => void
-  // Bottom panel
+  // Bottom panel — App-local (composed via useBottomPanelTabs in App.tsx)
   bottomPanelTabs: BottomPanelTabDef[]
-  // Status bar
-  saveState: 'saved' | 'saving' | 'conflict'
-  activeProfile: Mode
-  onClickProfile: () => void
-  apiKeyMissing: boolean
-  onClickApiKeyWarning: () => void
-  cursorLine: number | null
-  cursorCol: number | null
-  onOpenSettings: () => void
-  onToggleChat: () => void
-  meterTokens: number | null
-  meterCostUsd: number | null
-  wordCount: number
-  selectionWordCount: number | null
 }
 
 export function WorkspaceShell(props: WorkspaceShellProps) {
   const {
-    ideLayout, workspace, openRels, pinnedRels,
-    onEditorReady, onEditorDestroy, onJumperReady, onJumperDestroy,
-    onEditorChange, onEditorSelectionChange,
-    readLiveBuffer,
-    onJumpToMatch,
-    outlineNodes, focusedKey, onOutlineJump,
-    onClickBreadcrumbFolder, revealFolderRel,
-    onCreateFile, onCreateFolder, onRename, onDelete, onChangeWorkspace,
-    onOpenDiff,
-    raEnabled, onOpenRestore, onViewHistory,
-    settings, onUpdateSettings,
-    onExportBackup,
+    onOpenRestore, onViewHistory,
     bottomPanelTabs,
-    saveState, activeProfile,
-    onClickProfile, apiKeyMissing, onClickApiKeyWarning,
-    cursorLine, cursorCol,
-    onOpenSettings, onToggleChat,
-    meterTokens, meterCostUsd,
-    wordCount, selectionWordCount,
   } = props
+
+  // Service-backed values — replaces the prop chain from App.tsx.
+  const workspace = useService('workspace')
+  const editorRegistry = useService('editorRegistry')
+  const ideLayout = useService('ideLayout')
+  const settingsApi = useService('settings')
+  const fileOps = useService('workspaceFileOps')
+  const setup = useService('setup')
+  const modesSvc = useService('modes')
+  const selectionAgent = useService('selectionAgent')
+  const activeProfileId = modesSvc.profile ?? modesSvc.defaultModeId
+  const activeProfile =
+    modesSvc.modes.find((m) => m.id === activeProfileId) ??
+    modesSvc.modes.find((m) => m.id === modesSvc.defaultModeId)!
+  const { settings } = settingsApi
+  const onUpdateSettings = settingsApi.update
+  const raEnabled = setup.config?.revisionArchaeology.enabled === true
+  const onExportBackup = useCallback(() => {
+    workspace.flushAll()
+    exportBackup()
+  }, [workspace])
+
+  const contributions = useContributions()
+  const fileHandlerRouting = useFileHandlerRouting()
+
+  // Derived sets — previously computed in App.tsx and passed in.
+  const openRels = useMemo(() => {
+    const out = new Set<string>()
+    for (const g of workspace.editorGroups) {
+      for (const t of g.openTabs) {
+        if (t.kind === 'markdown') out.add(t.relPath)
+      }
+    }
+    return out
+  }, [workspace.editorGroups])
+  const pinnedRels = useMemo(
+    () => new Set(workspace.pinned.map((p) => p.relPath)),
+    [workspace.pinned],
+  )
+
+  // FileTree reveal target — drives a one-shot expand on the FileTree. Stays
+  // local to WorkspaceShell since no other AppInner state reads it.
+  const [revealFolderRel, setRevealFolderRel] = useState<string | null>(null)
+
+  // Folder the sidebar's +file / +folder buttons target. Set by clicking or
+  // right-clicking a folder row in the tree; '' means workspace root.
+  const [selectedDir, setSelectedDir] = useState('')
+  const [seenRoot, setSeenRoot] = useState(workspace.root)
+  if (workspace.root !== seenRoot) {
+    setSeenRoot(workspace.root)
+    setSelectedDir('')
+  }
+  const onClickBreadcrumbFolder = useCallback((folderRel: string) => {
+    ideLayout.setSidebarTab('files')
+    if (!ideLayout.layout.sidebar.visible) ideLayout.toggleSidebar()
+    setRevealFolderRel(folderRel)
+    setSelectedDir(folderRel)
+    // Clear in a microtask so consecutive clicks on the same folder still
+    // bump the prop and re-trigger the FileTree expand effect.
+    setTimeout(() => setRevealFolderRel(null), 0)
+  }, [ideLayout])
+
+  // Outline jump — uses editor + jumper refs from the registry service.
+  const { editorsRef, jumpersRef } = editorRegistry
+  const onOutlineJump = useCallback((node: OutlineNode) => {
+    const rel = workspace.activeMarkdownRel
+    if (!rel) return
+    const key = editorMapKey(workspace.activeGroupId, rel)
+    const jumper = jumpersRef.current.get(key)
+    if (jumper) {
+      jumper(node.line, node.index)
+      return
+    }
+    const view = editorsRef.current.get(key)
+    if (!view) return
+    const doc = view.state.doc
+    const safeLine = Math.max(1, Math.min(node.line, doc.lines))
+    const linePos = doc.line(safeLine).from
+    view.dispatch({
+      selection: { anchor: linePos },
+      effects: EditorView.scrollIntoView(linePos, { y: 'start', yMargin: 8 }),
+    })
+    view.focus()
+  }, [workspace.activeGroupId, workspace.activeMarkdownRel, editorsRef, jumpersRef])
+
+  // Diff open — wraps workspace.openDiffTab for HistoryTab + breadcrumb hooks.
+  const onOpenDiff = useCallback(
+    (rel: string, baseRef: string = 'HEAD', baseLabel?: string) => {
+      workspace.openDiffTab(rel, baseRef, baseLabel)
+    },
+    [workspace],
+  )
+
+  /**
+   * Open a file, routing through extension file handlers when a match exists.
+   * Pass opts.withExtensionId to force a specific handler, or null to force CodeMirror.
+   */
+  function openFile(rel: string, opts?: { withExtensionId?: string | null }) {
+    if (opts?.withExtensionId !== undefined) {
+      if (opts.withExtensionId === null) {
+        // Force text editor
+        void workspace.openTab(rel)
+        return
+      }
+      const handler = fileHandlerRouting.list(rel).find((h) => h.extensionId === opts.withExtensionId)
+      workspace.openExtensionTab(rel, opts.withExtensionId, handler?.mode ?? 'viewer')
+      return
+    }
+    // Auto-route
+    const handler = fileHandlerRouting.resolve(rel)
+    if (handler) {
+      workspace.openExtensionTab(rel, handler.extensionId, handler.mode)
+      return
+    }
+    void workspace.openTab(rel)
+  }
+
+  const builtinTabs: BuiltinTab[] = [
+    { id: 'files', label: 'Files', icon: Folder },
+    { id: 'search', label: 'Search', icon: Search },
+    ...(raEnabled ? [{ id: 'history', label: 'History', icon: HistoryIcon }] : []),
+    { id: 'sites', label: 'Sites', icon: LayoutDashboard },
+    { id: 'extensions', label: 'Extensions', icon: Puzzle },
+  ]
+
+  function onSelectSidebarTab(tabId: string) {
+    const { visible, activeTab } = ideLayout.layout.sidebar
+    if (visible && activeTab === tabId) {
+      ideLayout.toggleSidebar()
+      return
+    }
+    ideLayout.setSidebarTab(tabId)
+    if (!visible) ideLayout.toggleSidebar()
+  }
 
   function setChatDraft(prompt: string) {
     window.dispatchEvent(new CustomEvent('canv:setChatDraft', { detail: prompt }))
   }
 
-  const outlineNode = outlineNodes.length > 0 ? (
+  const outlineNode = editorRegistry.outlineNodes.length > 0 ? (
     <OutlinePanel
-      nodes={outlineNodes}
-      resetKey={focusedKey}
+      nodes={editorRegistry.outlineNodes}
+      resetKey={editorRegistry.focusedKey}
       onJump={onOutlineJump}
       collapsed={ideLayout.layout.outline.collapsed}
       onToggleSectionCollapsed={ideLayout.toggleOutlineCollapsed}
     />
   ) : null
 
+  const historyRef = useRef<HistoryTabHandle | null>(null)
+  const extensionsRef = useRef<ExtensionsTabHandle | null>(null)
+
+  const panels: SidebarPanelDef[] = [
+    {
+      id: 'files',
+      title: 'Workspace',
+      headerActions: (
+        <>
+          <SidebarIconButton
+            aria-label="New file"
+            icon={Plus}
+            onClick={() => fileOps.createFile(selectedDir)}
+          />
+          <SidebarIconButton
+            aria-label="New folder"
+            icon={FolderPlus}
+            onClick={() => fileOps.createFolder(selectedDir)}
+          />
+          <SidebarIconButton
+            aria-label="Change workspace"
+            title="Change workspace"
+            icon={FolderOpen}
+            onClick={fileOps.changeWorkspace}
+          />
+        </>
+      ),
+      body: (
+        <FilesTab
+          root={workspace.root}
+          tree={workspace.tree}
+          truncated={workspace.treeTruncated}
+          openRels={openRels}
+          activeRel={workspace.activeMarkdownRel}
+          pinnedRels={pinnedRels}
+          onOpen={(rel) => openFile(rel)}
+          onOpenWith={(rel, extensionId) => openFile(rel, { withExtensionId: extensionId })}
+          onPin={(rel) => workspace.pin(rel)}
+          onUnpin={(rel) => workspace.unpin(rel)}
+          onCreateFile={fileOps.createFile}
+          onCreateFolder={fileOps.createFolder}
+          onRename={fileOps.rename}
+          onDelete={fileOps.remove}
+          onChangeWorkspace={fileOps.changeWorkspace}
+          selectedDir={selectedDir}
+          onSelectDir={setSelectedDir}
+          revealRel={revealFolderRel}
+          revisionArchaeologyEnabled={raEnabled}
+          onViewHistory={onViewHistory}
+        />
+      ),
+    },
+    {
+      id: 'search',
+      title: 'Search',
+      body: <SearchTab onJumpToMatch={editorRegistry.jumpToMatch} />,
+    },
+    ...(raEnabled
+      ? [{
+          id: 'history' as const,
+          title: 'History',
+          headerActions: (
+            <SidebarIconButton
+              aria-label="Create checkpoint"
+              title="Create checkpoint"
+              icon={Plus}
+              onClick={() => historyRef.current?.openCheckpointComposer()}
+            />
+          ),
+          body: (
+            <HistoryTab
+              ref={historyRef}
+              history={getCanvHistory()!}
+              onOpenDiff={(r) => {
+                const sha = r.kind === 'current' ? r.baseSha : r.commitSha
+                onOpenDiff(r.relPath, sha, r.baseLabel)
+              }}
+              onCreateCheckpoint={async (summary) => {
+                const h = getCanvHistory(); if (!h) return
+                const changes = await h.getCurrentChanges()
+                await h.createSnapshot({
+                  reason: 'manual',
+                  summary,
+                  files: changes.map((c) => c.relPath),
+                  metadata: {},
+                })
+              }}
+              onRestore={onOpenRestore}
+            />
+          ),
+        }]
+      : []),
+    {
+      id: 'sites',
+      title: 'Sites',
+      body: <SitesTab onRegenerate={setChatDraft} />,
+    },
+    {
+      id: 'extensions',
+      title: 'Extensions',
+      headerActions: (
+        <InstallExtensionMenu
+          onFromFolder={() => extensionsRef.current?.installFromFolder()}
+          onFromFile={() => extensionsRef.current?.installFromFile()}
+        />
+      ),
+      body: <ExtensionsTab ref={extensionsRef} />,
+    },
+  ]
+
+  const extensionBottomTabs: BottomPanelTabDef[] = contributions.panels
+    .filter((p) => p.location === 'bottom-dock')
+    .map((p) => ({
+      id: `ext:${p.extensionId}:${p.id}`,
+      label: p.title,
+      icon: Puzzle,
+      render: () => <BottomExtensionPanelSlot slotId={`ext:${p.extensionId}:${p.id}`} />,
+    }))
+
+  const allBottomTabs = [...bottomPanelTabs, ...extensionBottomTabs]
+
   return (
-    <div className="flex-1 min-h-0">
+    <div style={{ display: 'flex', height: '100%' }} className="flex-1 min-h-0">
+      <ActivityBar
+        builtinTabs={builtinTabs}
+        extensionPanels={contributions.panels}
+        activeTabId={ideLayout.layout.sidebar.activeTab}
+        onSelect={onSelectSidebarTab}
+        sidebarVisible={ideLayout.layout.sidebar.visible}
+      />
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
       <IdeShell
         sidebar={(
           <LeftSidebar
             activeTab={ideLayout.layout.sidebar.activeTab}
-            onSelectTab={ideLayout.setSidebarTab}
-            search={<SearchTab onJumpToMatch={onJumpToMatch} />}
-            historyEnabled={raEnabled}
-            history={raEnabled ? (
-              <HistoryTab
-                history={getCanvHistory()!}
-                onOpenDiff={(r) => {
-                  // r.baseSha (current) or r.commitSha (snapshot / fileHistory) — both are valid git OIDs on canv-history.
-                  const sha = r.kind === 'current' ? r.baseSha : r.commitSha
-                  onOpenDiff(r.relPath, sha, r.baseLabel)
-                }}
-                onCreateCheckpoint={async (summary) => {
-                  const h = getCanvHistory(); if (!h) return
-                  const changes = await h.getCurrentChanges()
-                  await h.createSnapshot({
-                    reason: 'manual',
-                    summary,
-                    files: changes.map((c) => c.relPath),
-                    metadata: {},
-                  })
-                }}
-                onRestore={onOpenRestore}
-              />
-            ) : undefined}
-            sites={<SitesTab onRegenerate={setChatDraft} />}
+            panels={panels}
             settings={settings}
             onUpdateSettings={onUpdateSettings}
             workspaceName={workspace.root}
-            files={(
-              <FilesTab
-                root={workspace.root}
-                tree={workspace.tree}
-                truncated={workspace.treeTruncated}
-                openRels={openRels}
-                activeRel={workspace.activeMarkdownRel}
-                pinnedRels={pinnedRels}
-                onOpen={(rel) => workspace.openTab(rel)}
-                onPin={(rel) => workspace.pin(rel)}
-                onUnpin={(rel) => workspace.unpin(rel)}
-                onCreateFile={onCreateFile}
-                onCreateFolder={onCreateFolder}
-                onRename={onRename}
-                onDelete={onDelete}
-                onChangeWorkspace={onChangeWorkspace}
-                revealRel={revealFolderRel}
-                revisionArchaeologyEnabled={raEnabled}
-                onViewHistory={onViewHistory}
-              />
-            )}
             outline={outlineNode}
             outlineSize={ideLayout.layout.outline.size}
             onOutlineSizeChange={ideLayout.setOutlineSize}
-            onNewFile={() => onCreateFile('')}
-            onNewFolder={() => onCreateFolder('')}
-            onChangeWorkspace={onChangeWorkspace}
           />
         )}
         sidebarVisible={ideLayout.layout.sidebar.visible}
         sidebarSize={ideLayout.layout.sidebar.size}
         editor={(
           <main className="h-full flex flex-col min-w-0 overflow-hidden bg-app">
+            <TrustWorkspaceBanner
+              onReviewInSidebar={() => {
+                ideLayout.setSidebarTab('extensions')
+                if (!ideLayout.layout.sidebar.visible) ideLayout.toggleSidebar()
+              }}
+            />
             <div className="flex-1 min-h-0">
               <EditorArea
                 workspaceRoot={workspace.root}
@@ -205,6 +371,10 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
                 groupSizes={ideLayout.layout.editor.sizes}
                 onGroupSizesChange={(sizes) => ideLayout.setEditorSizes(sizes)}
                 onClickFolder={onClickBreadcrumbFolder}
+                profile={activeProfile}
+                onRunDocAgent={(groupId, agent, instruction) =>
+                  selectionAgent.handleAgentOnDocument(groupId, agent, instruction)
+                }
                 renderTabContent={(groupId, t, isActive, viewMode) => {
                   if (t.kind === 'settings') {
                     return (
@@ -218,6 +388,16 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
                   if (t.kind === 'diff') {
                     return <DiffTab relPath={t.relPath} baseRef={t.baseRef} baseLabel={t.baseLabel} isActive={isActive} />
                   }
+                  if (t.kind === 'extension') {
+                    return (
+                      <ExtensionEditorTab
+                        extensionId={t.extensionId}
+                        relPath={t.relPath}
+                        mode={t.mode}
+                        isActive={isActive}
+                      />
+                    )
+                  }
                   return (
                     <Canvas
                       groupId={groupId}
@@ -226,20 +406,20 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
                       fontSize={settings.fontSize}
                       lineWidth={settings.lineWidth}
                       viewMode={viewMode}
-                      onChange={onEditorChange}
-                      onSelectionChange={onEditorSelectionChange}
-                      onEditorReady={onEditorReady}
-                      onEditorDestroy={onEditorDestroy}
-                      onJumperReady={onJumperReady}
-                      onJumperDestroy={onJumperDestroy}
-                      getInitialBuffer={readLiveBuffer}
+                      onChange={editorRegistry.handleEditorChange}
+                      onEditorReady={editorRegistry.handleEditorReady}
+                      onEditorDestroy={editorRegistry.handleEditorDestroy}
+                      onJumperReady={editorRegistry.handleJumperReady}
+                      onJumperDestroy={editorRegistry.handleJumperDestroy}
+                      getInitialBuffer={editorRegistry.readLiveBuffer}
+                      onActiveEditorUpdate={editorRegistry.onActiveEditorUpdate}
                     />
                   )
                 }}
                 emptyState={(
                   <EmptyState
                     hasWorkspace={!!workspace.root}
-                    onChooseWorkspace={onChangeWorkspace}
+                    onChooseWorkspace={fileOps.changeWorkspace}
                   />
                 )}
               />
@@ -248,7 +428,7 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
         )}
         dock={(
           <BottomPanel
-            tabs={bottomPanelTabs}
+            tabs={allBottomTabs}
             activeTab={ideLayout.layout.bottom.activeTab}
             onSelectTab={ideLayout.setBottomTab}
             onClose={ideLayout.toggleBottom}
@@ -268,29 +448,9 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
         onSidebarSizeChange={ideLayout.setSidebarSize}
         onBottomSizeChange={ideLayout.setBottomSize}
         onRightSizeChange={ideLayout.setRightSize}
-        statusBar={(
-          <StatusBar
-            saveState={saveState}
-            profile={activeProfile}
-            workspaceName={workspace.root}
-            kind={workspace.kind}
-            wordCount={wordCount}
-            selectionWordCount={selectionWordCount}
-            onClickProfile={onClickProfile}
-            apiKeyMissing={apiKeyMissing}
-            onClickApiKeyWarning={onClickApiKeyWarning}
-            cursorLine={cursorLine}
-            cursorCol={cursorCol}
-            branch={null}
-            diffStats={null}
-            onOpenSettings={onOpenSettings}
-            chatVisible={ideLayout.layout.bottom.visible && ideLayout.layout.bottom.activeTab === 'chat'}
-            onToggleChat={onToggleChat}
-            meterTokens={meterTokens}
-            meterCostUsd={meterCostUsd}
-          />
-        )}
+        statusBar={<StatusBar />}
       />
+      </div>
     </div>
   )
 }

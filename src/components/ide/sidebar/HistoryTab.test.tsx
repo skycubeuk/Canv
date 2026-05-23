@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
+import { createRef } from 'react'
 import { HistoryTab } from './HistoryTab'
+import type { HistoryTabHandle } from './HistoryTab'
 import type { SnapshotEntry } from '../../../lib/historyTypes'
 
 function snap(over: Partial<SnapshotEntry> = {}): SnapshotEntry {
@@ -86,8 +88,11 @@ describe('HistoryTab', () => {
       hideSnapshot: vi.fn(),
       getTipCommit: vi.fn().mockResolvedValue('a'.repeat(40)),
     }
-    render(<HistoryTab history={history as never} onOpenDiff={onOpenDiff} onCreateCheckpoint={onCreateCheckpoint} onRestore={onRestore} />)
-    fireEvent.click(screen.getByRole('button', { name: /Create checkpoint/i }))
+    const ref = createRef<HistoryTabHandle>()
+    render(<HistoryTab ref={ref} history={history as never} onOpenDiff={onOpenDiff} onCreateCheckpoint={onCreateCheckpoint} onRestore={onRestore} />)
+    // The "Create checkpoint" button now lives in the shell header; open the
+    // composer via the imperative handle (as WorkspaceShell does).
+    act(() => { ref.current?.openCheckpointComposer() })
     const input = screen.getByDisplayValue('Manual checkpoint')
     fireEvent.change(input, { target: { value: 'After chapter 4' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))

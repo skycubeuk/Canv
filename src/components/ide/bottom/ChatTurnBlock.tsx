@@ -64,7 +64,7 @@ export function ChatTurnBlock({ turnIndex, userMessage, assistantMessage }: Prop
       ))}
 
       {assistantMessage.failureReason === 'provider_error' && assistantMessage.errorInfo && (
-        <div data-testid="turn-error" className="mt-1 text-[11px] text-red-400">
+        <div data-testid="turn-error" className="mt-1 text-[11px] text-danger-fg">
           [{assistantMessage.errorInfo.kind}
           {assistantMessage.errorInfo.statusCode ? ` ${assistantMessage.errorInfo.statusCode}` : ''}
           ] {assistantMessage.errorInfo.message}
