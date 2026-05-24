@@ -29,6 +29,13 @@ export interface UseSelectionAgentArgs {
   showToast: (msg: string) => void
   openSettingsTab: () => void
   showBottomTab: (tab: BottomTab) => void
+  /** Emit a finished selection rewrite as an inline diff in the document. */
+  emitDiffSuggestion: (
+    range: { from: number; to: number },
+    original: string,
+    rewrite: string,
+    origin: { agentId: string; agentLabel: string; provider: string; model: string },
+  ) => void
 }
 
 export interface UseSelectionAgentApi {
@@ -47,7 +54,7 @@ export function useSelectionAgent(args: UseSelectionAgentArgs): UseSelectionAgen
   const {
     settings, modelForAgent, activeProfile, activeProfileId, workspace,
     getActiveEditor, getActiveEditorForGroup,
-    showToast, openSettingsTab, showBottomTab,
+    showToast, openSettingsTab, showBottomTab, emitDiffSuggestion,
   } = args
 
   const [runs, setRuns] = useLocalStorage<RunRecord[]>('canv:runs', [])
@@ -116,6 +123,9 @@ export function useSelectionAgent(args: UseSelectionAgentArgs): UseSelectionAgen
         return
       }
       const adapter = getAdapter(provider)
+      // Selection-level plain rewrites render inline; everything else keeps the
+      // Runs panel for now (Phase 1).
+      const emitInline = agent.outputMode === 'replacement' && range != null
       const freshContextSummaries = await ensurePinnedReady()
       const promptTemplate = agent.prompt
 
@@ -145,6 +155,7 @@ export function useSelectionAgent(args: UseSelectionAgentArgs): UseSelectionAgen
         basePrompt,
         followups: [],
         schemaVersion: 2,
+        inlineEmitted: emitInline,
       }
 
       setRuns((prev) => {
@@ -152,7 +163,7 @@ export function useSelectionAgent(args: UseSelectionAgentArgs): UseSelectionAgen
         return next.slice(0, MAX_RUNS)
       })
       setActiveTabId(id)
-      showBottomTab('runs')
+      if (!emitInline) showBottomTab('runs')
 
       const startedAt = Date.now()
       const controller = new AbortController()
@@ -200,6 +211,15 @@ export function useSelectionAgent(args: UseSelectionAgentArgs): UseSelectionAgen
               : r,
           ),
         )
+
+        if (emitInline && range && final.trim()) {
+          emitDiffSuggestion(
+            range,
+            text,
+            final,
+            { agentId: agent.id, agentLabel: agent.label, provider: adapter.id, model },
+          )
+        }
       } catch (e) {
         const aborted = e instanceof DOMException && e.name === 'AbortError'
         const msg = e instanceof Error ? e.message : String(e)
@@ -215,11 +235,12 @@ export function useSelectionAgent(args: UseSelectionAgentArgs): UseSelectionAgen
               : r,
           ),
         )
+        if (emitInline) showBottomTab('runs')
       } finally {
         runAbort.current.delete(id)
       }
     },
-    [activeProfileId, settings, modelForAgent, ensurePinnedReady, getActiveEditor, setRuns, showToast, openSettingsTab, showBottomTab],
+    [activeProfileId, settings, modelForAgent, ensurePinnedReady, getActiveEditor, setRuns, showToast, openSettingsTab, showBottomTab, emitDiffSuggestion],
   )
 
   const handleAgentFromToolbar = useCallback(

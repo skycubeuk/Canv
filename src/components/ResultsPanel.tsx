@@ -58,6 +58,9 @@ export interface RunRecord {
   /** Set true once the rewrite has been written into the editor. Disables
    *  Apply so a second click can't prepend another copy of the change. */
   applied?: boolean
+  /** True when this run's rewrite was rendered as an inline diff in the
+   *  document; the Runs panel then shows a hint instead of an Apply button. */
+  inlineEmitted?: boolean
 }
 
 export function RunView({
@@ -224,23 +227,27 @@ export function RunView({
 
           {!busy && parsed.rewrite && (
             <div className="flex items-center gap-2 mt-3">
-              <button
-                type="button"
-                className="btn-primary"
-                onClick={() => onApply(run, parsed.rewrite!)}
-                disabled={run.schemaVersion !== 2 || run.applied === true}
-                title={
-                  run.schemaVersion !== 2
-                    ? 'Run was created with the previous editor — re-run to apply'
-                    : run.applied
-                      ? 'Already applied — re-run to produce a fresh edit'
-                      : run.range
-                        ? 'Replace selection with this text'
-                        : 'Replace the entire document with this text'
-                }
-              >
-                {run.applied ? 'Applied' : 'Apply'}
-              </button>
+              {run.inlineEmitted ? (
+                <span className="text-xs text-subtle italic">Review inline in the document ↑</span>
+              ) : (
+                <button
+                  type="button"
+                  className="btn-primary"
+                  onClick={() => onApply(run, parsed.rewrite!)}
+                  disabled={run.schemaVersion !== 2 || run.applied === true}
+                  title={
+                    run.schemaVersion !== 2
+                      ? 'Run was created with the previous editor — re-run to apply'
+                      : run.applied
+                        ? 'Already applied — re-run to produce a fresh edit'
+                        : run.range
+                          ? 'Replace selection with this text'
+                          : 'Replace the entire document with this text'
+                  }
+                >
+                  {run.applied ? 'Applied' : 'Apply'}
+                </button>
+              )}
               <button
                 type="button"
                 className="btn-secondary"
