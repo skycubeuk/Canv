@@ -5,6 +5,7 @@ import type { EditorGroupId } from '../types/workspace'
 import { EditorView } from '@codemirror/view'
 import { runAgent, buildPrompt, parseAgentResponse } from '../agents/runner'
 import { routeSelectionAgentResult } from '../agents/selectionRouting'
+import { parseReviewNotes, anchorReviewNotes } from '../lib/suggestions/reviewNotes'
 import { getActionById } from './useModes'
 import { getAdapter } from '../adapters'
 import { decideApply } from '../lib/applyDecision'
@@ -163,9 +164,10 @@ export function useSelectionAgent(args: UseSelectionAgentArgs): UseSelectionAgen
         return next.slice(0, MAX_RUNS)
       })
       setActiveTabId(id)
-      // Whole-document runs (no selection range) have no inline target → panel.
-      // Selection runs defer the decision until the response arrives.
-      if (range == null) showBottomTab('runs')
+      // Surface the run immediately so the user SEES it streaming — that
+      // "it's working" feedback is the whole point of the Runs panel. The
+      // result also renders inline (diff / annotations) once it arrives.
+      showBottomTab('runs')
 
       const startedAt = Date.now()
       const controller = new AbortController()
@@ -233,10 +235,19 @@ export function useSelectionAgent(args: UseSelectionAgentArgs): UseSelectionAgen
             model,
           })
         }
-        if (routing.emitAnnotation && range && parsed.feedback) {
-          emitAnnotation({ from: range.from, to: range.to }, parsed.feedback, agent.label)
+        if (routing.emitAnnotation && range) {
+          // Per-span: a review that returns the structured JSON array becomes
+          // one annotation per note, each anchored to its quoted span.
+          // Otherwise (holistic notes / non-JSON) fall back to a single note.
+          const structured = parseReviewNotes(final)
+          if (structured) {
+            for (const a of anchorReviewNotes(text, range.from, structured)) {
+              emitAnnotation({ from: a.from, to: a.to }, a.note, agent.label)
+            }
+          } else if (parsed.feedback) {
+            emitAnnotation({ from: range.from, to: range.to }, parsed.feedback, agent.label)
+          }
         }
-        if (!routing.suppressPanel) showBottomTab('runs')
       } catch (e) {
         const aborted = e instanceof DOMException && e.name === 'AbortError'
         const msg = e instanceof Error ? e.message : String(e)

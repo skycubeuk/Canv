@@ -216,7 +216,6 @@ class ControlWidget extends WidgetType {
 
     wrap.appendChild(mkBtn('✓', 'cm-sug-accept', 'Accept change', (cb) => cb.accept(this.hunkId, view)))
     wrap.appendChild(mkBtn('✗', 'cm-sug-reject', 'Reject change', (cb) => cb.reject(this.hunkId, view)))
-    wrap.appendChild(mkBtn('Discuss', 'cm-sug-discuss', 'Discuss change', (cb) => cb.discuss?.(this.hunkId, view)))
     return wrap
   }
   ignoreEvent() {
@@ -289,7 +288,6 @@ class AnnotationCardWidget extends WidgetType {
       actions.appendChild(mkBtn('Accept', 'cm-annot-accept', (cb) => cb.acceptAnnotation?.(this.ann.id, view)))
     }
     actions.appendChild(mkBtn('Dismiss', 'cm-annot-dismiss', (cb) => cb.dismissAnnotation?.(this.ann.id, view)))
-    actions.appendChild(mkBtn('Discuss', 'cm-annot-discuss', (cb) => cb.discuss?.(this.ann.id, view)))
     card.appendChild(actions)
     return card
   }
