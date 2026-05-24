@@ -83,6 +83,8 @@ export interface UseChatSessionsApi {
   followLatest: boolean
   setFollowLatest: React.Dispatch<React.SetStateAction<boolean>>
   sendChat: (text: string) => Promise<void>
+  /** Create a new chat session, activate it, and immediately send `seedText` as the first user message. */
+  startSeededChat: (seedText: string) => Promise<void>
   chatBusy: boolean
   onApprovalDecide: (callId: string, decision: ApprovalDecision) => void
   retryFromAnchor: (anchorId: string) => void
@@ -535,6 +537,26 @@ export function useChatSessions(args: UseChatSessionsArgs): UseChatSessionsApi {
     bumpRuntime()
   }, [active.id, bumpRuntime, getRuntime])
 
+  const startSeededChat = useCallback(async (seedText: string) => {
+    const pick = pickDefaultProviderModel(settings)
+    const seed = makeEmptySession(pick.provider, pick.model)
+    // Create the new session and make it active in a single setState call so
+    // we capture the exact id without relying on a subsequent render flush.
+    setState((prev) => ({ sessions: [...prev.sessions, seed], activeId: seed.id }))
+    // Now send the seed text into that specific new session, bypassing the
+    // active-session closure in sendChat (which is stale at this point).
+    const lockedProvider: ChatProvider = seed.provider as ChatProvider
+    const userMsg: ChatMessage = {
+      id: `u-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      role: 'user',
+      content: seedText,
+      provider: lockedProvider,
+    }
+    const history = [userMsg]
+    patchSession(seed.id, (s) => ({ ...s, messages: history }))
+    await runTurn(seed.id, history)
+  }, [settings, patchSession, runTurn])
+
   const clearChat = useCallback(() => {
     const rt = getRuntime(active.id)
     rt.abort?.abort()
@@ -579,6 +601,7 @@ export function useChatSessions(args: UseChatSessionsArgs): UseChatSessionsApi {
       followLatest,
       setFollowLatest,
       sendChat,
+      startSeededChat,
       chatBusy,
       onApprovalDecide,
       retryFromAnchor,
@@ -587,7 +610,7 @@ export function useChatSessions(args: UseChatSessionsArgs): UseChatSessionsApi {
       stopChat,
       clearChat,
     }),
-    [active, sessions, state.sessions, getSession, createSession, selectSession, closeSession, setActiveSessionProviderModel, __test_pushUserMessage, apiKeyMissing, meterTotals, pendingApprovals, followLatest, sendChat, chatBusy, onApprovalDecide, retryFromAnchor, editAndRetry, undoRetry, stopChat, clearChat],
+    [active, sessions, state.sessions, getSession, createSession, selectSession, closeSession, setActiveSessionProviderModel, __test_pushUserMessage, apiKeyMissing, meterTotals, pendingApprovals, followLatest, sendChat, startSeededChat, chatBusy, onApprovalDecide, retryFromAnchor, editAndRetry, undoRetry, stopChat, clearChat],
   )
 }
 

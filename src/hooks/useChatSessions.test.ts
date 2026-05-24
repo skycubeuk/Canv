@@ -509,3 +509,48 @@ describe('useChatSessions — getSession', () => {
     expect(result.current.getSession('cs-does-not-exist')).toBeNull()
   })
 })
+
+describe('useChatSessions — startSeededChat', () => {
+  beforeEach(() => { localStorage.clear(); vi.clearAllMocks() })
+
+  it('startSeededChat creates a new session, activates it, and sends the seed text as the first user message', async () => {
+    const args = makeArgs()
+    args.workspace.tree = { kind: 'dir', relPath: '', name: 'root', children: [], truncated: false }
+    const { result } = renderHook(() => useChatSessions(args))
+    const originalId = result.current.activeId
+
+    await act(async () => {
+      await result.current.startSeededChat('discuss this change')
+    })
+
+    // A new session must have been created and made active.
+    expect(result.current.activeId).not.toBe(originalId)
+    expect(result.current.sessions.length).toBe(2)
+
+    // The NEW active session must contain the seed text as a user message.
+    const newSession = result.current.getSession(result.current.activeId)
+    expect(newSession).not.toBeNull()
+    const userMessages = newSession!.messages.filter((m) => m.role === 'user')
+    expect(userMessages).toHaveLength(1)
+    expect(userMessages[0].content).toBe('discuss this change')
+  })
+
+  it('startSeededChat does not mutate or send into the previously-active session', async () => {
+    const args = makeArgs()
+    args.workspace.tree = { kind: 'dir', relPath: '', name: 'root', children: [], truncated: false }
+    const { result } = renderHook(() => useChatSessions(args))
+    const originalId = result.current.activeId
+
+    // Give the original session a message so we can verify it stays untouched.
+    act(() => { result.current.__test_pushUserMessage('original message') })
+
+    await act(async () => {
+      await result.current.startSeededChat('discuss this change')
+    })
+
+    const originalSession = result.current.getSession(originalId)
+    expect(originalSession).not.toBeNull()
+    expect(originalSession!.messages).toHaveLength(1)
+    expect(originalSession!.messages[0].content).toBe('original message')
+  })
+})
