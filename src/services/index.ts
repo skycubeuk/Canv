@@ -46,7 +46,14 @@ export interface ICanvServices {
     profile: string | null
     setProfile: (p: string | null) => void
   }
-  chatSessions: ReturnType<typeof useChatSessions>
+  chatSessions: ReturnType<typeof useChatSessions> & {
+    /**
+     * The callId of the approval that is currently shown as an inline diff
+     * preview in the active editor. Null when no inline preview is active.
+     * Used by useBottomPanelTabs to suppress the duplicate approval card.
+     */
+    inlinePreviewedCallId: string | null
+  }
   selectionAgent: ReturnType<typeof useSelectionAgent>
   suggestions: ReturnType<typeof useSuggestions>
   lint: ReturnType<typeof useLintIssues>

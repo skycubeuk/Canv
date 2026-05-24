@@ -17,6 +17,7 @@ import { useProfilePicker } from '../hooks/useProfilePicker'
 import { useChatSessions } from '../hooks/useChatSessions'
 import { useSelectionAgent } from '../hooks/useSelectionAgent'
 import { useSuggestions } from '../hooks/useSuggestions'
+import { useChatEditPreview } from '../hooks/useChatEditPreview'
 import { useWorkspaceSetup } from '../hooks/useWorkspaceSetup'
 import { getCanvHistory } from '../lib/history'
 import { type AiEditHistoryClient } from '../lib/history/withAiEditSnapshot'
@@ -143,6 +144,25 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
     showChatTab: () => ideLayout.showBottomTab('chat'),
   })
 
+  const chatEditPreview = useChatEditPreview({
+    pendingApprovals: chatSessions.pendingApprovals,
+    onApprovalDecide: chatSessions.onApprovalDecide,
+    getActiveEditor: editorRegistry.getActiveEditor,
+    activeMarkdownRel: workspace.activeMarkdownRel,
+  })
+
+  // Extend the suggestions callbacks with the chat-edit approval resolvers.
+  // This avoids re-creating useSuggestions — we just compose onto the existing
+  // callbacks object, which is stable across renders.
+  const suggestionsWithEditPreview = {
+    ...suggestions,
+    callbacks: {
+      ...suggestions.callbacks,
+      approveEdit: chatEditPreview.approveEdit,
+      rejectEdit: chatEditPreview.rejectEdit,
+    },
+  }
+
   const selectionAgent = useSelectionAgent({
     settings: settingsApi.settings,
     modelForAgent: settingsApi.modelForAgent,
@@ -166,9 +186,9 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
     notifications,
     ideLayout,
     modes: { ...modes, profile, setProfile },
-    chatSessions,
+    chatSessions: { ...chatSessions, inlinePreviewedCallId: chatEditPreview.previewedCallId },
     selectionAgent,
-    suggestions,
+    suggestions: suggestionsWithEditPreview,
     lint,
     workspaceFileOps,
     editorStats,
@@ -187,8 +207,9 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
     profile,
     setProfile,
     chatSessions,
+    chatEditPreview.previewedCallId,
     selectionAgent,
-    suggestions,
+    suggestionsWithEditPreview,
     lint,
     workspaceFileOps,
     editorStats,

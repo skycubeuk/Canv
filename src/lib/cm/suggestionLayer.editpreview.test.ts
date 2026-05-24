@@ -6,7 +6,6 @@ import {
   setEditPreview,
   clearEditPreview,
   suggestionExtension,
-  suggestionCallbacks,
   type SuggestionCallbacks,
 } from './suggestionLayer'
 
@@ -14,7 +13,7 @@ import {
 function makeView(doc: string, extraExtensions: import('@codemirror/state').Extension[] = []) {
   const state = EditorState.create({
     doc,
-    extensions: [...suggestionExtension(), ...extraExtensions],
+    extensions: [suggestionExtension(), ...extraExtensions],
   })
   // jsdom doesn't have a real DOM so we can't mount an EditorView normally,
   // but we CAN use EditorState directly for field tests.

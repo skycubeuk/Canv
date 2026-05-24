@@ -103,6 +103,16 @@ export function useBottomPanelTabs(args: UseBottomPanelTabsArgs) {
     [editorRegistry, lint.issues],
   )
 
+  // Suppress the card for whichever approval is currently shown inline.
+  const filteredPendingApprovals = useMemo(() => {
+    const inlineId = chatSessions.inlinePreviewedCallId
+    if (!inlineId) return chatSessions.pendingApprovals
+    // Build a new Map without the inline-previewed entry so the card is hidden.
+    const filtered = new Map(chatSessions.pendingApprovals)
+    filtered.delete(inlineId)
+    return filtered
+  }, [chatSessions.pendingApprovals, chatSessions.inlinePreviewedCallId])
+
   const adapter = useMemo<BottomPanelTabsAdapter>(() => ({
     // Chat
     chatMessages: chatSessions.chatMessages,
@@ -114,7 +124,7 @@ export function useBottomPanelTabs(args: UseBottomPanelTabsArgs) {
     stopChat: chatSessions.stopChat,
     retryChat: chatSessions.retryFromAnchor,
     editAndRetryChat: chatSessions.editAndRetry,
-    pendingApprovals: chatSessions.pendingApprovals,
+    pendingApprovals: filteredPendingApprovals,
     decideApproval: chatSessions.onApprovalDecide,
     followLatest: chatSessions.followLatest,
     setFollowLatest: chatSessions.setFollowLatest,
@@ -154,7 +164,7 @@ export function useBottomPanelTabs(args: UseBottomPanelTabsArgs) {
   }), [
     workspace.activeMarkdownRel,
     settings.chatFontSize, settings.pricingOverrides,
-    chatSessions, lint, jumpToProblem,
+    chatSessions, filteredPendingApprovals, lint, jumpToProblem,
     availableModels, workspaceFiles, chatSystemPreamble,
     raEnabled, fileHistoryTarget, fileHistoryNonce,
     onOpenDiff, onOpenRestore,
