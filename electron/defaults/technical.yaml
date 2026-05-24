@@ -59,10 +59,7 @@ actions:
 
       {{context}}
 
-      Respond in this exact format:
-
-      NOTES:
-      - [bulleted analysis: which claims are well-supported, which need evidence, which terms are undefined, where the reasoning skips a step]
+      Respond with ONLY a JSON array and nothing else. Each element is an object {"quote": "<an exact, verbatim substring of the passage that this note refers to>", "comment": "<your note>"}. The "quote" MUST be copied exactly from the passage so it can be located. If you have no notes, respond with [].
 
       TEXT TO REVIEW:
       {{text}}
@@ -77,10 +74,9 @@ actions:
 
       {{context}}
 
-      Respond in this exact format:
+      Aim for 6–10 first-person reactions covering: what was clear, what was ambiguous, where you got stuck, what assumed knowledge tripped you up, what examples you wanted, what definitions you needed earlier, whether the structure helped or hindered, and what was missing. Point to specific sentences or sections when you can.
 
-      NOTES:
-      - [Aim for 6–10 first-person bullets covering: what was clear, what was ambiguous, where you got stuck, what assumed knowledge tripped you up, what examples you wanted, what definitions you needed earlier, whether the structure helped or hindered, and what was missing. Point to specific sentences or sections when you can.]
+      Respond with ONLY a JSON array and nothing else. Each element is an object {"quote": "<an exact, verbatim substring of the passage that this reaction refers to>", "comment": "<your reaction in first person>"}. The "quote" MUST be copied exactly from the passage so it can be located. If you have no reactions, respond with [].
 
       TEXT YOU JUST READ:
       {{text}}

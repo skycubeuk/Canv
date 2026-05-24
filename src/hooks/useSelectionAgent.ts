@@ -4,6 +4,7 @@ import type { EditorGroupId } from '../types/workspace'
 import { EditorView } from '@codemirror/view'
 import { runAgent, buildPrompt, parseAgentResponse } from '../agents/runner'
 import { routeSelectionAgentResult } from '../agents/selectionRouting'
+import { parseReviewNotes, anchorReviewNotes } from '../lib/suggestions/reviewNotes'
 import { getAdapter } from '../adapters'
 import type { useSettings } from './useSettings'
 import type { useWorkspace } from './useWorkspace'
@@ -144,8 +145,15 @@ export function useSelectionAgent(args: UseSelectionAgentArgs): UseSelectionAgen
             model,
           })
         }
-        if (routing.emitAnnotation && range && parsed.feedback) {
-          emitAnnotation({ from: range.from, to: range.to }, parsed.feedback, agent.label)
+        if (routing.emitAnnotation && range) {
+          const structured = parseReviewNotes(final)
+          if (structured) {
+            for (const a of anchorReviewNotes(text, range.from, structured)) {
+              emitAnnotation({ from: a.from, to: a.to }, a.note, agent.label)
+            }
+          } else if (parsed.feedback) {
+            emitAnnotation({ from: range.from, to: range.to }, parsed.feedback, agent.label)
+          }
         }
         // Whole-document runs (no range) show a toast on completion since there's no inline target.
         if (range == null) {

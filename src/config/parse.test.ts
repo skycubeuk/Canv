@@ -205,7 +205,7 @@ describe('parseModeFiles — per-file validation', () => {
     )
   })
 
-  it('rejects a feedback-only prompt missing the NOTES header', () => {
+  it('accepts a feedback-only prompt without a NOTES header (JSON-array format is also valid)', () => {
     const yml = valid()
       .replace('outputMode: replacement', 'outputMode: feedback-only')
       .replace(
@@ -213,14 +213,7 @@ describe('parseModeFiles — per-file validation', () => {
         '    prompt: |\n      Just react to this:\n      {{text}}',
       )
     const result = parseModeFiles([{ file: 'm.yaml', content: yml }])
-    if (result.ok) throw new Error('expected failure')
-    expect(result.errors).toContainEqual(
-      expect.objectContaining({
-        file: 'm.yaml',
-        field: 'actions[0].prompt',
-        message: expect.stringContaining('NOTES'),
-      }),
-    )
+    if (!result.ok) throw new Error('expected ok, got: ' + JSON.stringify(result.errors))
   })
 
   it('accepts ISSUES (not NOTES) as the feedback header', () => {
