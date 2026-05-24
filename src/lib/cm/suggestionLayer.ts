@@ -21,6 +21,10 @@ export interface SuggestionCallbacks {
   dismissAnnotation?: (id: string, view: EditorView) => void
   /** Open a seeded chat discussion about this change. Optional until the store wires it. */
   discuss?: (id: string, view: EditorView) => void
+  /** Resolve the chat approval for a chat-edit preview as approved. Optional until wired. */
+  approveEdit?: (callId: string, view: EditorView) => void
+  /** Resolve the chat approval for a chat-edit preview as denied. Optional until wired. */
+  rejectEdit?: (callId: string, view: EditorView) => void
 }
 
 export const suggestionCallbacks = Facet.define<SuggestionCallbacks, SuggestionCallbacks | null>({
@@ -36,6 +40,49 @@ export const clearHunks = StateEffect.define<null>()
 export const addAnnotation = StateEffect.define<Annotation>()
 export const removeAnnotation = StateEffect.define<string>()
 export const clearAnnotations = StateEffect.define<null>()
+
+// ---- chat-edit preview effects + field ------------------------------------
+
+export interface EditPreviewState {
+  callId: string
+  from: number
+  to: number
+  rewrite: string
+}
+
+export const setEditPreview = StateEffect.define<EditPreviewState>()
+export const clearEditPreview = StateEffect.define<null>()
+
+export const editPreviewField = StateField.define<EditPreviewState | null>({
+  create: () => null,
+  update(preview, tr) {
+    // Process explicit effects first.
+    for (const e of tr.effects) {
+      if (e.is(setEditPreview)) return e.value
+      if (e.is(clearEditPreview)) return null
+    }
+    if (!tr.docChanged || !preview) return preview
+
+    // Map positions through the change set, invalidating when an edit
+    // overlaps the preview span (same rule as hunk and annotation fields).
+    let invalid = false
+    tr.changes.iterChanges((fromA, toA) => {
+      if (toA > fromA) {
+        // Deletion/replacement: invalidate if it overlaps (fromA,toA) ∩ (preview.from,preview.to)
+        if (fromA < preview.to && toA > preview.from) invalid = true
+      } else {
+        // Pure insertion: invalidate only if strictly inside the span
+        if (fromA > preview.from && fromA < preview.to) invalid = true
+      }
+    })
+    if (invalid) return null
+
+    const from = tr.changes.mapPos(preview.from, 1)
+    const to = tr.changes.mapPos(preview.to, -1)
+    return { ...preview, from, to }
+  },
+  provide: (f) => EditorView.decorations.from(f, (preview) => buildEditPreviewDecorations(preview)),
+})
 
 // ---- state field: holds the current hunks, kept live with mapPos ----------
 
@@ -240,6 +287,69 @@ class AnnotationCardWidget extends WidgetType {
   }
 }
 
+// ---- edit-preview widgets -------------------------------------------------
+
+class EditPreviewControlWidget extends WidgetType {
+  callId: string
+  rewrite: string
+  constructor(callId: string, rewrite: string) {
+    super()
+    this.callId = callId
+    this.rewrite = rewrite
+  }
+  eq(other: WidgetType) {
+    return (
+      other instanceof EditPreviewControlWidget &&
+      other.callId === this.callId &&
+      other.rewrite === this.rewrite
+    )
+  }
+  toDOM(view: EditorView) {
+    const wrap = document.createElement('span')
+    wrap.className = 'cm-editprev-controls'
+    wrap.contentEditable = 'false'
+
+    const mkBtn = (label: string, cls: string, ariaLabel: string, run: (cb: SuggestionCallbacks) => void) => {
+      const b = document.createElement('button')
+      b.type = 'button'
+      b.className = cls
+      b.textContent = label
+      b.setAttribute('aria-label', ariaLabel)
+      b.onmousedown = (ev) => {
+        ev.preventDefault()
+        const cb = view.state.facet(suggestionCallbacks)
+        if (cb) run(cb)
+      }
+      return b
+    }
+
+    wrap.appendChild(mkBtn('✓', 'cm-sug-accept', 'Accept chat edit', (cb) => cb.approveEdit?.(this.callId, view)))
+    wrap.appendChild(mkBtn('✗', 'cm-sug-reject', 'Reject chat edit', (cb) => cb.rejectEdit?.(this.callId, view)))
+    return wrap
+  }
+  ignoreEvent() {
+    return false
+  }
+}
+
+function buildEditPreviewDecorations(preview: EditPreviewState | null): DecorationSet {
+  if (!preview) return Decoration.none
+  const ranges: Range<Decoration>[] = []
+  if (preview.to > preview.from) {
+    ranges.push(Decoration.mark({ class: 'cm-sug-del' }).range(preview.from, preview.to))
+  }
+  if (preview.rewrite) {
+    ranges.push(Decoration.widget({ widget: new InsertWidget(preview.rewrite), side: 1 }).range(preview.to))
+  }
+  ranges.push(
+    Decoration.widget({
+      widget: new EditPreviewControlWidget(preview.callId, preview.rewrite),
+      side: 1,
+    }).range(preview.to),
+  )
+  return Decoration.set(ranges, true)
+}
+
 function buildAnnotationDecorations(anns: Annotation[]): DecorationSet {
   const ranges: Range<Decoration>[] = []
   for (const a of anns) {
@@ -366,5 +476,5 @@ const suggestionTheme = EditorView.baseTheme({
 
 /** The full extension to add to an editor. */
 export function suggestionExtension(): Extension {
-  return [suggestionField, annotationField, suggestionTheme]
+  return [suggestionField, annotationField, editPreviewField, suggestionTheme]
 }
