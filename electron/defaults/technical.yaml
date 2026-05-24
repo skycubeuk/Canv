@@ -74,7 +74,7 @@ actions:
 
       {{context}}
 
-      Aim for 6–10 first-person reactions covering: what was clear, what was ambiguous, where you got stuck, what assumed knowledge tripped you up, what examples you wanted, what definitions you needed earlier, whether the structure helped or hindered, and what was missing. Point to specific sentences or sections when you can.
+      React to whatever genuinely affected your ability to use the document: what was clear, what was ambiguous, where you got stuck, what assumed knowledge tripped you up, what examples you wanted, what definitions you needed earlier, whether the structure helped or hindered, and what was missing. Let the number of reactions follow the text: a short passage may prompt only one or two; a long document, many more. Don't pad or manufacture reactions to hit a number. Point to specific sentences or sections when you can.
 
       Respond with ONLY a JSON array and nothing else. Each element is an object {"quote": "<an exact, verbatim substring of the passage that this reaction refers to>", "comment": "<your reaction in first person>"}. The "quote" MUST be copied exactly from the passage so it can be located. If you have no reactions, respond with [].
 
