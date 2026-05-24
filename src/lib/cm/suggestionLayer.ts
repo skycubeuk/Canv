@@ -164,15 +164,18 @@ export function rejectHunkInView(view: EditorView, hunkId: string) {
 
 // ---- styling --------------------------------------------------------------
 
+// Theme-adaptive: all colors come from the app's design-token CSS vars
+// (defined in src/index.css per theme). The `--*-soft` vars are full
+// color-mix() values; the others are `R G B` triplets used via rgb(var(...)).
 const suggestionTheme = EditorView.baseTheme({
   '.cm-sug-del': {
-    backgroundColor: 'rgba(243, 139, 168, 0.18)',
+    backgroundColor: 'var(--danger-soft)',
     textDecoration: 'line-through',
-    textDecorationColor: '#f38ba8',
+    textDecorationColor: 'rgb(var(--danger-fg))',
     opacity: '0.7',
   },
   '.cm-sug-ins': {
-    backgroundColor: 'rgba(166, 227, 161, 0.20)',
+    backgroundColor: 'var(--success-soft)',
     borderRadius: '2px',
   },
   '.cm-sug-controls': {
@@ -183,15 +186,15 @@ const suggestionTheme = EditorView.baseTheme({
   },
   '.cm-sug-controls button': {
     cursor: 'pointer',
-    border: '1px solid var(--border-default, #45475a)',
+    border: '1px solid rgb(var(--border-default))',
     borderRadius: '4px',
-    background: 'var(--bg-panel, #313244)',
+    background: 'rgb(var(--bg-panel))',
     fontSize: '11px',
     lineHeight: '1',
     padding: '1px 5px',
   },
-  '.cm-sug-accept': { color: '#a6e3a1' },
-  '.cm-sug-reject': { color: '#f38ba8' },
+  '.cm-sug-accept': { color: 'rgb(var(--success-fg))' },
+  '.cm-sug-reject': { color: 'rgb(var(--danger-fg))' },
 })
 
 /** The full extension to add to an editor. */

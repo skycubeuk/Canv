@@ -219,6 +219,11 @@ export function useSelectionAgent(args: UseSelectionAgentArgs): UseSelectionAgen
             final,
             { agentId: agent.id, agentLabel: agent.label, provider: adapter.id, model },
           )
+        } else if (emitInline) {
+          // Inline was intended but there's nothing to show (e.g. a
+          // whitespace-only response). Surface the run so the user isn't
+          // left with neither an inline diff nor a panel.
+          showBottomTab('runs')
         }
       } catch (e) {
         const aborted = e instanceof DOMException && e.name === 'AbortError'
