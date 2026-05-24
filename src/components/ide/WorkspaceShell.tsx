@@ -65,6 +65,7 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
   const setup = useService('setup')
   const modesSvc = useService('modes')
   const selectionAgent = useService('selectionAgent')
+  const suggestions = useService('suggestions')
   const activeProfileId = modesSvc.profile ?? modesSvc.defaultModeId
   const activeProfile =
     modesSvc.modes.find((m) => m.id === activeProfileId) ??
@@ -413,6 +414,7 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
                       onJumperDestroy={editorRegistry.handleJumperDestroy}
                       getInitialBuffer={editorRegistry.readLiveBuffer}
                       onActiveEditorUpdate={editorRegistry.onActiveEditorUpdate}
+                      suggestionCallbacks={suggestions.callbacks}
                     />
                   )
                 }}

@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { EditorView } from '@codemirror/view'
 import type { Extension } from '@codemirror/state'
 import { makeMarkdownState, languageCompartment, type ActiveEditorUpdateInfo } from '../lib/cm/markdownEditor'
+import { suggestionCallbacks as suggestionCallbacksFacet, type SuggestionCallbacks } from '../lib/cm/suggestionLayer'
 import { loadLanguageFor } from '../extensions-runtime/languageLoader'
 import { markdownToHtml } from '../lib/markdown'
 import type { LineWidth } from '../hooks/useSettings'
@@ -37,6 +38,9 @@ interface Props {
    * transaction. Used by the extensions bridge to replace the 400ms poll.
    */
   onActiveEditorUpdate?: (info: ActiveEditorUpdateInfo) => void
+  /** Accept/reject callbacks for inline-diff control widgets. Supplied by
+   *  WorkspaceShell; absent in bare component tests (controls then no-op). */
+  suggestionCallbacks?: SuggestionCallbacks
 }
 
 const widthClass: Record<LineWidth, string> = {
@@ -59,6 +63,7 @@ export function Canvas({
   groupId, tab, isActive, fontSize, lineWidth, viewMode,
   onChange, onSelectionChange, onEditorReady, onEditorDestroy,
   onJumperReady, onJumperDestroy, getInitialBuffer, onActiveEditorUpdate,
+  suggestionCallbacks,
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const viewRef = useRef<EditorView | null>(null)
@@ -78,6 +83,7 @@ export function Canvas({
   const onChangeRef = useRef(onChange)
   const onSelectionChangeRef = useRef(onSelectionChange)
   const onActiveEditorUpdateRef = useRef(onActiveEditorUpdate)
+  const suggestionCallbacksRef = useRef(suggestionCallbacks)
   // The jumper closes over the latest viewMode so a single registered function
   // routes correctly across edit↔preview toggles without re-registration.
   const viewModeRef = useRef<ViewMode>(viewMode)
@@ -86,9 +92,10 @@ export function Canvas({
     onChangeRef.current = onChange
     onSelectionChangeRef.current = onSelectionChange
     onActiveEditorUpdateRef.current = onActiveEditorUpdate
+    suggestionCallbacksRef.current = suggestionCallbacks
     viewModeRef.current = viewMode
     isActiveRef.current = isActive
-  }, [onChange, onSelectionChange, onActiveEditorUpdate, viewMode, isActive])
+  }, [onChange, onSelectionChange, onActiveEditorUpdate, suggestionCallbacks, viewMode, isActive])
 
   useLayoutEffect(() => {
     const container = containerRef.current
@@ -97,6 +104,10 @@ export function Canvas({
     // potentially newer than the disk snapshot in tab.loadedMarkdown.
     const initialDoc = getInitialBufferRef.current?.(groupId, tab.relPath) ?? tab.loadedMarkdown
     lastLoadedRef.current = tab.loadedMarkdown
+    const extras: Extension[] = [editorTypographyTheme]
+    if (suggestionCallbacksRef.current) {
+      extras.push(suggestionCallbacksFacet.of(suggestionCallbacksRef.current))
+    }
     const state = makeMarkdownState({
       initialDoc,
       onDocChange: (doc) => {
@@ -108,7 +119,7 @@ export function Canvas({
         onActiveEditorUpdateRef.current?.(info)
       },
       activeRel: tab.relPath,
-    }, [editorTypographyTheme])
+    }, extras)
     const view = new EditorView({ state, parent: container })
     viewRef.current = view
     onEditorReady(groupId, tab.relPath, view)
