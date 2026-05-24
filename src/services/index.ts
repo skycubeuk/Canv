@@ -9,6 +9,7 @@ import type { useIdeLayout } from '../hooks/useIdeLayout'
 import type { useModes } from '../hooks/useModes'
 import type { useChatSessions } from '../hooks/useChatSessions'
 import type { useSelectionAgent } from '../hooks/useSelectionAgent'
+import type { useSuggestions } from '../hooks/useSuggestions'
 import type { useLintIssues } from '../hooks/useLintIssues'
 import type { useWorkspaceFileOps } from '../hooks/useWorkspaceFileOps'
 import type { useEditorStats } from '../hooks/useEditorStats'
@@ -47,6 +48,7 @@ export interface ICanvServices {
   }
   chatSessions: ReturnType<typeof useChatSessions>
   selectionAgent: ReturnType<typeof useSelectionAgent>
+  suggestions: ReturnType<typeof useSuggestions>
   lint: ReturnType<typeof useLintIssues>
   workspaceFileOps: ReturnType<typeof useWorkspaceFileOps>
   editorStats: ReturnType<typeof useEditorStats>

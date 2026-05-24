@@ -16,8 +16,10 @@ import { useLintIssues } from '../hooks/useLintIssues'
 import { useProfilePicker } from '../hooks/useProfilePicker'
 import { useChatSessions } from '../hooks/useChatSessions'
 import { useSelectionAgent } from '../hooks/useSelectionAgent'
+import { useSuggestions } from '../hooks/useSuggestions'
 import { useWorkspaceSetup } from '../hooks/useWorkspaceSetup'
 import { getCanvHistory } from '../lib/history'
+import { type AiEditHistoryClient } from '../lib/history/withAiEditSnapshot'
 import { getFs } from '../lib/fs'
 import { ServicesContext } from './useService'
 import type { ICanvServices } from './index'
@@ -126,6 +128,19 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
     historyClient,
   })
 
+  const suggestions = useSuggestions({
+    getActiveEditor: editorRegistry.getActiveEditor,
+    activeMarkdownRel: workspace.activeMarkdownRel,
+    // canv-history client is a structural superset of AiEditHistoryClient.
+    historyClient: historyClient as unknown as AiEditHistoryClient | null,
+    flushAll: workspace.flushAll,
+    saveActive: () => {
+      const view = editorRegistry.getActiveEditor()
+      const rel = workspace.activeMarkdownRel
+      if (view && rel) workspace.saveTab(rel, view.state.doc.toString())
+    },
+  })
+
   const selectionAgent = useSelectionAgent({
     settings: settingsApi.settings,
     modelForAgent: settingsApi.modelForAgent,
@@ -151,6 +166,7 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
     modes: { ...modes, profile, setProfile },
     chatSessions,
     selectionAgent,
+    suggestions,
     lint,
     workspaceFileOps,
     editorStats,
@@ -170,6 +186,7 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
     setProfile,
     chatSessions,
     selectionAgent,
+    suggestions,
     lint,
     workspaceFileOps,
     editorStats,
