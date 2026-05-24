@@ -1,3 +1,4 @@
+import type { RunRecord } from '../components/ResultsPanel'
 import type { ChatMessage, ChatProvider, PendingApproval } from '../components/ChatPanel'
 import type { SidebarSession } from '../components/ChatSessionsSidebar'
 import type { ChatSession } from '../hooks/useChatSessions'
@@ -8,9 +9,21 @@ import type { BottomTab } from '../hooks/useIdeLayout'
 import type { ThemeId } from './themes'
 import type { ModelPricing } from '../config/pricing'
 
+/** A run as broadcast to the pop-out, with main-side parsing already applied. */
+export interface DockRun extends RunRecord {
+  /** Parsed feedback section (from parseAgentResponse), if any. */
+  parsedFeedback?: string
+  /** Parsed rewrite section (from parseAgentResponse), if any. */
+  parsedRewrite?: string
+  /** Agent's outputMode, so the popout can choose section headings. */
+  outputMode?: string
+}
+
 /** Snapshot of all dock-relevant state, broadcast from main → pop-out. */
 export interface DockState {
   activeTab: BottomTab
+  activeRunId: string | null
+  runs: DockRun[]
 
   // Chat
   chatMessages: ChatMessage[]
@@ -27,7 +40,7 @@ export interface DockState {
   // Chat sessions
   sessions: SidebarSession[]
   /** Full session records for every session, so the popout can power its
-   *  chat inspector without sharing the main hook's closure. */
+   *  Output-tab chat inspector without sharing the main hook's closure. */
   chatSessionsFull: ChatSession[]
   /** System preamble the chat runner is currently injecting; rebuilt on the
    *  main side so the popout's chat inspector matches what the model sees. */
@@ -53,6 +66,9 @@ export interface DockState {
   // hosted (and reparented) by the main process via canvExtensions:showPanelInSlot.
   bottomDockExtensionPanels: Array<{ extensionId: string; id: string; title: string }>
 
+  // Output / runs streaming
+  streamingRunId: string | null
+
   ui: {
     theme: ThemeId
     fontSize: number
@@ -62,8 +78,13 @@ export interface DockState {
 
 /** Messages dispatched from pop-out → main when the user interacts. */
 export type UserAction =
-  // Tabs
+  // Tabs / runs
   | { type: 'select-tab'; tabId: BottomTab }
+  | { type: 'select-run'; runId: string | null }
+  | { type: 'rerun-agent'; runId: string }
+  | { type: 'delete-run'; runId: string }
+  | { type: 'apply-run'; runId: string }
+  | { type: 'refine-run'; runId: string; message: string }
   // Chat — turn control
   | { type: 'send-chat'; text: string }
   | { type: 'clear-chat' }

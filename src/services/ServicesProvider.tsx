@@ -169,12 +169,14 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
   const selectionAgent = useSelectionAgent({
     settings: settingsApi.settings,
     modelForAgent: settingsApi.modelForAgent,
+    activeProfile,
     activeProfileId,
     workspace,
     getActiveEditor: editorRegistry.getActiveEditor,
     getActiveEditorForGroup: editorRegistry.getActiveEditorForGroup,
     showToast: notifications.showToast,
     openSettingsTab: workspace.openSettingsTab,
+    showBottomTab: ideLayout.showBottomTab,
     emitDiffSuggestion: suggestions.addDiffSuggestion,
     emitAnnotation: suggestions.addAnnotation,
   })

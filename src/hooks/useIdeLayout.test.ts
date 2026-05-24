@@ -104,7 +104,7 @@ describe('useIdeLayout', () => {
     rerender({ root: '/ws/b' })
     expect(result.current.layout.sidebar.visible).toBe(true)
     expect(result.current.layout.sidebar.activeTab).toBe('search')
-    expect(result.current.layout.bottom.activeTab).toBe('chat')
+    expect(result.current.layout.bottom.activeTab).toBe('runs')
   })
 })
 

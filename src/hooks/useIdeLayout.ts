@@ -41,7 +41,7 @@ export interface IdeLayoutState {
 
 export const DEFAULT_IDE_LAYOUT: IdeLayoutState = {
   sidebar: { visible: true, activeTab: 'files', size: 20 },
-  bottom: { visible: false, activeTab: 'chat', size: 30, rightSize: 30, placement: 'bottom', lastDockedPlacement: 'bottom' },
+  bottom: { visible: false, activeTab: 'runs', size: 30, rightSize: 30, placement: 'bottom', lastDockedPlacement: 'bottom' },
   editor: { groupCount: 1, sizes: [50, 50] },
   outline: { size: 40, collapsed: false },
 }

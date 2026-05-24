@@ -1,9 +1,11 @@
 import { DisposableStore, toDisposable } from '../lib/lifecycle'
+import { parseAgentResponse } from '../agents/runner'
+import { getActionById, getModeById } from '../hooks/useModes'
 import { buildChatSystemPreamble } from '../lib/buildChatSystemPreamble'
 import { getAdapter, configuredProviders, type Provider } from '../adapters'
 import { flattenTree } from '../lib/fs'
 import type { ChatProvider, PendingApproval } from '../components/ChatPanel'
-import type { DockState, UserAction } from '../lib/dockTypes'
+import type { DockRun, DockState, UserAction } from '../lib/dockTypes'
 import { registerContribution, subscribeServicesChange, type Contribution } from './index'
 
 /**
@@ -15,20 +17,31 @@ import { registerContribution, subscribeServicesChange, type Contribution } from
  * user actions arriving from the pop-out through the same handlers the in-app
  * UI uses.
  *
+ * Almost every piece of dock state lives in a service today (selectionAgent,
+ * chatSessions, ideLayout, lint, modes, workspace, contributions, settings),
+ * so this contribution reads them via `services.<X>` and re-derives the
+ * snapshot whenever services identity changes — exactly the broadcast cadence
+ * the old `useEffect(broadcast, [dockState])` had.
+ *
  * Three values still live in AppInner state and travel through CustomEvent
  * seams, mirroring the pattern used by commands.contribution for palette
  * mode + pendingDocAgent:
  *
  *   - 'canv:dockBridge:appProps' { detail: { fileHistoryTarget, fileHistoryNonce, revisionArchaeologyEnabled } }
  *       App → contribution. The contribution stores the latest payload and
- *       re-broadcasts so the popout sees the change immediately.
+ *       re-broadcasts so the popout sees the change immediately. Without
+ *       this, the contribution would only see App-local state at its own
+ *       re-register cadence, which is driven by services identity.
  *
  *   - 'canv:fileHistory:openRequest' { detail: { relPath } }
  *   - 'canv:fileHistory:openDiff' { detail: { req } }
  *   - 'canv:fileHistory:restore' { detail: { snapshotId, relPath } }
  *       Contribution → App. AppInner listens and updates its local state.
  *
- * Throttling: pushState() is coalesced to ~30fps.
+ * Throttling: the legacy useDockBridge hook coalesced pushState() to ~30fps.
+ * The contribution implements the same throttle inline rather than calling
+ * the hook (contributions don't get to call hooks), keeping
+ * `window.canvDock.pushState` as the only IPC primitive.
  */
 
 const THROTTLE_MS = 33 // ~30fps
@@ -48,7 +61,11 @@ let latestAppProps: AppProps = {
   revisionArchaeologyEnabled: false,
 }
 
-// Module-scope memory of the last placement/visible we acted on.
+// Module-scope memory of the last placement/visible we acted on. The legacy
+// hook's open/close effect deps were [dockBridge, placement, visible], so it
+// only fired when those actually changed. Contributions re-register on every
+// services identity change (~each render during streaming), so we de-dup
+// here to avoid spamming `openPopout()` (which focus()es the popout window).
 let lastActedPopoutOpen: boolean | null = null
 
 export const dockBridge: Contribution = {
@@ -58,18 +75,22 @@ export const dockBridge: Contribution = {
     const bridge = typeof window !== 'undefined' ? window.canvDock : undefined
 
     // Always wire the CustomEvent → latestAppProps listener so App.tsx's
-    // dispatch keeps the module in sync even before the bridge is available.
+    // dispatch keeps the module in sync even before the bridge is available
+    // (the listener also triggers a broadcast when ready).
     const onAppProps = (e: Event) => {
       const detail = (e as CustomEvent<AppProps>).detail
       if (!detail) return
       latestAppProps = detail
+      // Re-broadcast immediately so the popout sees the change without
+      // waiting for the next services-identity tick.
       pushNow()
     }
     window.addEventListener('canv:dockBridge:appProps', onAppProps)
     store.add(toDisposable(() => window.removeEventListener('canv:dockBridge:appProps', onAppProps)))
 
     if (!bridge) {
-      // Browser build (no Electron preload): nothing else to wire.
+      // Browser build (no Electron preload): nothing else to wire. The
+      // CustomEvent listener above is harmless and gets disposed normally.
       return store
     }
 
@@ -108,14 +129,33 @@ export const dockBridge: Contribution = {
     }))
 
     // ---- Snapshot builder ----
+    // Reads exclusively from `services` + module-level App-prop state.
+    // Recomputed every time we broadcast; services identity changes drive
+    // re-registration (and a fresh broadcast), and CustomEvent updates
+    // trigger an explicit broadcast.
     const buildDockState = (): DockState => {
-      const { chatSessions, ideLayout, lint, modes, workspace, contributions, settings } = services
+      const { selectionAgent, chatSessions, ideLayout, lint, modes, workspace, contributions, settings } = services
       const settingsObj = settings.settings
 
       const activeProfileId = modes.profile ?? modes.defaultModeId
       const activeProfile =
         modes.modes.find((m) => m.id === activeProfileId) ??
         modes.modes.find((m) => m.id === modes.defaultModeId)!
+
+      // Parse each run on the main side so the popout can render Notes /
+      // Rewrite / Diff sections without needing useModes() of its own.
+      const dockRuns: DockRun[] = selectionAgent.runs.map((r) => {
+        const mode = getModeById(modes.modes, r.modeId) ?? getModeById(modes.modes, modes.defaultModeId)
+        const agent = mode ? getActionById(mode, r.agentId) : null
+        if (!agent) return { ...r }
+        const parsed = parseAgentResponse(agent, r.response)
+        return {
+          ...r,
+          parsedFeedback: parsed.feedback,
+          parsedRewrite: parsed.rewrite,
+          outputMode: agent.outputMode,
+        }
+      })
 
       const pendingApprovalsArr: Array<[string, PendingApproval]> = Array.from(
         chatSessions.pendingApprovals.entries(),
@@ -149,6 +189,8 @@ export const dockBridge: Contribution = {
         ? (activeRel.lastIndexOf('/') >= 0 ? activeRel.slice(activeRel.lastIndexOf('/') + 1) : activeRel)
         : null
 
+      const streamingRunId = dockRuns.find((r) => r.status === 'streaming' || r.status === 'refining')?.id ?? null
+
       const workspaceFiles = workspace.tree
         ? flattenTree(workspace.tree)
             .filter((n) => n.kind === 'file')
@@ -158,6 +200,8 @@ export const dockBridge: Contribution = {
 
       return {
         activeTab: ideLayout.layout.bottom.activeTab,
+        activeRunId: selectionAgent.activeTabId,
+        runs: dockRuns,
         chatMessages: chatSessions.chatMessages,
         chatProvider: chatSessions.chatProvider,
         chatModel: chatSessions.chatModel,
@@ -180,6 +224,7 @@ export const dockBridge: Contribution = {
         lintScanState: lint.scanState,
         lintScanError: lint.scanError,
         bottomDockExtensionPanels,
+        streamingRunId,
         ui: {
           theme: settingsObj.theme as import('../lib/themes').ThemeId,
           fontSize: settingsObj.fontSize,
@@ -193,18 +238,48 @@ export const dockBridge: Contribution = {
         broadcastState(buildDockState())
       } catch (e) {
         // Don't take down the whole contribution loader if a service is
-        // momentarily inconsistent during a reload.
+        // momentarily inconsistent during a reload. The next services tick
+        // will produce a clean snapshot.
         console.warn('[dock-bridge] failed to build snapshot:', e)
       }
     }
 
     // ---- IPC listener: user actions from the pop-out ----
     const offAction = bridge.onUserAction((action: UserAction) => {
-      const { chatSessions, ideLayout, lint, editorRegistry } = services
+      const { selectionAgent, chatSessions, ideLayout, lint, editorRegistry } = services
       switch (action.type) {
         case 'select-tab':
           ideLayout.setBottomTab(action.tabId)
           return
+        case 'select-run':
+          selectionAgent.setActiveTabId(action.runId)
+          return
+        case 'rerun-agent': {
+          const run = selectionAgent.runs.find((r) => r.id === action.runId)
+          if (run) selectionAgent.handleRerun(run)
+          return
+        }
+        case 'delete-run':
+          selectionAgent.handleCloseTab(action.runId)
+          return
+        case 'apply-run': {
+          const run = selectionAgent.runs.find((r) => r.id === action.runId)
+          if (!run) return
+          // Re-parse the run to recover parsedRewrite, matching the old hook's
+          // dockRuns lookup. Keeps apply text identical to what the popout shows.
+          const mode = getModeById(services.modes.modes, run.modeId)
+            ?? getModeById(services.modes.modes, services.modes.defaultModeId)
+          const agent = mode ? getActionById(mode, run.agentId) : null
+          const parsed = agent ? parseAgentResponse(agent, run.response) : { rewrite: undefined }
+          const text = parsed.rewrite ?? run.response
+          if (text) selectionAgent.handleApply(run, text)
+          return
+        }
+        case 'refine-run': {
+          const run = selectionAgent.runs.find((r) => r.id === action.runId)
+          if (run) void selectionAgent.refineRun(run, action.message)
+          return
+        }
         case 'send-chat':
           void chatSessions.sendChat(action.text)
           return
@@ -271,12 +346,18 @@ export const dockBridge: Contribution = {
 
     // ---- IPC listener: pop-out ready (replay latest snapshot) ----
     const offReady = bridge.onPopoutReady(() => {
+      // Force-send immediately (bypass throttle delta) so the freshly mounted
+      // window doesn't render empty before the next state change.
       lastSendAt = 0
       pushNow()
     })
     store.add(toDisposable(offReady))
 
     // ---- IPC listener: pop-out closed (guarded revert) ----
+    // The popout's `closed` event fires for both external closes and
+    // renderer-initiated closes. Only revert when placement is STILL 'popout'
+    // at the time the close arrives. We read placement at fire time from
+    // services, so the guard remains correct without a React ref.
     const offClosed = bridge.onPopoutClosed(() => {
       const { ideLayout } = services
       if (ideLayout.layout.bottom.placement === 'popout' && ideLayout.layout.bottom.visible) {
@@ -286,6 +367,8 @@ export const dockBridge: Contribution = {
     store.add(toDisposable(offClosed))
 
     // ---- Open / close pop-out based on placement + visibility ----
+    // Re-evaluated on every services-change tick. De-duped against the last
+    // acted value so openPopout() (which focuses the window) doesn't spam.
     const evaluatePopoutOpen = () => {
       const { placement: bottomPlacement, visible: bottomVisible } = services.ideLayout.layout.bottom
       const shouldOpen = bottomPlacement === 'popout' && bottomVisible
@@ -301,6 +384,10 @@ export const dockBridge: Contribution = {
     evaluatePopoutOpen()
 
     // ---- React to services identity changes ----
+    // Contributions register once (see Contributions.tsx). To keep the broadcast
+    // cadence the legacy useEffect(broadcast, [dockState]) provided, we
+    // subscribe to the services-change event and re-broadcast + re-evaluate
+    // pop-out open/close on each tick.
     store.add(subscribeServicesChange(() => {
       evaluatePopoutOpen()
       pushNow()

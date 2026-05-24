@@ -1,11 +1,14 @@
-import { MessageSquare, AlertTriangle, History } from 'lucide-react'
+import { Play, MessageSquare, AlertTriangle, FileText, History } from 'lucide-react'
 import type { BottomPanelTabDef } from './BottomPanel'
+import { RunsTab } from './bottom/RunsTab'
 import { ChatTab } from './bottom/ChatTab'
 import { ProblemsTab } from './bottom/ProblemsTab'
+import { OutputTab } from './bottom/OutputTab'
 import { FileHistoryTab } from './bottom/FileHistoryTab'
 import type { ChatMessage, ChatProvider, PendingApproval } from '../ChatPanel'
 import type { SidebarSession } from '../ChatSessionsSidebar'
 import type { ApprovalDecision } from '../../agents/chatRunner'
+import type { RunRecord } from '../ResultsPanel'
 import type { LintIssue } from '../../lib/lintTypes'
 import type { ScanState } from '../../hooks/useLintIssues'
 import type { ModelPricing } from '../../config/pricing'
@@ -19,6 +22,15 @@ import type { ModelPricing } from '../../config/pricing'
  *  by construction and can never drift.
  */
 export interface BottomPanelTabsAdapter {
+  // Runs
+  runs: RunRecord[]
+  activeRunId: string | null
+  selectRun: (id: string) => void
+  closeRun: (id: string) => void
+  applyRun: (run: RunRecord, text: string) => void
+  rerunRun: (run: RunRecord) => void
+  refineRun: (run: RunRecord, message: string) => void
+
   // Chat
   chatMessages: ChatMessage[]
   chatBusy: boolean
@@ -73,6 +85,24 @@ export interface BottomPanelTabsAdapter {
 export function buildBottomPanelTabs(adapter: BottomPanelTabsAdapter): BottomPanelTabDef[] {
   return [
     {
+      id: 'runs',
+      label: 'Runs',
+      icon: Play,
+      badge: adapter.runs.length > 0 ? adapter.runs.length : undefined,
+      render: () => (
+        <RunsTab
+          runs={adapter.runs}
+          activeId={adapter.activeRunId}
+          onSelect={adapter.selectRun}
+          onClose={adapter.closeRun}
+          onApply={adapter.applyRun}
+          onRerun={adapter.rerunRun}
+          onRefine={adapter.refineRun}
+          pricingOverrides={adapter.pricingOverrides}
+        />
+      ),
+    },
+    {
       id: 'chat',
       label: 'Chat',
       icon: MessageSquare,
@@ -119,6 +149,20 @@ export function buildBottomPanelTabs(adapter: BottomPanelTabsAdapter): BottomPan
           onScan={adapter.scanProblems}
           onClear={adapter.clearProblems}
           onJump={adapter.jumpToProblem}
+        />
+      ),
+    },
+    {
+      id: 'output',
+      label: 'Output',
+      icon: FileText,
+      render: () => (
+        <OutputTab
+          runs={adapter.runs}
+          sessions={adapter.sessions}
+          activeSessionId={adapter.activeSessionId}
+          getSession={adapter.getSession}
+          chatSystemPreamble={adapter.chatSystemPreamble}
         />
       ),
     },
