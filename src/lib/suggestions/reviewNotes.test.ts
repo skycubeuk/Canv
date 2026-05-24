@@ -161,4 +161,31 @@ describe('anchorReviewNotes tolerance', () => {
     expect(result[0].note).toBe('nope')
     expect(result[0].from).toBe(result[0].to)
   })
+
+  it('returns correct UTF-16 offsets when a supplementary-plane char precedes the match (normalized path)', () => {
+    // Leading emoji (surrogate pair = 2 UTF-16 units). Match must anchor AFTER
+    // it via the normalized path (case differs so exact match fails).
+    const sel = '😀 the quick brown fox'
+    const result = anchorReviewNotes(sel, 0, [
+      { quote: 'QUICK BROWN', comment: 'speedy' },
+    ])
+    // Offsets must be real UTF-16 indices into sel, not shifted by the emoji's
+    // codepoint count.
+    const sliced = sel.slice(result[0].from, result[0].to)
+    expect(sliced.toLowerCase()).toBe('quick brown')
+  })
+
+  it('returns correct UTF-16 offsets when supplementary-plane chars precede a partial match', () => {
+    const sel = '😀🎉 the quick brown fox'
+    const spanBase = 100
+    // Quote has a paraphrased tail so only the leading chunk anchors.
+    const result = anchorReviewNotes(sel, spanBase, [
+      { quote: 'QUICK BROWN something invented here too', comment: 'mixed' },
+    ])
+    const sliced = sel.slice(result[0].from - spanBase, result[0].to - spanBase)
+    // Offsets are correct UTF-16 positions (not shifted by the two emoji): the
+    // sliced span starts at the real "quick brown" location.
+    expect(sliced.toLowerCase().trim()).toBe('quick brown')
+    expect(result[0].from - spanBase).toBe(sel.indexOf('quick'))
+  })
 })

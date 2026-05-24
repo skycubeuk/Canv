@@ -276,6 +276,10 @@ class AnnotationCardWidget extends WidgetType {
       other.ann.id === this.ann.id &&
       other.ann.note === this.ann.note &&
       other.ann.suggestedReplacement === this.ann.suggestedReplacement &&
+      // from/to are part of identity: when the span shifts (text inserted before
+      // it) the quote snippet is re-sliced, so a cached DOM would be stale.
+      other.ann.from === this.ann.from &&
+      other.ann.to === this.ann.to &&
       other.num === this.num
     )
   }
@@ -558,7 +562,6 @@ const suggestionTheme = EditorView.baseTheme({
     verticalAlign: 'super',
     margin: '0 0 0 2px',
     padding: '0 3px',
-    marginRight: '0',
   },
   '.cm-annot-quote': {
     display: 'block',

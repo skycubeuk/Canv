@@ -70,8 +70,16 @@ const SMART_QUOTE_MAP: Array<[RegExp, string]> = [
  *   - `map`: map[normIdx] = origIdx of the corresponding original character
  */
 function normalize(text: string): { norm: string; map: number[] } {
-  // Build a working array of (char, originalIndex) pairs.
-  let chars: Array<{ ch: string; oi: number }> = Array.from(text).map((ch, i) => ({ ch, oi: i }))
+  // Build a working array of (char, originalIndex) pairs. `oi` is the UTF-16
+  // offset in `text` (NOT the codepoint index): `indexOf`/`slice` and
+  // CodeMirror positions are all UTF-16, so a supplementary-plane char (emoji)
+  // before a match must advance `oi` by 2, not 1.
+  let u16 = 0
+  let chars: Array<{ ch: string; oi: number }> = []
+  for (const ch of text) {
+    chars.push({ ch, oi: u16 })
+    u16 += ch.length // surrogate pairs have length 2
+  }
 
   // Apply smart-quote substitutions on the char array.
   for (const [re, replacement] of SMART_QUOTE_MAP) {
@@ -94,20 +102,25 @@ function normalize(text: string): { norm: string; map: number[] } {
     chars = out
   }
 
-  // Collapse whitespace runs (including newlines) to a single space, then lowercase.
+  // Collapse whitespace runs (including newlines) to a single space, then
+  // lowercase. `map` is indexed by UTF-16 code unit of the resulting `norm`
+  // string (each appended char may be 1 or 2 code units, e.g. an emoji that
+  // survives normalisation), so `norm.indexOf(...)` results align with it.
   const norm: string[] = []
   const map: number[] = []
   let prevWasSpace = false
+  const pushChar = (out: string, oi: number) => {
+    norm.push(out)
+    for (let k = 0; k < out.length; k++) map.push(oi)
+  }
   for (const { ch, oi } of chars) {
     if (/\s/.test(ch)) {
       if (!prevWasSpace) {
-        norm.push(' ')
-        map.push(oi)
+        pushChar(' ', oi)
         prevWasSpace = true
       }
     } else {
-      norm.push(ch.toLowerCase())
-      map.push(oi)
+      pushChar(ch.toLowerCase(), oi)
       prevWasSpace = false
     }
   }
@@ -125,6 +138,18 @@ export function anchorReviewNotes(
 ): Array<{ from: number; to: number; note: string; quote: string }> {
   // Pre-compute the normalised form of the selection once.
   const { norm: normText, map: textMap } = normalize(selectionText)
+  const textLen = selectionText.length
+
+  // Map a normalised [normIdx, normIdx+matchLen) range back to original UTF-16
+  // offsets. `textMap[i]` is the original offset of the char starting at norm
+  // unit i; the exclusive end is the original offset of the char just past the
+  // last matched unit (or end-of-text when the match runs to the end).
+  const mapRange = (normIdx: number, matchLen: number): { from: number; to: number } => {
+    const from = textMap[normIdx]
+    const endNormIdx = normIdx + matchLen
+    const to = endNormIdx < textMap.length ? textMap[endNormIdx] : textLen
+    return { from, to }
+  }
 
   return notes.map(({ quote, comment }) => {
     // Step 1: exact match
@@ -137,12 +162,8 @@ export function anchorReviewNotes(
     const { norm: normQuote } = normalize(quote)
     const normIdx = normText.indexOf(normQuote)
     if (normIdx !== -1) {
-      const origFrom = textMap[normIdx]
-      // The last normalised char of the match maps back to an original index;
-      // advance by 1 to get the exclusive end.
-      const lastNormIdx = normIdx + normQuote.length - 1
-      const origTo = textMap[lastNormIdx] + 1
-      return { from: spanFrom + origFrom, to: spanFrom + origTo, note: comment, quote }
+      const { from, to } = mapRange(normIdx, normQuote.length)
+      return { from: spanFrom + from, to: spanFrom + to, note: comment, quote }
     }
 
     // Step 3: partial / leading-chunk match — try progressively shorter prefixes of
@@ -153,10 +174,8 @@ export function anchorReviewNotes(
       const leadChunk = normQuote.slice(0, chunkLen)
       const chunkIdx = normText.indexOf(leadChunk)
       if (chunkIdx !== -1) {
-        const origFrom = textMap[chunkIdx]
-        const lastNormIdx = chunkIdx + chunkLen - 1
-        const origTo = textMap[lastNormIdx] + 1
-        return { from: spanFrom + origFrom, to: spanFrom + origTo, note: comment, quote }
+        const { from, to } = mapRange(chunkIdx, chunkLen)
+        return { from: spanFrom + from, to: spanFrom + to, note: comment, quote }
       }
     }
 

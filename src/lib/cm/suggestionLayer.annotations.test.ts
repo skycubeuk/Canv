@@ -197,4 +197,29 @@ describe('annotation badge numbers + quote-in-card', () => {
     expect(quoteEl?.textContent).toContain('xyz does not exist')
     view.destroy()
   })
+
+  it('rebuilds the card DOM when the span shifts so the snippet is never stale', () => {
+    // 'the cat sat dog' — annotate "cat" at 4..7
+    const view = mountWith('the cat sat dog', [ann({ from: 4, to: 7, note: 'about cat' })])
+    const cardBefore = view.dom.querySelector('.cm-annot-card')
+    expect(cardBefore?.querySelector('.cm-annot-quote')?.textContent).toContain('cat')
+
+    // Insert text BEFORE the span. The annotation remaps to new from/to. If
+    // eq() ignored from/to, CM would reuse the SAME cached DOM node (whose
+    // quote snippet was sliced from the OLD offsets). Requiring a rebuilt node
+    // proves the snippet is recomputed against the current span.
+    view.dispatch({ changes: { from: 0, insert: 'XX ' } })
+
+    const a = view.state.field(annotationField)[0]
+    expect(a.status).toBe('open')
+    // Span shifted but still covers "cat".
+    expect(view.state.doc.sliceString(a.from, a.to)).toBe('cat')
+
+    const cardAfter = view.dom.querySelector('.cm-annot-card')
+    // DOM node must be rebuilt (not reused), so the snippet reflects the
+    // current span rather than stale offsets.
+    expect(cardAfter).not.toBe(cardBefore)
+    expect(cardAfter?.querySelector('.cm-annot-quote')?.textContent).toContain('cat')
+    view.destroy()
+  })
 })
