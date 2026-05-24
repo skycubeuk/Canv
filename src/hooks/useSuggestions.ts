@@ -7,6 +7,9 @@ import {
   applyHunkInView,
   rejectHunkInView,
   findHunk,
+  addAnnotation as addAnnotationEffect,
+  acceptAnnotationInView,
+  dismissAnnotationInView,
   type SuggestionCallbacks,
 } from '../lib/cm/suggestionLayer'
 import { computeHunks } from '../lib/suggestions/hunks'
@@ -33,6 +36,9 @@ export interface UseSuggestionsApi {
   reject: (hunkId: string, view?: EditorView) => void
   acceptAll: (view?: EditorView) => Promise<void>
   rejectAll: (view?: EditorView) => void
+  addAnnotation: (range: { from: number; to: number }, note: string, author: string, suggestedReplacement?: string) => void
+  dismissAnnotation: (id: string, view?: EditorView) => void
+  acceptAnnotation: (id: string, view?: EditorView) => Promise<void>
   pendingCount: number
   callbacks: SuggestionCallbacks
 }
@@ -40,6 +46,7 @@ export interface UseSuggestionsApi {
 export function useSuggestions(deps: UseSuggestionsDeps): UseSuggestionsApi {
   const [pendingCount, setPendingCount] = useState(0)
   const originRef = useRef<DiffOrigin | null>(null)
+  const annotSeq = useRef(0)
 
   // Keep deps fresh without re-creating the stable callbacks below.
   const depsRef = useRef(deps)
@@ -118,18 +125,45 @@ export function useSuggestions(deps: UseSuggestionsDeps): UseSuggestionsApi {
     syncCount(view)
   }, [syncCount])
 
+  const addAnnotation = useCallback(
+    (range: { from: number; to: number }, note: string, author: string, suggestedReplacement?: string) => {
+      const view = depsRef.current.getActiveEditor()
+      if (!view) return
+      const id = `annot-${Date.now().toString(36)}-${(annotSeq.current++).toString(36)}`
+      view.dispatch({
+        effects: addAnnotationEffect.of({ id, from: range.from, to: range.to, note, author, suggestedReplacement, status: 'open' }),
+      })
+    },
+    [],
+  )
+
+  const dismissAnnotation = useCallback((id: string, viewArg?: EditorView) => {
+    const view = viewArg ?? depsRef.current.getActiveEditor()
+    if (!view) return
+    dismissAnnotationInView(view, id)
+  }, [])
+
+  const acceptAnnotation = useCallback(async (id: string, viewArg?: EditorView) => {
+    const view = viewArg ?? depsRef.current.getActiveEditor()
+    if (!view) return
+    // Applies a doc change → route through the history-snapshot bracket.
+    await runWithSnapshot(async () => { acceptAnnotationInView(view, id) })
+  }, [runWithSnapshot])
+
   const callbacks = useMemo<SuggestionCallbacks>(
     () => ({
       accept: (hunkId, view) => { void accept(hunkId, view) },
       reject: (hunkId, view) => { reject(hunkId, view) },
       acceptAll: (view) => { void acceptAll(view) },
       rejectAll: (view) => { rejectAll(view) },
+      acceptAnnotation: (id, view) => { void acceptAnnotation(id, view) },
+      dismissAnnotation: (id, view) => { dismissAnnotation(id, view) },
     }),
-    [accept, reject, acceptAll, rejectAll],
+    [accept, reject, acceptAll, rejectAll, acceptAnnotation, dismissAnnotation],
   )
 
   return useMemo<UseSuggestionsApi>(
-    () => ({ addDiffSuggestion, accept, reject, acceptAll, rejectAll, pendingCount, callbacks }),
-    [addDiffSuggestion, accept, reject, acceptAll, rejectAll, pendingCount, callbacks],
+    () => ({ addDiffSuggestion, accept, reject, acceptAll, rejectAll, addAnnotation, dismissAnnotation, acceptAnnotation, pendingCount, callbacks }),
+    [addDiffSuggestion, accept, reject, acceptAll, rejectAll, addAnnotation, dismissAnnotation, acceptAnnotation, pendingCount, callbacks],
   )
 }
