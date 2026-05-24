@@ -26,3 +26,24 @@ export interface DiffOrigin {
   provider: string
   model: string
 }
+
+/** An open annotation is shown; an invalidated one had its anchored text
+ *  deleted and is dropped from the document. */
+export type AnnotationStatus = 'open' | 'invalidated'
+
+/**
+ * A span-anchored note in the document — AI feedback or a user note. `[from,to]`
+ * is the anchored span (absolute positions in the current doc). When
+ * `suggestedReplacement` is set, the card offers an Accept that replaces the span
+ * with it (reusing the inline-diff apply path).
+ */
+export interface Annotation {
+  id: string
+  from: number
+  to: number
+  note: string
+  /** Display name of the author — an agent label, or 'You' for a user note. */
+  author: string
+  suggestedReplacement?: string
+  status: AnnotationStatus
+}

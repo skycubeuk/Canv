@@ -6,7 +6,7 @@ import {
   type Extension,
 } from '@codemirror/state'
 import { Decoration, type DecorationSet, EditorView, WidgetType } from '@codemirror/view'
-import type { Hunk } from '../suggestions/types'
+import type { Hunk, Annotation } from '../suggestions/types'
 
 // ---- callbacks facet: the editor calls back into the React store ----------
 
@@ -15,6 +15,10 @@ export interface SuggestionCallbacks {
   reject: (hunkId: string, view: EditorView) => void
   acceptAll: (view: EditorView) => void
   rejectAll: (view: EditorView) => void
+  /** Apply an annotation's suggested replacement. Optional until the store wires it. */
+  acceptAnnotation?: (id: string, view: EditorView) => void
+  /** Drop an annotation without changing the document. Optional until the store wires it. */
+  dismissAnnotation?: (id: string, view: EditorView) => void
 }
 
 export const suggestionCallbacks = Facet.define<SuggestionCallbacks, SuggestionCallbacks | null>({
@@ -26,6 +30,10 @@ export const suggestionCallbacks = Facet.define<SuggestionCallbacks, SuggestionC
 export const setDiffHunks = StateEffect.define<Hunk[]>()
 export const removeHunk = StateEffect.define<string>()
 export const clearHunks = StateEffect.define<null>()
+
+export const addAnnotation = StateEffect.define<Annotation>()
+export const removeAnnotation = StateEffect.define<string>()
+export const clearAnnotations = StateEffect.define<null>()
 
 // ---- state field: holds the current hunks, kept live with mapPos ----------
 
@@ -64,6 +72,39 @@ export const suggestionField = StateField.define<Hunk[]>({
     return hunks
   },
   provide: (f) => EditorView.decorations.from(f, (hunks) => buildDecorations(hunks)),
+})
+
+// ---- annotations field: span-anchored notes (AI feedback or user notes) ----
+
+export const annotationField = StateField.define<Annotation[]>({
+  create: () => [],
+  update(annotations, tr) {
+    if (tr.docChanged && annotations.length) {
+      annotations = annotations.map((a): Annotation => {
+        if (a.status !== 'open') return a
+        // Same anchoring rule as hunks: a deletion/replacement overlapping the
+        // span, or an insertion strictly inside it, invalidates; boundary edits
+        // just shift it (inner association).
+        let invalid = false
+        tr.changes.iterChanges((fromA, toA) => {
+          if (toA > fromA) {
+            if (fromA < a.to && toA > a.from) invalid = true
+          } else if (fromA > a.from && fromA < a.to) {
+            invalid = true
+          }
+        })
+        if (invalid) return { ...a, status: 'invalidated' }
+        return { ...a, from: tr.changes.mapPos(a.from, 1), to: tr.changes.mapPos(a.to, -1) }
+      })
+    }
+    for (const e of tr.effects) {
+      if (e.is(addAnnotation)) annotations = [...annotations, e.value]
+      else if (e.is(removeAnnotation)) annotations = annotations.filter((a) => a.id !== e.value)
+      else if (e.is(clearAnnotations)) annotations = []
+    }
+    return annotations
+  },
+  provide: (f) => EditorView.decorations.from(f, (anns) => buildAnnotationDecorations(anns)),
 })
 
 // ---- widgets --------------------------------------------------------------
@@ -140,6 +181,73 @@ function buildDecorations(hunks: Hunk[]): DecorationSet {
   return Decoration.set(ranges, true)
 }
 
+class AnnotationCardWidget extends WidgetType {
+  ann: Annotation
+  constructor(ann: Annotation) {
+    super()
+    this.ann = ann
+  }
+  eq(other: WidgetType) {
+    return (
+      other instanceof AnnotationCardWidget &&
+      other.ann.id === this.ann.id &&
+      other.ann.note === this.ann.note &&
+      other.ann.suggestedReplacement === this.ann.suggestedReplacement
+    )
+  }
+  toDOM(view: EditorView) {
+    const card = document.createElement('span')
+    card.className = 'cm-annot-card'
+    card.contentEditable = 'false'
+
+    const head = document.createElement('span')
+    head.className = 'cm-annot-author'
+    head.textContent = this.ann.author
+    card.appendChild(head)
+
+    const body = document.createElement('span')
+    body.className = 'cm-annot-note'
+    body.textContent = this.ann.note
+    card.appendChild(body)
+
+    const actions = document.createElement('span')
+    actions.className = 'cm-annot-actions'
+    const mkBtn = (label: string, cls: string, run: (cb: SuggestionCallbacks) => void) => {
+      const b = document.createElement('button')
+      b.type = 'button'
+      b.className = cls
+      b.textContent = label
+      b.onmousedown = (ev) => {
+        ev.preventDefault()
+        const cb = view.state.facet(suggestionCallbacks)
+        if (cb) run(cb)
+      }
+      return b
+    }
+    if (this.ann.suggestedReplacement != null) {
+      actions.appendChild(mkBtn('Accept', 'cm-annot-accept', (cb) => cb.acceptAnnotation?.(this.ann.id, view)))
+    }
+    actions.appendChild(mkBtn('Dismiss', 'cm-annot-dismiss', (cb) => cb.dismissAnnotation?.(this.ann.id, view)))
+    card.appendChild(actions)
+    return card
+  }
+  ignoreEvent() {
+    return false
+  }
+}
+
+function buildAnnotationDecorations(anns: Annotation[]): DecorationSet {
+  const ranges: Range<Decoration>[] = []
+  for (const a of anns) {
+    if (a.status !== 'open') continue
+    if (a.to > a.from) {
+      ranges.push(Decoration.mark({ class: 'cm-annot' }).range(a.from, a.to))
+    }
+    ranges.push(Decoration.widget({ widget: new AnnotationCardWidget(a), side: 1 }).range(a.to))
+  }
+  return Decoration.set(ranges, true)
+}
+
 // ---- view-level helpers (used by widgets and the store) -------------------
 
 export function findHunk(view: EditorView, hunkId: string): Hunk | undefined {
@@ -160,6 +268,26 @@ export function applyHunkInView(view: EditorView, hunkId: string) {
 /** Drop a single hunk without changing the document. */
 export function rejectHunkInView(view: EditorView, hunkId: string) {
   view.dispatch({ effects: removeHunk.of(hunkId) })
+}
+
+export function findAnnotation(view: EditorView, id: string): Annotation | undefined {
+  return view.state.field(annotationField).find((a) => a.id === id)
+}
+
+/** Apply an annotation's suggested replacement (if any) and drop the annotation. */
+export function acceptAnnotationInView(view: EditorView, id: string) {
+  const a = findAnnotation(view, id)
+  if (!a || a.status !== 'open' || a.suggestedReplacement == null) return
+  view.dispatch({
+    changes: { from: a.from, to: a.to, insert: a.suggestedReplacement },
+    effects: removeAnnotation.of(id),
+    scrollIntoView: true,
+  })
+}
+
+/** Drop an annotation without changing the document. */
+export function dismissAnnotationInView(view: EditorView, id: string) {
+  view.dispatch({ effects: removeAnnotation.of(id) })
 }
 
 // ---- styling --------------------------------------------------------------
@@ -195,9 +323,42 @@ const suggestionTheme = EditorView.baseTheme({
   },
   '.cm-sug-accept': { color: 'rgb(var(--success-fg))' },
   '.cm-sug-reject': { color: 'rgb(var(--danger-fg))' },
+  '.cm-annot': {
+    backgroundColor: 'color-mix(in oklab, rgb(var(--accent)) 12%, transparent)',
+    borderBottom: '2px dotted rgb(var(--accent))',
+  },
+  '.cm-annot-card': {
+    display: 'inline-flex',
+    alignItems: 'baseline',
+    gap: '6px',
+    margin: '0 0 0 6px',
+    padding: '2px 8px',
+    borderRadius: '6px',
+    border: '1px solid rgb(var(--border-default))',
+    borderLeft: '3px solid rgb(var(--accent))',
+    background: 'rgb(var(--bg-panel))',
+    fontFamily: 'Inter, system-ui, sans-serif',
+    fontSize: '12px',
+    lineHeight: '1.45',
+    whiteSpace: 'normal',
+    verticalAlign: 'text-top',
+    maxWidth: '34em',
+  },
+  '.cm-annot-author': { fontWeight: '600', color: 'rgb(var(--accent))', whiteSpace: 'nowrap' },
+  '.cm-annot-note': { color: 'rgb(var(--text-default))' },
+  '.cm-annot-actions': { display: 'inline-flex', gap: '8px', whiteSpace: 'nowrap' },
+  '.cm-annot-card button': {
+    cursor: 'pointer',
+    border: 'none',
+    background: 'none',
+    padding: '0',
+    fontSize: '12px',
+  },
+  '.cm-annot-accept': { color: 'rgb(var(--success-fg))', fontWeight: '600' },
+  '.cm-annot-dismiss': { color: 'rgb(var(--text-subtle))' },
 })
 
 /** The full extension to add to an editor. */
 export function suggestionExtension(): Extension {
-  return [suggestionField, suggestionTheme]
+  return [suggestionField, annotationField, suggestionTheme]
 }
