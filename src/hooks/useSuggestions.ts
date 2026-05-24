@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { EditorView } from '@codemirror/view'
 import {
   setDiffHunks,
@@ -10,11 +10,17 @@ import {
   addAnnotation as addAnnotationEffect,
   acceptAnnotationInView,
   dismissAnnotationInView,
+  annotationField,
   type SuggestionCallbacks,
 } from '../lib/cm/suggestionLayer'
 import { computeHunks } from '../lib/suggestions/hunks'
 import type { DiffOrigin } from '../lib/suggestions/types'
 import { withAiEditSnapshot, type AiEditHistoryClient } from '../lib/history/withAiEditSnapshot'
+import { makeAnchor, resolveAnchor } from '../lib/suggestions/anchor'
+import { loadAnnotations, saveAnnotations, type AnnotationRecord } from '../lib/annotationStore'
+
+/** Debounce window (ms) for persisting annotation changes to the sidecar. */
+const SAVE_DEBOUNCE_MS = 400
 
 export interface UseSuggestionsDeps {
   getActiveEditor: () => EditorView | null
@@ -47,6 +53,9 @@ export function useSuggestions(deps: UseSuggestionsDeps): UseSuggestionsApi {
   const [pendingCount, setPendingCount] = useState(0)
   const originRef = useRef<DiffOrigin | null>(null)
   const annotSeq = useRef(0)
+  // Which file's annotations are already loaded — guards a single load per open.
+  const loadedRelRef = useRef<string | null>(null)
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Keep deps fresh without re-creating the stable callbacks below.
   const depsRef = useRef(deps)
@@ -56,6 +65,30 @@ export function useSuggestions(deps: UseSuggestionsDeps): UseSuggestionsApi {
   const syncCount = useCallback((view: EditorView | null) => {
     const n = view ? view.state.field(suggestionField).filter((h) => h.status === 'pending').length : 0
     setPendingCount(n)
+  }, [])
+
+  // Debounce-persist the current open annotations for the active file. Each
+  // open annotation is serialised as a content anchor (not raw offsets) so it
+  // can be re-located after the text changes. Empty list deletes the sidecar.
+  const scheduleSave = useCallback(() => {
+    if (saveTimerRef.current !== null) clearTimeout(saveTimerRef.current)
+    saveTimerRef.current = setTimeout(() => {
+      saveTimerRef.current = null
+      const view = depsRef.current.getActiveEditor()
+      const rel = depsRef.current.activeMarkdownRel
+      if (!view || !rel) return
+      const docText = view.state.doc.toString()
+      const records: AnnotationRecord[] = view.state.field(annotationField)
+        .filter((a) => a.status === 'open')
+        .map((a) => ({
+          id: a.id,
+          anchor: makeAnchor(docText, a.from, a.to),
+          note: a.note,
+          author: a.author,
+          ...(a.suggestedReplacement !== undefined ? { suggestedReplacement: a.suggestedReplacement } : {}),
+        }))
+      void saveAnnotations(rel, records)
+    }, SAVE_DEBOUNCE_MS)
   }, [])
 
   const addDiffSuggestion = useCallback(
@@ -133,22 +166,64 @@ export function useSuggestions(deps: UseSuggestionsDeps): UseSuggestionsApi {
       view.dispatch({
         effects: addAnnotationEffect.of({ id, from: range.from, to: range.to, note, author, suggestedReplacement, status: 'open' }),
       })
+      scheduleSave()
     },
-    [],
+    [scheduleSave],
   )
 
   const dismissAnnotation = useCallback((id: string, viewArg?: EditorView) => {
     const view = viewArg ?? depsRef.current.getActiveEditor()
     if (!view) return
     dismissAnnotationInView(view, id)
-  }, [])
+    scheduleSave()
+  }, [scheduleSave])
 
   const acceptAnnotation = useCallback(async (id: string, viewArg?: EditorView) => {
     const view = viewArg ?? depsRef.current.getActiveEditor()
     if (!view) return
     // Applies a doc change → route through the history-snapshot bracket.
     await runWithSnapshot(async () => { acceptAnnotationInView(view, id) })
-  }, [runWithSnapshot])
+    scheduleSave()
+  }, [runWithSnapshot, scheduleSave])
+
+  // Load persisted annotations once per file open: when activeMarkdownRel
+  // becomes a new non-null value and the editor is available, read the sidecar,
+  // re-anchor each record against the current doc text, and add the ones that
+  // still resolve (orphaned/unresolved records are skipped for now).
+  useEffect(() => {
+    const rel = deps.activeMarkdownRel
+    if (!rel) return
+    if (loadedRelRef.current === rel) return
+    const view = deps.getActiveEditor()
+    if (!view) return
+    loadedRelRef.current = rel
+
+    let cancelled = false
+    void (async () => {
+      const records = await loadAnnotations(rel)
+      if (cancelled) return
+      const current = depsRef.current.getActiveEditor()
+      if (!current || depsRef.current.activeMarkdownRel !== rel) return
+      const docText = current.state.doc.toString()
+      for (const rec of records) {
+        const span = resolveAnchor(docText, rec.anchor)
+        if (!span) continue
+        current.dispatch({
+          effects: addAnnotationEffect.of({
+            id: rec.id,
+            from: span.from,
+            to: span.to,
+            note: rec.note,
+            author: rec.author,
+            suggestedReplacement: rec.suggestedReplacement,
+            status: 'open',
+          }),
+        })
+      }
+    })()
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once per rel; getActiveEditor read live via depsRef inside the async body
+  }, [deps.activeMarkdownRel])
 
   const callbacks = useMemo<SuggestionCallbacks>(
     () => ({

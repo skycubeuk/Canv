@@ -1,8 +1,9 @@
-import { describe, it, expect } from 'vitest'
-import { renderHook, act } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { renderHook, act, waitFor } from '@testing-library/react'
 import { EditorState } from '@codemirror/state'
 import { EditorView } from '@codemirror/view'
 import { suggestionExtension, annotationField } from '../lib/cm/suggestionLayer'
+import { makeAnchor } from '../lib/suggestions/anchor'
 import { useSuggestions } from './useSuggestions'
 
 function mountView(doc: string) {
@@ -62,6 +63,57 @@ describe('useSuggestions — annotations', () => {
     const id = view.state.field(annotationField)[0].id
     act(() => { result.current.callbacks.dismissAnnotation?.(id, view) })
     expect(view.state.field(annotationField)).toHaveLength(0)
+    view.destroy()
+  })
+})
+
+describe('useSuggestions — annotation persistence', () => {
+  let savedRel: string | null
+  let savedRecords: Array<{ id: string; anchor: { quote: string }; note: string; author: string }> | null
+  let loadResult: Array<{ id: string; anchor: ReturnType<typeof makeAnchor>; note: string; author: string; suggestedReplacement?: string }>
+
+  beforeEach(() => {
+    savedRel = null
+    savedRecords = null
+    loadResult = []
+    ;(window as unknown as { canvAnnotations?: unknown }).canvAnnotations = {
+      load: vi.fn(async (_rel: string) => loadResult),
+      save: vi.fn(async (rel: string, records: typeof savedRecords) => {
+        savedRel = rel
+        savedRecords = records
+      }),
+    }
+  })
+
+  afterEach(() => {
+    delete (window as unknown as { canvAnnotations?: unknown }).canvAnnotations
+  })
+
+  it('adding an annotation triggers a debounced save of the anchor', async () => {
+    const view = mountView('the cat sat on the mat')
+    const { result } = renderHook(() => useSuggestions({ ...deps(view), activeMarkdownRel: 'note.md' }))
+    act(() => { result.current.addAnnotation({ from: 4, to: 7 }, 'a note', 'Author') })
+    await waitFor(() => expect(savedRel).toBe('note.md'), { timeout: 2000 })
+    expect(savedRecords).toHaveLength(1)
+    expect(savedRecords![0].anchor.quote).toBe('cat')
+    expect(savedRecords![0].note).toBe('a note')
+    expect(savedRecords![0].author).toBe('Author')
+    view.destroy()
+  })
+
+  it('load → resolve → add round-trips a persisted annotation into the doc', async () => {
+    const doc = 'the cat sat on the mat'
+    loadResult = [{ id: 'annot-loaded-0', anchor: makeAnchor(doc, 4, 7), note: 'loaded note', author: 'AI' }]
+    const view = mountView(doc)
+    renderHook(() => useSuggestions({ ...deps(view), activeMarkdownRel: 'loaded.md' }))
+    await waitFor(
+      () => expect(view.state.field(annotationField).length).toBeGreaterThan(0),
+      { timeout: 2000 },
+    )
+    const ann = view.state.field(annotationField)[0]
+    expect(ann.note).toBe('loaded note')
+    expect(ann.author).toBe('AI')
+    expect(doc.slice(ann.from, ann.to)).toBe('cat')
     view.destroy()
   })
 })
