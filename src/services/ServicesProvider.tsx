@@ -153,6 +153,7 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
     openSettingsTab: workspace.openSettingsTab,
     showBottomTab: ideLayout.showBottomTab,
     emitDiffSuggestion: suggestions.addDiffSuggestion,
+    emitAnnotation: suggestions.addAnnotation,
   })
 
   const services = useMemo<ICanvServices>(() => ({

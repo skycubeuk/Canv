@@ -3,7 +3,8 @@ import { type RunRecord } from '../components/ResultsPanel'
 import type { Action as AgentDef, Mode } from '../config/types'
 import type { EditorGroupId } from '../types/workspace'
 import { EditorView } from '@codemirror/view'
-import { runAgent, buildPrompt } from '../agents/runner'
+import { runAgent, buildPrompt, parseAgentResponse } from '../agents/runner'
+import { routeSelectionAgentResult } from '../agents/selectionRouting'
 import { getActionById } from './useModes'
 import { getAdapter } from '../adapters'
 import { decideApply } from '../lib/applyDecision'
@@ -36,6 +37,8 @@ export interface UseSelectionAgentArgs {
     rewrite: string,
     origin: { agentId: string; agentLabel: string; provider: string; model: string },
   ) => void
+  /** Emit a finished run's notes as an inline annotation. */
+  emitAnnotation: (range: { from: number; to: number }, note: string, author: string) => void
 }
 
 export interface UseSelectionAgentApi {
@@ -54,7 +57,7 @@ export function useSelectionAgent(args: UseSelectionAgentArgs): UseSelectionAgen
   const {
     settings, modelForAgent, activeProfile, activeProfileId, workspace,
     getActiveEditor, getActiveEditorForGroup,
-    showToast, openSettingsTab, showBottomTab, emitDiffSuggestion,
+    showToast, openSettingsTab, showBottomTab, emitDiffSuggestion, emitAnnotation,
   } = args
 
   const [runs, setRuns] = useLocalStorage<RunRecord[]>('canv:runs', [])
@@ -123,9 +126,6 @@ export function useSelectionAgent(args: UseSelectionAgentArgs): UseSelectionAgen
         return
       }
       const adapter = getAdapter(provider)
-      // Selection-level plain rewrites render inline; everything else keeps the
-      // Runs panel for now (Phase 1).
-      const emitInline = agent.outputMode === 'replacement' && range != null
       const freshContextSummaries = await ensurePinnedReady()
       const promptTemplate = agent.prompt
 
@@ -155,7 +155,7 @@ export function useSelectionAgent(args: UseSelectionAgentArgs): UseSelectionAgen
         basePrompt,
         followups: [],
         schemaVersion: 2,
-        inlineEmitted: emitInline,
+        inlineEmitted: false,
       }
 
       setRuns((prev) => {
@@ -163,7 +163,9 @@ export function useSelectionAgent(args: UseSelectionAgentArgs): UseSelectionAgen
         return next.slice(0, MAX_RUNS)
       })
       setActiveTabId(id)
-      if (!emitInline) showBottomTab('runs')
+      // Whole-document runs (no selection range) have no inline target → panel.
+      // Selection runs defer the decision until the response arrives.
+      if (range == null) showBottomTab('runs')
 
       const startedAt = Date.now()
       const controller = new AbortController()
@@ -195,6 +197,16 @@ export function useSelectionAgent(args: UseSelectionAgentArgs): UseSelectionAgen
           chunkDelayMs: settings.streamChunkDelayMs,
         })
 
+        const parsed = parseAgentResponse(agent, final)
+        const rewrite = agent.outputMode === 'replacement' ? final.trim() : parsed.rewrite
+        const routing = routeSelectionAgentResult({
+          outputMode: agent.outputMode,
+          hasRange: range != null,
+          original: text,
+          rewrite,
+          feedback: parsed.feedback,
+        })
+
         setRuns((prev) =>
           prev.map((r) =>
             r.id === id
@@ -207,24 +219,24 @@ export function useSelectionAgent(args: UseSelectionAgentArgs): UseSelectionAgen
                   rawMessages,
                   tokenUsage,
                   elapsedMs: Date.now() - startedAt,
+                  inlineEmitted: routing.emitDiff,
                 }
               : r,
           ),
         )
 
-        if (emitInline && range && final.trim()) {
-          emitDiffSuggestion(
-            range,
-            text,
-            final,
-            { agentId: agent.id, agentLabel: agent.label, provider: adapter.id, model },
-          )
-        } else if (emitInline) {
-          // Inline was intended but there's nothing to show (e.g. a
-          // whitespace-only response). Surface the run so the user isn't
-          // left with neither an inline diff nor a panel.
-          showBottomTab('runs')
+        if (routing.emitDiff && range && rewrite) {
+          emitDiffSuggestion(range, text, rewrite, {
+            agentId: agent.id,
+            agentLabel: agent.label,
+            provider: adapter.id,
+            model,
+          })
         }
+        if (routing.emitAnnotation && range && parsed.feedback) {
+          emitAnnotation({ from: range.from, to: range.to }, parsed.feedback, agent.label)
+        }
+        if (!routing.suppressPanel) showBottomTab('runs')
       } catch (e) {
         const aborted = e instanceof DOMException && e.name === 'AbortError'
         const msg = e instanceof Error ? e.message : String(e)
@@ -240,12 +252,12 @@ export function useSelectionAgent(args: UseSelectionAgentArgs): UseSelectionAgen
               : r,
           ),
         )
-        if (emitInline) showBottomTab('runs')
+        if (range != null) showBottomTab('runs')
       } finally {
         runAbort.current.delete(id)
       }
     },
-    [activeProfileId, settings, modelForAgent, ensurePinnedReady, getActiveEditor, setRuns, showToast, openSettingsTab, showBottomTab, emitDiffSuggestion],
+    [activeProfileId, settings, modelForAgent, ensurePinnedReady, getActiveEditor, setRuns, showToast, openSettingsTab, showBottomTab, emitDiffSuggestion, emitAnnotation],
   )
 
   const handleAgentFromToolbar = useCallback(
