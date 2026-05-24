@@ -5,6 +5,7 @@ import { syntaxHighlighting, defaultHighlightStyle, indentUnit } from '@codemirr
 import { markdown } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
 import { searchKeymap } from '@codemirror/search'
+import { suggestionExtension } from './suggestionLayer'
 
 /**
  * Shared compartment instance for the language extension.
@@ -81,6 +82,7 @@ export function markdownEditorExtensions(opts: MarkdownEditorOptions): Extension
     indentUnit.of('  '),
     EditorState.allowMultipleSelections.of(true),
     ...(opts.showLineNumbers ? [lineNumbers()] : []),
+    suggestionExtension(),
     updateListener,
   ]
 }
