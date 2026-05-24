@@ -78,20 +78,12 @@ export const commands: Contribution = {
       },
     })
     reg({
-      id: 'view.focusRunsTab', label: 'View: Focus Runs', group: 'View',
-      run: () => services.ideLayout.showBottomTab('runs'),
-    })
-    reg({
       id: 'view.focusChatTab', label: 'View: Focus Chat', group: 'View',
       run: () => services.ideLayout.showBottomTab('chat'),
     })
     reg({
       id: 'view.focusProblemsTab', label: 'View: Focus Problems', group: 'View',
       run: () => services.ideLayout.showBottomTab('problems'),
-    })
-    reg({
-      id: 'view.focusOutputTab', label: 'View: Focus Output', group: 'View',
-      run: () => services.ideLayout.showBottomTab('output'),
     })
     reg({
       id: 'view.dockToBottom', label: 'View: Dock at Bottom', group: 'View',

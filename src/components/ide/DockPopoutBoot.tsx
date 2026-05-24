@@ -8,7 +8,6 @@ import { useDockBridge } from '../../hooks/useDockBridge'
 import { useModesState } from '../../hooks/useModes'
 import type { DockState, UserAction } from '../../lib/dockTypes'
 import type { PendingApproval, ChatProvider } from '../ChatPanel'
-import type { RunRecord } from '../ResultsPanel'
 import type { LintIssue } from '../../lib/lintTypes'
 import { applyTheme } from '../../lib/theme'
 import { DialogProvider } from '../../lib/dialogs'
@@ -31,16 +30,14 @@ export function DockPopoutBoot() {
   }, [bridge])
 
   // Apply theme + accent to the popout's <html> via the same data-theme/CSS-var
-  // mechanism the main window uses. Without this the popout has no data-theme
-  // attribute and no --accent value, so every semantic token (bg-app, text-default,
-  // accent rails) falls back to undefined and the window renders unstyled.
+  // mechanism the main window uses.
   useEffect(() => {
     if (!state) return
     applyTheme(state.ui.theme)
   }, [state])
 
   // When theme === 'system', subscribe to prefers-color-scheme so OS dark-mode
-  // toggles apply live (not only on the next state snapshot from main).
+  // toggles apply live.
   const theme = state?.ui.theme
   useEffect(() => {
     if (theme !== 'system') return
@@ -53,8 +50,6 @@ export function DockPopoutBoot() {
   }, [theme])
 
   // Reconstruct the Map<string, PendingApproval> from its entries form.
-  // ChatPanel's prop type is Map<>; we serialise as entries because Maps don't
-  // round-trip cleanly through every postMessage path.
   const pendingApprovalsMap = useMemo<Map<string, PendingApproval>>(() => {
     return new Map(state?.pendingApprovals ?? [])
   }, [state?.pendingApprovals])
@@ -63,22 +58,7 @@ export function DockPopoutBoot() {
     if (!state) return null
     const dispatch = (a: UserAction) => bridge.sendAction(a)
 
-    // The bridge transports DockRun (extends RunRecord with parsed sections);
-    // RunsTab/OutputTab consume RunRecord. The extra fields are ignored.
-    const runs: RunRecord[] = state.runs
-
     return {
-      runs,
-      activeRunId: state.activeRunId,
-      selectRun: (id: string) => dispatch({ type: 'select-run', runId: id }),
-      closeRun: (id: string) => dispatch({ type: 'delete-run', runId: id }),
-      // Apply on the popout side ignores the second arg: main resolves the
-      // canonical replacement text from its parsed run cache, so popout-side
-      // editing of a run's parsedRewrite isn't a concept.
-      applyRun: (run: RunRecord) => dispatch({ type: 'apply-run', runId: run.id }),
-      rerunRun: (run: RunRecord) => dispatch({ type: 'rerun-agent', runId: run.id }),
-      refineRun: (run: RunRecord, message: string) => dispatch({ type: 'refine-run', runId: run.id, message }),
-
       chatMessages: state.chatMessages,
       chatBusy: state.chatBusy,
       chatProvider: state.chatProvider,
@@ -129,9 +109,7 @@ export function DockPopoutBoot() {
   const tabs = useMemo<BottomPanelTabDef[]>(() => {
     if (!adapter) return []
     const builtin = buildBottomPanelTabs(adapter)
-    // Mirror WorkspaceShell.tsx's extensionBottomTabs mapping. Bounds reported
-    // by BottomExtensionPanelSlot are window-local; main reparents the
-    // WebContentsView to this popout window when it first sees a slot here.
+    // Mirror WorkspaceShell.tsx's extensionBottomTabs mapping.
     const ext = (state?.bottomDockExtensionPanels ?? []).map((p) => ({
       id: `ext:${p.extensionId}:${p.id}`,
       label: p.title,
@@ -141,8 +119,6 @@ export function DockPopoutBoot() {
     return [...builtin, ...ext]
   }, [adapter, state?.bottomDockExtensionPanels])
 
-  // Modes config not yet ready (cold-load race) — show a placeholder. Same
-  // gate the main window applies; without it RunsTab's useModes() would throw.
   if (modesState.status !== 'ready' || !state || !adapter) {
     return (
       <DialogProvider>

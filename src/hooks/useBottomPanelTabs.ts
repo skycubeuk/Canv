@@ -3,7 +3,6 @@ import { useService } from '../services/useService'
 import { buildBottomPanelTabs, type BottomPanelTabsAdapter } from '../components/ide/bottomPanelTabs'
 import { getCanvHistory } from '../lib/history'
 import { flattenTree } from '../lib/fs'
-import { useApplyRunWithSnapshot } from './useApplyRunWithSnapshot'
 import { buildChatSystemPreamble } from '../lib/buildChatSystemPreamble'
 import { getAdapter, configuredProviders } from '../adapters'
 import type { Provider } from '../adapters'
@@ -31,13 +30,11 @@ export interface UseBottomPanelTabsArgs {
  *
  * Everything except the file-history target/nonce and the restore setter is
  * derived from services here, so AppInner doesn't need to manufacture
- * applyRunWithSnapshot / availableModels / chatSystemPreamble / raEnabled
- * just to pass them through.
+ * availableModels / chatSystemPreamble / raEnabled just to pass them through.
  */
 export function useBottomPanelTabs(args: UseBottomPanelTabsArgs) {
   const workspace = useService('workspace')
   const settings = useService('settings').settings
-  const selectionAgent = useService('selectionAgent')
   const chatSessions = useService('chatSessions')
   const lint = useService('lint')
   const editorRegistry = useService('editorRegistry')
@@ -46,8 +43,6 @@ export function useBottomPanelTabs(args: UseBottomPanelTabsArgs) {
 
   const { fileHistoryTarget, fileHistoryNonce, onOpenRestore } = args
   const raEnabled = setup.config?.revisionArchaeology.enabled === true
-
-  const applyRunWithSnapshot = useApplyRunWithSnapshot()
 
   // Active profile derivation — mirrors ServicesProvider.
   const activeProfileId = modesSvc.profile ?? modesSvc.defaultModeId
@@ -109,15 +104,6 @@ export function useBottomPanelTabs(args: UseBottomPanelTabsArgs) {
   )
 
   const adapter = useMemo<BottomPanelTabsAdapter>(() => ({
-    // Runs
-    runs: selectionAgent.runs,
-    activeRunId: selectionAgent.activeTabId,
-    selectRun: selectionAgent.setActiveTabId,
-    closeRun: selectionAgent.handleCloseTab,
-    applyRun: applyRunWithSnapshot,
-    rerunRun: selectionAgent.handleRerun,
-    refineRun: selectionAgent.refineRun,
-
     // Chat
     chatMessages: chatSessions.chatMessages,
     chatBusy: chatSessions.chatBusy,
@@ -168,8 +154,8 @@ export function useBottomPanelTabs(args: UseBottomPanelTabsArgs) {
   }), [
     workspace.activeMarkdownRel,
     settings.chatFontSize, settings.pricingOverrides,
-    selectionAgent, chatSessions, lint, jumpToProblem,
-    applyRunWithSnapshot, availableModels, workspaceFiles, chatSystemPreamble,
+    chatSessions, lint, jumpToProblem,
+    availableModels, workspaceFiles, chatSystemPreamble,
     raEnabled, fileHistoryTarget, fileHistoryNonce,
     onOpenDiff, onOpenRestore,
   ])
