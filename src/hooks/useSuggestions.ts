@@ -45,7 +45,7 @@ export interface UseSuggestionsApi {
   reject: (hunkId: string, view?: EditorView) => void
   acceptAll: (view?: EditorView) => Promise<void>
   rejectAll: (view?: EditorView) => void
-  addAnnotation: (range: { from: number; to: number }, note: string, author: string, suggestedReplacement?: string) => void
+  addAnnotation: (range: { from: number; to: number }, note: string, author: string, suggestedReplacement?: string, quote?: string) => void
   dismissAnnotation: (id: string, view?: EditorView) => void
   acceptAnnotation: (id: string, view?: EditorView) => Promise<void>
   discuss: (id: string, view?: EditorView) => void
@@ -163,12 +163,12 @@ export function useSuggestions(deps: UseSuggestionsDeps): UseSuggestionsApi {
   }, [syncCount])
 
   const addAnnotation = useCallback(
-    (range: { from: number; to: number }, note: string, author: string, suggestedReplacement?: string) => {
+    (range: { from: number; to: number }, note: string, author: string, suggestedReplacement?: string, quote?: string) => {
       const view = depsRef.current.getActiveEditor()
       if (!view) return
       const id = `annot-${Date.now().toString(36)}-${(annotSeq.current++).toString(36)}`
       view.dispatch({
-        effects: addAnnotationEffect.of({ id, from: range.from, to: range.to, note, author, suggestedReplacement, status: 'open' }),
+        effects: addAnnotationEffect.of({ id, from: range.from, to: range.to, note, author, suggestedReplacement, quote, status: 'open' }),
       })
       scheduleSave()
     },

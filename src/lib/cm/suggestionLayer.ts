@@ -242,18 +242,41 @@ function buildDecorations(hunks: Hunk[]): DecorationSet {
   return Decoration.set(ranges, true)
 }
 
+class AnnotationNumberWidget extends WidgetType {
+  num: number
+  constructor(num: number) {
+    super()
+    this.num = num
+  }
+  eq(other: WidgetType) {
+    return other instanceof AnnotationNumberWidget && other.num === this.num
+  }
+  toDOM() {
+    const span = document.createElement('span')
+    span.className = 'cm-annot-num cm-annot-num-inline'
+    span.textContent = String(this.num)
+    return span
+  }
+  ignoreEvent() {
+    return true
+  }
+}
+
 class AnnotationCardWidget extends WidgetType {
   ann: Annotation
-  constructor(ann: Annotation) {
+  num: number | null
+  constructor(ann: Annotation, num: number | null) {
     super()
     this.ann = ann
+    this.num = num
   }
   eq(other: WidgetType) {
     return (
       other instanceof AnnotationCardWidget &&
       other.ann.id === this.ann.id &&
       other.ann.note === this.ann.note &&
-      other.ann.suggestedReplacement === this.ann.suggestedReplacement
+      other.ann.suggestedReplacement === this.ann.suggestedReplacement &&
+      other.num === this.num
     )
   }
   toDOM(view: EditorView) {
@@ -261,16 +284,41 @@ class AnnotationCardWidget extends WidgetType {
     card.className = 'cm-annot-card'
     card.contentEditable = 'false'
 
+    // 1. Header: optional number badge + author
     const head = document.createElement('span')
     head.className = 'cm-annot-author'
-    head.textContent = this.ann.author
+    if (this.num != null) {
+      const badge = document.createElement('span')
+      badge.className = 'cm-annot-num'
+      badge.textContent = String(this.num)
+      head.appendChild(badge)
+    }
+    head.appendChild(document.createTextNode(this.ann.author))
     card.appendChild(head)
 
+    // 2. Quote snippet
+    const snippet = this.ann.to > this.ann.from
+      ? view.state.doc.sliceString(this.ann.from, this.ann.to)
+      : (this.ann.quote ?? '')
+    const trimmed = snippet.trim()
+    if (trimmed) {
+      const MAX_QUOTE = 80
+      const display = trimmed.length > MAX_QUOTE
+        ? trimmed.slice(0, MAX_QUOTE) + '…'
+        : trimmed
+      const quoteEl = document.createElement('span')
+      quoteEl.className = 'cm-annot-quote'
+      quoteEl.textContent = `“${display}”`
+      card.appendChild(quoteEl)
+    }
+
+    // 3. Note body
     const body = document.createElement('span')
     body.className = 'cm-annot-note'
     body.textContent = this.ann.note
     card.appendChild(body)
 
+    // 4. Actions
     const actions = document.createElement('span')
     actions.className = 'cm-annot-actions'
     const mkBtn = (label: string, cls: string, run: (cb: SuggestionCallbacks) => void) => {
@@ -366,15 +414,32 @@ function buildEditPreviewDecorations(preview: EditPreviewState | null): Decorati
 
 function buildAnnotationDecorations(anns: Annotation[], doc: Text): DecorationSet {
   const ranges: Range<Decoration>[] = []
-  for (const a of anns) {
-    if (a.status !== 'open') continue
-    if (a.to > a.from) {
+
+  // Sort open annotations by from position (stable) for sequential numbering.
+  const open = anns.filter((a) => a.status === 'open')
+  open.sort((a, b) => a.from - b.from)
+
+  // Assign sequential numbers only to anchored annotations (to > from).
+  let nextNum = 1
+  for (const a of open) {
+    const anchored = a.to > a.from
+    const num = anchored ? nextNum++ : null
+
+    if (anchored) {
       ranges.push(Decoration.mark({ class: 'cm-annot' }).range(a.from, a.to))
+      // Inline number badge immediately after the span.
+      ranges.push(
+        Decoration.widget({ widget: new AnnotationNumberWidget(num!), side: 1 }).range(a.to),
+      )
     }
-    // Block widget at the end of the line containing a.to — sits below the line, out of text flow.
+
+    // Block card widget at end of the line containing a.to.
     const lineEnd = doc.lineAt(a.to).to
-    ranges.push(Decoration.widget({ widget: new AnnotationCardWidget(a), block: true, side: 1 }).range(lineEnd))
+    ranges.push(
+      Decoration.widget({ widget: new AnnotationCardWidget(a, num), block: true, side: 1 }).range(lineEnd),
+    )
   }
+
   return Decoration.set(ranges, true)
 }
 
@@ -473,6 +538,36 @@ const suggestionTheme = EditorView.baseTheme({
     whiteSpace: 'normal',
   },
   '.cm-annot-author': { display: 'block', fontWeight: '600', color: 'rgb(var(--accent))', marginBottom: '2px' },
+  '.cm-annot-num': {
+    display: 'inline-block',
+    minWidth: '16px',
+    height: '16px',
+    lineHeight: '16px',
+    padding: '0 4px',
+    borderRadius: '999px',
+    fontSize: '10px',
+    fontWeight: '700',
+    textAlign: 'center',
+    background: 'color-mix(in oklab, rgb(var(--accent)) 22%, transparent)',
+    color: 'rgb(var(--accent))',
+    marginRight: '5px',
+    verticalAlign: 'middle',
+  },
+  '.cm-annot-num-inline': {
+    fontSize: '9px',
+    verticalAlign: 'super',
+    margin: '0 0 0 2px',
+    padding: '0 3px',
+    marginRight: '0',
+  },
+  '.cm-annot-quote': {
+    display: 'block',
+    color: 'rgb(var(--text-subtle))',
+    fontStyle: 'italic',
+    fontSize: '11px',
+    margin: '1px 0 3px',
+    overflowWrap: 'anywhere',
+  },
   '.cm-annot-note': { display: 'block', color: 'rgb(var(--text-default))' },
   '.cm-annot-actions': { display: 'inline-flex', gap: '8px', marginTop: '6px' },
   '.cm-annot-card button': {

@@ -39,7 +39,7 @@ export interface UseSelectionAgentArgs {
     origin: { agentId: string; agentLabel: string; provider: string; model: string },
   ) => void
   /** Emit a finished run's notes as an inline annotation. */
-  emitAnnotation: (range: { from: number; to: number }, note: string, author: string) => void
+  emitAnnotation: (range: { from: number; to: number }, note: string, author: string, suggestedReplacement?: string, quote?: string) => void
 }
 
 export interface UseSelectionAgentApi {
@@ -242,11 +242,15 @@ export function useSelectionAgent(args: UseSelectionAgentArgs): UseSelectionAgen
           const structured = parseReviewNotes(final)
           if (structured) {
             for (const a of anchorReviewNotes(text, range.from, structured)) {
-              emitAnnotation({ from: a.from, to: a.to }, a.note, agent.label)
+              emitAnnotation({ from: a.from, to: a.to }, a.note, agent.label, undefined, a.quote)
             }
           } else if (parsed.feedback) {
             emitAnnotation({ from: range.from, to: range.to }, parsed.feedback, agent.label)
           }
+          // Collapse the editor's text selection so the blue selection highlight
+          // doesn't visually blend with the annotation highlights.
+          const v = getActiveEditor()
+          if (v && !v.state.selection.main.empty) v.dispatch({ selection: { anchor: range.from } })
         }
       } catch (e) {
         const aborted = e instanceof DOMException && e.name === 'AbortError'

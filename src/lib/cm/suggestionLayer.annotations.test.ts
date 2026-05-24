@@ -12,6 +12,7 @@ import {
 } from './suggestionLayer'
 import type { Annotation } from '../suggestions/types'
 
+
 const ann = (over: Partial<Annotation>): Annotation => ({
   id: 'a1',
   from: 4,
@@ -117,6 +118,83 @@ describe('annotation decorations + view helpers (mounted)', () => {
     const cardInsideLine = view.dom.querySelector('.cm-line .cm-annot-card')
     expect(cardInsideLine).toBeNull()
 
+    view.destroy()
+  })
+})
+
+describe('annotation badge numbers + quote-in-card', () => {
+  function mountWith(doc: string, anns: Annotation[]) {
+    const view = new EditorView({
+      state: EditorState.create({ doc, extensions: [suggestionExtension()] }),
+      parent: document.body,
+    })
+    for (const a of anns) view.dispatch({ effects: addAnnotation.of(a) })
+    return view
+  }
+
+  it('card shows the referenced snippet for an anchored annotation', () => {
+    // 'the cat sat' — cat is at 4..7
+    const view = mountWith('the cat sat', [ann({ from: 4, to: 7 })])
+    const quoteEl = view.dom.querySelector('.cm-annot-quote')
+    expect(quoteEl).not.toBeNull()
+    expect(quoteEl?.textContent).toContain('cat')
+    view.destroy()
+  })
+
+  it('anchored annotation renders an in-text badge cm-annot-num-inline', () => {
+    const view = mountWith('the cat sat', [ann({ from: 4, to: 7 })])
+    const badge = view.dom.querySelector('.cm-annot-num-inline')
+    expect(badge).not.toBeNull()
+    view.destroy()
+  })
+
+  it('in-text badge number matches the card header badge number', () => {
+    const view = mountWith('the cat sat', [ann({ from: 4, to: 7 })])
+    const inlineBadge = view.dom.querySelector('.cm-annot-num-inline')
+    const cardBadge = view.dom.querySelector('.cm-annot-card .cm-annot-num')
+    expect(inlineBadge).not.toBeNull()
+    expect(cardBadge).not.toBeNull()
+    expect(inlineBadge?.textContent).toBe(cardBadge?.textContent)
+    view.destroy()
+  })
+
+  it('two anchored annotations get sequential numbers in document order', () => {
+    // first annotation: from=4 (cat), second: from=8 (sat)
+    const view = mountWith('the cat sat', [
+      ann({ id: 'b', from: 8, to: 11, note: 'second' }),  // added first but higher position
+      ann({ id: 'a', from: 4, to: 7, note: 'first' }),    // added second but lower position
+    ])
+    const badges = view.dom.querySelectorAll('.cm-annot-num-inline')
+    // should have 2 badges; the one at lower from should have "1"
+    expect(badges.length).toBe(2)
+    // The first badge in document order (left to right) should be "1"
+    expect(badges[0].textContent).toBe('1')
+    expect(badges[1].textContent).toBe('2')
+    view.destroy()
+  })
+
+  it('unanchored annotation (from===to) has no mark and no inline badge, but card is present', () => {
+    // zero-width annotation with a stored quote
+    const unanchored: Annotation = {
+      id: 'u1',
+      from: 5,
+      to: 5,
+      note: 'could not locate',
+      author: 'AI',
+      status: 'open',
+      quote: 'xyz does not exist',
+    }
+    const view = mountWith('the cat sat', [unanchored])
+    // No inline badge
+    expect(view.dom.querySelector('.cm-annot-num-inline')).toBeNull()
+    // No cm-annot mark (highlight)
+    expect(view.dom.querySelector('.cm-annot')).toBeNull()
+    // Card is present
+    expect(view.dom.querySelector('.cm-annot-card')).not.toBeNull()
+    // Card shows the stored quote
+    const quoteEl = view.dom.querySelector('.cm-annot-quote')
+    expect(quoteEl).not.toBeNull()
+    expect(quoteEl?.textContent).toContain('xyz does not exist')
     view.destroy()
   })
 })

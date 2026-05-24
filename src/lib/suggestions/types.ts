@@ -46,4 +46,7 @@ export interface Annotation {
   author: string
   suggestedReplacement?: string
   status: AnnotationStatus
+  /** Verbatim text the note refers to. Display fallback for the card when the
+   *  span can't be anchored (from === to). Session-only — not persisted. */
+  quote?: string
 }
