@@ -13,9 +13,13 @@ export interface UseChatEditPreviewDeps {
 }
 
 /**
- * Watches `pendingApprovals` for a single `edit_file` approval that targets the
- * currently open file, then renders it as an inline diff preview via the
- * `editPreviewField` effect rather than the normal approval card.
+ * Watches `pendingApprovals` for a pending `edit_file` or `apply_edits` approval
+ * that targets the currently open file, then renders it as an inline diff preview
+ * via the `editPreviewField` effect rather than the normal approval card.
+ *
+ * For `apply_edits`, the inline path is taken ONLY IF every edit targets the
+ * active file and every oldText appears exactly once (unambiguous). Otherwise
+ * the card fallback is used.
  *
  * Returns the callId of the approval currently shown inline so that
  * `useBottomPanelTabs` can suppress the duplicate card.
@@ -46,8 +50,8 @@ export function useChatEditPreview(deps: UseChatEditPreviewDeps): {
 
     const view = getActiveEditor()
 
-    // Find the first pending edit_file approval that resolves on the active file.
-    let found: { callId: string; from: number; to: number; original: string; rewrite: string } | null = null
+    // Find the first pending approval that resolves to an inline preview on the active file.
+    let found: { callId: string; hunks: Array<{ from: number; to: number; rewrite: string }> } | null = null
     for (const [, approval] of pendingApprovals) {
       if (approval.state !== 'pending') continue
       const result = locateChatEdit(
@@ -56,11 +60,12 @@ export function useChatEditPreview(deps: UseChatEditPreviewDeps): {
         approval.callId,
         approval.preview,
       )
-      if (result) {
-        found = result.range
-          ? { callId: result.callId, from: result.range.from, to: result.range.to, original: result.original, rewrite: result.rewrite }
-          : null
-        if (found) break
+      if (result && result.hunks.length > 0) {
+        found = {
+          callId: result.callId,
+          hunks: result.hunks.map(({ from, to, rewrite }) => ({ from, to, rewrite })),
+        }
+        break
       }
     }
 
@@ -70,7 +75,7 @@ export function useChatEditPreview(deps: UseChatEditPreviewDeps): {
       // If it's a different call (or no current), dispatch the preview.
       if (found.callId !== currentId) {
         if (view) {
-          view.dispatch({ effects: setEditPreview.of({ callId: found.callId, from: found.from, to: found.to, rewrite: found.rewrite }) })
+          view.dispatch({ effects: setEditPreview.of({ callId: found.callId, hunks: found.hunks }) })
         }
         setPreviewedCallId(found.callId)
         previewedCallIdRef.current = found.callId

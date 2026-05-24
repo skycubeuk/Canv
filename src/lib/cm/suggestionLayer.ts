@@ -43,11 +43,15 @@ export const clearAnnotations = StateEffect.define<null>()
 
 // ---- chat-edit preview effects + field ------------------------------------
 
-export interface EditPreviewState {
-  callId: string
+export interface EditPreviewHunk {
   from: number
   to: number
   rewrite: string
+}
+
+export interface EditPreviewState {
+  callId: string
+  hunks: EditPreviewHunk[]
 }
 
 export const setEditPreview = StateEffect.define<EditPreviewState>()
@@ -63,23 +67,30 @@ export const editPreviewField = StateField.define<EditPreviewState | null>({
     }
     if (!tr.docChanged || !preview) return preview
 
-    // Map positions through the change set, invalidating when an edit
-    // overlaps the preview span (same rule as hunk and annotation fields).
+    // Map all hunks through the change set, invalidating the whole preview
+    // when any edit overlaps any hunk (same rule as hunk and annotation fields).
     let invalid = false
-    tr.changes.iterChanges((fromA, toA) => {
-      if (toA > fromA) {
-        // Deletion/replacement: invalidate if it overlaps (fromA,toA) ∩ (preview.from,preview.to)
-        if (fromA < preview.to && toA > preview.from) invalid = true
-      } else {
-        // Pure insertion: invalidate only if strictly inside the span
-        if (fromA > preview.from && fromA < preview.to) invalid = true
-      }
-    })
+    for (const hunk of preview.hunks) {
+      tr.changes.iterChanges((fromA, toA) => {
+        if (toA > fromA) {
+          // Deletion/replacement: invalidate if it overlaps (fromA,toA) ∩ (hunk.from,hunk.to)
+          if (fromA < hunk.to && toA > hunk.from) invalid = true
+        } else {
+          // Pure insertion: invalidate only if strictly inside the span
+          if (fromA > hunk.from && fromA < hunk.to) invalid = true
+        }
+      })
+      if (invalid) break
+    }
     if (invalid) return null
 
-    const from = tr.changes.mapPos(preview.from, 1)
-    const to = tr.changes.mapPos(preview.to, -1)
-    return { ...preview, from, to }
+    // Map each hunk's positions through the change set
+    const mappedHunks = preview.hunks.map((hunk) => ({
+      ...hunk,
+      from: tr.changes.mapPos(hunk.from, 1),
+      to: tr.changes.mapPos(hunk.to, -1),
+    }))
+    return { ...preview, hunks: mappedHunks }
   },
   provide: (f) => EditorView.decorations.from(f, (preview) => buildEditPreviewDecorations(preview)),
 })
@@ -291,17 +302,14 @@ class AnnotationCardWidget extends WidgetType {
 
 class EditPreviewControlWidget extends WidgetType {
   callId: string
-  rewrite: string
-  constructor(callId: string, rewrite: string) {
+  constructor(callId: string) {
     super()
     this.callId = callId
-    this.rewrite = rewrite
   }
   eq(other: WidgetType) {
     return (
       other instanceof EditPreviewControlWidget &&
-      other.callId === this.callId &&
-      other.rewrite === this.rewrite
+      other.callId === this.callId
     )
   }
   toDOM(view: EditorView) {
@@ -333,19 +341,26 @@ class EditPreviewControlWidget extends WidgetType {
 }
 
 function buildEditPreviewDecorations(preview: EditPreviewState | null): DecorationSet {
-  if (!preview) return Decoration.none
+  if (!preview || preview.hunks.length === 0) return Decoration.none
   const ranges: Range<Decoration>[] = []
-  if (preview.to > preview.from) {
-    ranges.push(Decoration.mark({ class: 'cm-sug-del' }).range(preview.from, preview.to))
+
+  for (const hunk of preview.hunks) {
+    if (hunk.to > hunk.from) {
+      ranges.push(Decoration.mark({ class: 'cm-sug-del' }).range(hunk.from, hunk.to))
+    }
+    if (hunk.rewrite) {
+      ranges.push(Decoration.widget({ widget: new InsertWidget(hunk.rewrite), side: 1 }).range(hunk.to))
+    }
   }
-  if (preview.rewrite) {
-    ranges.push(Decoration.widget({ widget: new InsertWidget(preview.rewrite), side: 1 }).range(preview.to))
-  }
+
+  // Single control widget anchored at the last hunk's `to` — one approve/deny
+  // for the whole call (apply_edits is a single atomic approval).
+  const lastHunk = preview.hunks[preview.hunks.length - 1]
   ranges.push(
     Decoration.widget({
-      widget: new EditPreviewControlWidget(preview.callId, preview.rewrite),
+      widget: new EditPreviewControlWidget(preview.callId),
       side: 1,
-    }).range(preview.to),
+    }).range(lastHunk.to),
   )
   return Decoration.set(ranges, true)
 }
