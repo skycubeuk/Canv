@@ -139,6 +139,8 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
       const rel = workspace.activeMarkdownRel
       if (view && rel) workspace.saveTab(rel, view.state.doc.toString())
     },
+    startSeededChat: chatSessions.startSeededChat,
+    showChatTab: () => ideLayout.showBottomTab('chat'),
   })
 
   const selectionAgent = useSelectionAgent({

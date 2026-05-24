@@ -7,6 +7,7 @@ import {
   applyHunkInView,
   rejectHunkInView,
   findHunk,
+  findAnnotation,
   addAnnotation as addAnnotationEffect,
   acceptAnnotationInView,
   dismissAnnotationInView,
@@ -29,6 +30,8 @@ export interface UseSuggestionsDeps {
   flushAll: () => Promise<void>
   /** Persist the active doc text after an in-memory dispatch. */
   saveActive: () => void
+  startSeededChat?: (seedText: string) => void
+  showChatTab?: () => void
 }
 
 export interface UseSuggestionsApi {
@@ -45,6 +48,7 @@ export interface UseSuggestionsApi {
   addAnnotation: (range: { from: number; to: number }, note: string, author: string, suggestedReplacement?: string) => void
   dismissAnnotation: (id: string, view?: EditorView) => void
   acceptAnnotation: (id: string, view?: EditorView) => Promise<void>
+  discuss: (id: string, view?: EditorView) => void
   pendingCount: number
   callbacks: SuggestionCallbacks
 }
@@ -225,6 +229,24 @@ export function useSuggestions(deps: UseSuggestionsDeps): UseSuggestionsApi {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- load once per rel; getActiveEditor read live via depsRef inside the async body
   }, [deps.activeMarkdownRel])
 
+  const discuss = useCallback((id: string, viewArg?: EditorView) => {
+    const view = viewArg ?? depsRef.current.getActiveEditor()
+    if (!view) return
+    const ann = findAnnotation(view, id)
+    const hunk = ann ? undefined : findHunk(view, id)
+    let seed: string | null = null
+    if (ann) {
+      const quoted = view.state.sliceDoc(ann.from, ann.to)
+      seed = `Let's discuss this note from ${ann.author} on "${quoted}":\n\n${ann.note}`
+    } else if (hunk) {
+      const original = view.state.sliceDoc(hunk.from, hunk.to)
+      seed = `Let's discuss this suggested edit.\n\nReplace:\n"${original}"\n\nWith:\n"${hunk.insert}"`
+    }
+    if (!seed) return
+    depsRef.current.startSeededChat?.(seed)
+    depsRef.current.showChatTab?.()
+  }, [])
+
   const callbacks = useMemo<SuggestionCallbacks>(
     () => ({
       accept: (hunkId, view) => { void accept(hunkId, view) },
@@ -233,12 +255,13 @@ export function useSuggestions(deps: UseSuggestionsDeps): UseSuggestionsApi {
       rejectAll: (view) => { rejectAll(view) },
       acceptAnnotation: (id, view) => { void acceptAnnotation(id, view) },
       dismissAnnotation: (id, view) => { dismissAnnotation(id, view) },
+      discuss: (id, view) => { discuss(id, view) },
     }),
-    [accept, reject, acceptAll, rejectAll, acceptAnnotation, dismissAnnotation],
+    [accept, reject, acceptAll, rejectAll, acceptAnnotation, dismissAnnotation, discuss],
   )
 
   return useMemo<UseSuggestionsApi>(
-    () => ({ addDiffSuggestion, accept, reject, acceptAll, rejectAll, addAnnotation, dismissAnnotation, acceptAnnotation, pendingCount, callbacks }),
-    [addDiffSuggestion, accept, reject, acceptAll, rejectAll, addAnnotation, dismissAnnotation, acceptAnnotation, pendingCount, callbacks],
+    () => ({ addDiffSuggestion, accept, reject, acceptAll, rejectAll, addAnnotation, dismissAnnotation, acceptAnnotation, discuss, pendingCount, callbacks }),
+    [addDiffSuggestion, accept, reject, acceptAll, rejectAll, addAnnotation, dismissAnnotation, acceptAnnotation, discuss, pendingCount, callbacks],
   )
 }

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act, waitFor } from '@testing-library/react'
 import { EditorState } from '@codemirror/state'
 import { EditorView } from '@codemirror/view'
-import { suggestionExtension, annotationField } from '../lib/cm/suggestionLayer'
+import { suggestionExtension, annotationField, suggestionField } from '../lib/cm/suggestionLayer'
 import { makeAnchor } from '../lib/suggestions/anchor'
 import { useSuggestions } from './useSuggestions'
 
@@ -114,6 +114,55 @@ describe('useSuggestions — annotation persistence', () => {
     expect(ann.note).toBe('loaded note')
     expect(ann.author).toBe('AI')
     expect(doc.slice(ann.from, ann.to)).toBe('cat')
+    view.destroy()
+  })
+})
+
+describe('useSuggestions — discuss', () => {
+  it('discuss(annotationId) calls startSeededChat with note + quoted text, and showChatTab', () => {
+    const view = mountView('the cat sat')
+    const startSeededChat = vi.fn(async (_text: string) => {})
+    const showChatTab = vi.fn()
+    const d = {
+      ...deps(view),
+      startSeededChat,
+      showChatTab,
+    }
+    const { result } = renderHook(() => useSuggestions(d))
+    act(() => { result.current.addAnnotation({ from: 4, to: 7 }, 'repeats earlier', 'Story Reviewer') })
+    const id = view.state.field(annotationField)[0].id
+    act(() => { result.current.discuss(id) })
+    expect(startSeededChat).toHaveBeenCalledOnce()
+    const seedArg: string = startSeededChat.mock.calls[0][0]
+    expect(seedArg).toContain('repeats earlier')
+    expect(seedArg).toContain('cat')
+    expect(showChatTab).toHaveBeenCalledOnce()
+    view.destroy()
+  })
+
+  it('discuss(hunkId) calls startSeededChat with original + replacement, and showChatTab', () => {
+    const view = mountView('the cat sat')
+    const startSeededChat = vi.fn(async (_text: string) => {})
+    const showChatTab = vi.fn()
+    const d = {
+      ...deps(view),
+      startSeededChat,
+      showChatTab,
+    }
+    const { result } = renderHook(() => useSuggestions(d))
+    act(() => {
+      result.current.addDiffSuggestion(
+        { from: 4, to: 7 }, 'cat', 'dog',
+        { agentId: 'polish', agentLabel: 'Polish', provider: 'anthropic', model: 'm' },
+      )
+    })
+    const id = view.state.field(suggestionField)[0].id
+    act(() => { result.current.discuss(id) })
+    expect(startSeededChat).toHaveBeenCalledOnce()
+    const seedArg: string = startSeededChat.mock.calls[0][0]
+    expect(seedArg).toContain('cat')
+    expect(seedArg).toContain('dog')
+    expect(showChatTab).toHaveBeenCalledOnce()
     view.destroy()
   })
 })

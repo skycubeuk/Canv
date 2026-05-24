@@ -19,6 +19,8 @@ export interface SuggestionCallbacks {
   acceptAnnotation?: (id: string, view: EditorView) => void
   /** Drop an annotation without changing the document. Optional until the store wires it. */
   dismissAnnotation?: (id: string, view: EditorView) => void
+  /** Open a seeded chat discussion about this change. Optional until the store wires it. */
+  discuss?: (id: string, view: EditorView) => void
 }
 
 export const suggestionCallbacks = Facet.define<SuggestionCallbacks, SuggestionCallbacks | null>({
@@ -140,12 +142,12 @@ class ControlWidget extends WidgetType {
     wrap.className = 'cm-sug-controls'
     wrap.contentEditable = 'false'
 
-    const mkBtn = (label: string, cls: string, run: (cb: SuggestionCallbacks) => void) => {
+    const mkBtn = (label: string, cls: string, ariaLabel: string, run: (cb: SuggestionCallbacks) => void) => {
       const b = document.createElement('button')
       b.type = 'button'
       b.className = cls
       b.textContent = label
-      b.setAttribute('aria-label', cls === 'cm-sug-accept' ? 'Accept change' : 'Reject change')
+      b.setAttribute('aria-label', ariaLabel)
       b.onmousedown = (ev) => {
         ev.preventDefault() // keep editor selection/focus
         const cb = view.state.facet(suggestionCallbacks)
@@ -154,8 +156,9 @@ class ControlWidget extends WidgetType {
       return b
     }
 
-    wrap.appendChild(mkBtn('✓', 'cm-sug-accept', (cb) => cb.accept(this.hunkId, view)))
-    wrap.appendChild(mkBtn('✗', 'cm-sug-reject', (cb) => cb.reject(this.hunkId, view)))
+    wrap.appendChild(mkBtn('✓', 'cm-sug-accept', 'Accept change', (cb) => cb.accept(this.hunkId, view)))
+    wrap.appendChild(mkBtn('✗', 'cm-sug-reject', 'Reject change', (cb) => cb.reject(this.hunkId, view)))
+    wrap.appendChild(mkBtn('Discuss', 'cm-sug-discuss', 'Discuss change', (cb) => cb.discuss?.(this.hunkId, view)))
     return wrap
   }
   ignoreEvent() {
@@ -228,6 +231,7 @@ class AnnotationCardWidget extends WidgetType {
       actions.appendChild(mkBtn('Accept', 'cm-annot-accept', (cb) => cb.acceptAnnotation?.(this.ann.id, view)))
     }
     actions.appendChild(mkBtn('Dismiss', 'cm-annot-dismiss', (cb) => cb.dismissAnnotation?.(this.ann.id, view)))
+    actions.appendChild(mkBtn('Discuss', 'cm-annot-discuss', (cb) => cb.discuss?.(this.ann.id, view)))
     card.appendChild(actions)
     return card
   }
@@ -323,6 +327,7 @@ const suggestionTheme = EditorView.baseTheme({
   },
   '.cm-sug-accept': { color: 'rgb(var(--success-fg))' },
   '.cm-sug-reject': { color: 'rgb(var(--danger-fg))' },
+  '.cm-sug-discuss': { color: 'rgb(var(--accent))' },
   '.cm-annot': {
     backgroundColor: 'color-mix(in oklab, rgb(var(--accent)) 12%, transparent)',
     borderBottom: '2px dotted rgb(var(--accent))',
@@ -356,6 +361,7 @@ const suggestionTheme = EditorView.baseTheme({
   },
   '.cm-annot-accept': { color: 'rgb(var(--success-fg))', fontWeight: '600' },
   '.cm-annot-dismiss': { color: 'rgb(var(--text-subtle))' },
+  '.cm-annot-discuss': { color: 'rgb(var(--accent))' },
 })
 
 /** The full extension to add to an editor. */
