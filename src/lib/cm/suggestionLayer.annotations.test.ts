@@ -94,4 +94,29 @@ describe('annotation decorations + view helpers (mounted)', () => {
     expect(view.state.field(annotationField)).toHaveLength(0)
     view.destroy()
   })
+
+  it('renders the annotation card as a block below the line, not inline inside the text', () => {
+    // Multi-line doc; annotation spans a word on line ONE
+    const multilineDoc = 'line one here\nline two here\nline three'
+    const view = new EditorView({
+      state: EditorState.create({ doc: multilineDoc, extensions: [suggestionExtension()] }),
+      parent: document.body,
+    })
+    // "one" is at position 5..8 on line one
+    view.dispatch({
+      effects: addAnnotation.of(
+        ann({ id: 'block-test', from: 5, to: 8, note: 'check this', author: 'Reviewer' }),
+      ),
+    })
+
+    // Card must exist somewhere in the editor DOM
+    const card = view.dom.querySelector('.cm-annot-card')
+    expect(card).not.toBeNull()
+
+    // Card must NOT be a descendant of a .cm-line (block widgets sit outside inline flow)
+    const cardInsideLine = view.dom.querySelector('.cm-line .cm-annot-card')
+    expect(cardInsideLine).toBeNull()
+
+    view.destroy()
+  })
 })

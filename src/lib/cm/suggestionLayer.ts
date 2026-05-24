@@ -4,6 +4,7 @@ import {
   Facet,
   type Range,
   type Extension,
+  type Text,
 } from '@codemirror/state'
 import { Decoration, type DecorationSet, EditorView, WidgetType } from '@codemirror/view'
 import type { Hunk, Annotation } from '../suggestions/types'
@@ -164,7 +165,7 @@ export const annotationField = StateField.define<Annotation[]>({
     }
     return annotations
   },
-  provide: (f) => EditorView.decorations.from(f, (anns) => buildAnnotationDecorations(anns)),
+  provide: (f) => EditorView.decorations.compute([f], (state) => buildAnnotationDecorations(state.field(f), state.doc)),
 })
 
 // ---- widgets --------------------------------------------------------------
@@ -256,7 +257,7 @@ class AnnotationCardWidget extends WidgetType {
     )
   }
   toDOM(view: EditorView) {
-    const card = document.createElement('span')
+    const card = document.createElement('div')
     card.className = 'cm-annot-card'
     card.contentEditable = 'false'
 
@@ -363,14 +364,16 @@ function buildEditPreviewDecorations(preview: EditPreviewState | null): Decorati
   return Decoration.set(ranges, true)
 }
 
-function buildAnnotationDecorations(anns: Annotation[]): DecorationSet {
+function buildAnnotationDecorations(anns: Annotation[], doc: Text): DecorationSet {
   const ranges: Range<Decoration>[] = []
   for (const a of anns) {
     if (a.status !== 'open') continue
     if (a.to > a.from) {
       ranges.push(Decoration.mark({ class: 'cm-annot' }).range(a.from, a.to))
     }
-    ranges.push(Decoration.widget({ widget: new AnnotationCardWidget(a), side: 1 }).range(a.to))
+    // Block widget at the end of the line containing a.to — sits below the line, out of text flow.
+    const lineEnd = doc.lineAt(a.to).to
+    ranges.push(Decoration.widget({ widget: new AnnotationCardWidget(a), block: true, side: 1 }).range(lineEnd))
   }
   return Decoration.set(ranges, true)
 }
@@ -456,25 +459,22 @@ const suggestionTheme = EditorView.baseTheme({
     borderBottom: '2px dotted rgb(var(--accent))',
   },
   '.cm-annot-card': {
-    display: 'inline-flex',
-    alignItems: 'baseline',
-    gap: '6px',
-    margin: '0 0 0 6px',
-    padding: '2px 8px',
+    display: 'block',
+    margin: '4px 0 8px 1.5em',
+    maxWidth: '42em',
+    padding: '8px 11px',
     borderRadius: '6px',
     border: '1px solid rgb(var(--border-default))',
     borderLeft: '3px solid rgb(var(--accent))',
     background: 'rgb(var(--bg-panel))',
     fontFamily: 'Inter, system-ui, sans-serif',
     fontSize: '12px',
-    lineHeight: '1.45',
+    lineHeight: '1.5',
     whiteSpace: 'normal',
-    verticalAlign: 'text-top',
-    maxWidth: '34em',
   },
-  '.cm-annot-author': { fontWeight: '600', color: 'rgb(var(--accent))', whiteSpace: 'nowrap' },
-  '.cm-annot-note': { color: 'rgb(var(--text-default))' },
-  '.cm-annot-actions': { display: 'inline-flex', gap: '8px', whiteSpace: 'nowrap' },
+  '.cm-annot-author': { display: 'block', fontWeight: '600', color: 'rgb(var(--accent))', marginBottom: '2px' },
+  '.cm-annot-note': { display: 'block', color: 'rgb(var(--text-default))' },
+  '.cm-annot-actions': { display: 'inline-flex', gap: '8px', marginTop: '6px' },
   '.cm-annot-card button': {
     cursor: 'pointer',
     border: 'none',
