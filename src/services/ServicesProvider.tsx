@@ -152,16 +152,19 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
   })
 
   // Extend the suggestions callbacks with the chat-edit approval resolvers.
-  // This avoids re-creating useSuggestions — we just compose onto the existing
-  // callbacks object, which is stable across renders.
-  const suggestionsWithEditPreview = {
-    ...suggestions,
-    callbacks: {
-      ...suggestions.callbacks,
-      approveEdit: chatEditPreview.approveEdit,
-      rejectEdit: chatEditPreview.rejectEdit,
-    },
-  }
+  // Memoised so its identity is stable across renders (it feeds the services
+  // useMemo below); recomputed only when suggestions or the resolvers change.
+  const suggestionsWithEditPreview = useMemo(
+    () => ({
+      ...suggestions,
+      callbacks: {
+        ...suggestions.callbacks,
+        approveEdit: chatEditPreview.approveEdit,
+        rejectEdit: chatEditPreview.rejectEdit,
+      },
+    }),
+    [suggestions, chatEditPreview.approveEdit, chatEditPreview.rejectEdit],
+  )
 
   const selectionAgent = useSelectionAgent({
     settings: settingsApi.settings,

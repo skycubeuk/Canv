@@ -35,10 +35,10 @@ export function useChatEditPreview(deps: UseChatEditPreviewDeps): {
   depsRef.current = deps
 
   const [previewedCallId, setPreviewedCallId] = useState<string | null>(null)
+  // The effect and the accept/reject callbacks keep this ref in lock-step with
+  // the state (every setPreviewedCallId is paired with a ref write), so no
+  // render-time sync is needed.
   const previewedCallIdRef = useRef<string | null>(null)
-
-  // Sync the ref whenever state changes so stable callbacks can read it.
-  previewedCallIdRef.current = previewedCallId
 
   // Core effect: scan pendingApprovals every time they (or the active file) change.
   useEffect(() => {
