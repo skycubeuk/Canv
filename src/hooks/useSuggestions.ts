@@ -43,6 +43,7 @@ export function useSuggestions(deps: UseSuggestionsDeps): UseSuggestionsApi {
 
   // Keep deps fresh without re-creating the stable callbacks below.
   const depsRef = useRef(deps)
+  // eslint-disable-next-line react-hooks/refs -- callbacks read depsRef only in event handlers (accept/reject), never during render, so syncing here is safe and avoids re-creating the stable facet callbacks
   depsRef.current = deps
 
   const syncCount = useCallback((view: EditorView | null) => {
