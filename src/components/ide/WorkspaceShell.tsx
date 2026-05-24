@@ -17,6 +17,7 @@ import { TrustWorkspaceBanner } from '../extensions/TrustWorkspaceBanner'
 import { BottomExtensionPanelSlot } from '../extensions/BottomExtensionPanelSlot'
 import { OutlinePanel } from './sidebar/OutlinePanel'
 import { Canvas } from '../Canvas'
+import { SuggestionBar } from './SuggestionBar'
 import { SettingsTab } from './tabs/SettingsTab'
 import { DiffTab } from './tabs/DiffTab'
 import { ActivityBar, type BuiltinTab } from './ActivityBar'
@@ -400,22 +401,31 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
                     )
                   }
                   return (
-                    <Canvas
-                      groupId={groupId}
-                      tab={t}
-                      isActive={isActive}
-                      fontSize={settings.fontSize}
-                      lineWidth={settings.lineWidth}
-                      viewMode={viewMode}
-                      onChange={editorRegistry.handleEditorChange}
-                      onEditorReady={editorRegistry.handleEditorReady}
-                      onEditorDestroy={editorRegistry.handleEditorDestroy}
-                      onJumperReady={editorRegistry.handleJumperReady}
-                      onJumperDestroy={editorRegistry.handleJumperDestroy}
-                      getInitialBuffer={editorRegistry.readLiveBuffer}
-                      onActiveEditorUpdate={editorRegistry.onActiveEditorUpdate}
-                      suggestionCallbacks={suggestions.callbacks}
-                    />
+                    <>
+                      <Canvas
+                        groupId={groupId}
+                        tab={t}
+                        isActive={isActive}
+                        fontSize={settings.fontSize}
+                        lineWidth={settings.lineWidth}
+                        viewMode={viewMode}
+                        onChange={editorRegistry.handleEditorChange}
+                        onEditorReady={editorRegistry.handleEditorReady}
+                        onEditorDestroy={editorRegistry.handleEditorDestroy}
+                        onJumperReady={editorRegistry.handleJumperReady}
+                        onJumperDestroy={editorRegistry.handleJumperDestroy}
+                        getInitialBuffer={editorRegistry.readLiveBuffer}
+                        onActiveEditorUpdate={editorRegistry.onActiveEditorUpdate}
+                        suggestionCallbacks={suggestions.callbacks}
+                      />
+                      {isActive && groupId === workspace.activeGroupId && (
+                        <SuggestionBar
+                          count={suggestions.pendingCount}
+                          onAcceptAll={() => suggestions.acceptAll()}
+                          onRejectAll={() => suggestions.rejectAll()}
+                        />
+                      )}
+                    </>
                   )
                 }}
                 emptyState={(
