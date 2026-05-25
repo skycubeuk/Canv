@@ -238,6 +238,9 @@ export function useSuggestions(deps: UseSuggestionsDeps): UseSuggestionsApi {
       const view = viewArg ?? depsRef.current.getActiveEditor()
       if (!view) return
       view.dispatch({ effects: patchAnnotation.of({ id, ...patch }) })
+      // No syncCount: patchAnnotation only changes note/suggestedReplacement, not
+      // the open-annotation count or any `collapsed` flag, so syncCount would be a
+      // pure no-op re-render here (cf. saveAnnotationNote).
       scheduleSave()
     },
     [scheduleSave],

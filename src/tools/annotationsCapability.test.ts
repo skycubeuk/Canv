@@ -77,6 +77,11 @@ describe('createAnnotationsCapability', () => {
     expect(() => makeCap(view, fakeSuggestions()).update('doc.md', { id: 'nope', note: 'x' })).toThrow(/no annotation with id/)
   })
 
+  it('update throws on a non-active path', () => {
+    const view = viewWith('the cat sat', [{ id: 'a1', from: 4, to: 7, note: 'n' }])
+    expect(() => makeCap(view, fakeSuggestions()).update('other.md', { id: 'a1', note: 'x' })).toThrow(/open other\.md/)
+  })
+
   it('remove delegates to dismissAnnotation', () => {
     const view = viewWith('the cat sat', [{ id: 'a1', from: 4, to: 7, note: 'n' }])
     const sugg = fakeSuggestions()
