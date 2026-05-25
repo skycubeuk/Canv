@@ -24,7 +24,7 @@ export function createAnnotationsCapability(deps: Deps): AnnotationsCapability {
     const active = deps.getActiveDocPath()
     if (active === null) throw new Error('no document is open')
     if (path !== active) {
-      throw new Error(`annotations can only be edited on the open document (${active}); open ${path} first`)
+      throw new Error(`annotations can only be edited on the open document (${active}); ask the user to open ${path}, then retry`)
     }
     const view = deps.getActiveEditor()
     if (!view) throw new Error('editor is not ready')

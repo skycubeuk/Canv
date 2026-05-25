@@ -62,7 +62,7 @@ describe('createAnnotationsCapability', () => {
 
   it('add throws on a non-active path', () => {
     const view = viewWith('the cat sat', [])
-    expect(() => makeCap(view, fakeSuggestions()).add('other.md', { quote: 'cat', note: 'x' })).toThrow(/open other.md first/)
+    expect(() => makeCap(view, fakeSuggestions()).add('other.md', { quote: 'cat', note: 'x' })).toThrow(/open other\.md/)
   })
 
   it('update delegates to updateAnnotation when the id exists', () => {
@@ -82,5 +82,30 @@ describe('createAnnotationsCapability', () => {
     const sugg = fakeSuggestions()
     makeCap(view, sugg).remove('doc.md', 'a1')
     expect(sugg.removed).toEqual(['a1'])
+  })
+
+  it('remove throws on a non-active path', () => {
+    const view = viewWith('the cat sat', [{ id: 'a1', from: 4, to: 7, note: 'n' }])
+    expect(() => makeCap(view, fakeSuggestions()).remove('other.md', 'a1')).toThrow(/open other\.md/)
+  })
+
+  it('remove throws on an unknown id', () => {
+    const view = viewWith('the cat sat', [])
+    expect(() => makeCap(view, fakeSuggestions()).remove('doc.md', 'nope')).toThrow(/no annotation with id/)
+  })
+
+  it('update with only suggestedReplacement patches just that field', () => {
+    const view = viewWith('the cat sat', [{ id: 'a1', from: 4, to: 7, note: 'n' }])
+    const sugg = fakeSuggestions()
+    makeCap(view, sugg).update('doc.md', { id: 'a1', suggestedReplacement: 'dog' })
+    expect(sugg.updated).toEqual([{ id: 'a1', patch: { note: undefined, suggestedReplacement: 'dog' } }])
+  })
+
+  it('list falls back to the stored quote for a zero-length span', () => {
+    let state = EditorState.create({ doc: 'the cat sat', extensions: [annotationField] })
+    state = state.update({ effects: addAnnotation.of({ id: 'z1', from: 4, to: 4, note: 'n', author: 'Assistant', status: 'open', quote: 'stored' }) }).state
+    const view = new EditorView({ state })
+    const cap = createAnnotationsCapability({ getActiveEditor: () => view, getActiveDocPath: () => 'doc.md', getSuggestions: () => fakeSuggestions() })
+    expect(cap.list('doc.md')?.[0].quote).toBe('stored')
   })
 })
