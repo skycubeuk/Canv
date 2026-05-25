@@ -17,7 +17,10 @@ export interface SelectionRoutingInput {
 export function routeSelectionAgentResult(input: SelectionRoutingInput): SelectionRouting {
   const canDiff =
     input.hasRange && !!input.rewrite && input.rewrite.trim().length > 0 && input.rewrite !== input.original
-  const canAnnotate = input.hasRange && !!input.feedback && input.feedback.trim().length > 0
+  // Annotations anchor by quote-matching anywhere in the supplied text, so unlike a
+  // rewrite diff (which replaces a specific range) they do not need a selection range —
+  // a whole-document run anchors from offset 0.
+  const canAnnotate = !!input.feedback && input.feedback.trim().length > 0
   let emitDiff = false
   let emitAnnotation = false
   if (input.outputMode === 'replacement') emitDiff = canDiff

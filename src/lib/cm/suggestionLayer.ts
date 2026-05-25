@@ -20,6 +20,12 @@ export interface SuggestionCallbacks {
   acceptAnnotation?: (id: string, view: EditorView) => void
   /** Drop an annotation without changing the document. Optional until the store wires it. */
   dismissAnnotation?: (id: string, view: EditorView) => void
+  /** Open an annotation's inline editing state. Optional until the store wires it. */
+  editAnnotation?: (id: string, view: EditorView) => void
+  /** Commit edited note text and close the editing state. Optional until the store wires it. */
+  saveAnnotationNote?: (id: string, note: string, view: EditorView) => void
+  /** Collapse/expand a single annotation card. Optional until the store wires it. */
+  toggleAnnotationCollapsed?: (id: string, view: EditorView) => void
   /** Open a seeded chat discussion about this change. Optional until the store wires it. */
   discuss?: (id: string, view: EditorView) => void
   /** Resolve the chat approval for a chat-edit preview as approved. Optional until wired. */
@@ -41,6 +47,14 @@ export const clearHunks = StateEffect.define<null>()
 export const addAnnotation = StateEffect.define<Annotation>()
 export const removeAnnotation = StateEffect.define<string>()
 export const clearAnnotations = StateEffect.define<null>()
+/** Open/close an annotation's inline editing state. */
+export const setAnnotationEditing = StateEffect.define<{ id: string; editing: boolean }>()
+/** Commit edited note text. */
+export const updateAnnotationNote = StateEffect.define<{ id: string; note: string }>()
+/** Collapse/expand a single annotation card to just its author + number badge. */
+export const setAnnotationCollapsed = StateEffect.define<{ id: string; collapsed: boolean }>()
+/** Collapse/expand every open annotation at once. */
+export const setAllAnnotationsCollapsed = StateEffect.define<boolean>()
 
 // ---- chat-edit preview effects + field ------------------------------------
 
@@ -162,6 +176,14 @@ export const annotationField = StateField.define<Annotation[]>({
       if (e.is(addAnnotation)) annotations = [...annotations, e.value]
       else if (e.is(removeAnnotation)) annotations = annotations.filter((a) => a.id !== e.value)
       else if (e.is(clearAnnotations)) annotations = []
+      else if (e.is(setAnnotationEditing))
+        annotations = annotations.map((a) => (a.id === e.value.id ? { ...a, editing: e.value.editing } : a))
+      else if (e.is(updateAnnotationNote))
+        annotations = annotations.map((a) => (a.id === e.value.id ? { ...a, note: e.value.note } : a))
+      else if (e.is(setAnnotationCollapsed))
+        annotations = annotations.map((a) => (a.id === e.value.id ? { ...a, collapsed: e.value.collapsed } : a))
+      else if (e.is(setAllAnnotationsCollapsed))
+        annotations = annotations.map((a) => (a.status === 'open' ? { ...a, collapsed: e.value } : a))
     }
     return annotations
   },
@@ -280,25 +302,56 @@ class AnnotationCardWidget extends WidgetType {
       // it) the quote snippet is re-sliced, so a cached DOM would be stale.
       other.ann.from === this.ann.from &&
       other.ann.to === this.ann.to &&
+      // collapsed/editing toggles change which controls render, so they must
+      // force a rebuild. (While editing, `note` stays put — keystrokes live in
+      // the textarea DOM and aren't dispatched — so the node is preserved.)
+      other.ann.collapsed === this.ann.collapsed &&
+      other.ann.editing === this.ann.editing &&
       other.num === this.num
     )
   }
   toDOM(view: EditorView) {
     const card = document.createElement('div')
     card.className = 'cm-annot-card'
+    if (this.ann.collapsed) card.classList.add('cm-annot-card--collapsed')
     card.contentEditable = 'false'
 
-    // 1. Header: optional number badge + author
+    const mkBtn = (label: string, cls: string, run: (cb: SuggestionCallbacks) => void) => {
+      const b = document.createElement('button')
+      b.type = 'button'
+      b.className = cls
+      b.textContent = label
+      b.onmousedown = (ev) => {
+        ev.preventDefault()
+        const cb = view.state.facet(suggestionCallbacks)
+        if (cb) run(cb)
+      }
+      return b
+    }
+
+    // 1. Header: optional number badge + author. When collapsed, the badge is
+    //    the expand affordance.
     const head = document.createElement('span')
     head.className = 'cm-annot-author'
     if (this.num != null) {
       const badge = document.createElement('span')
       badge.className = 'cm-annot-num'
       badge.textContent = String(this.num)
+      if (this.ann.collapsed) {
+        badge.classList.add('cm-annot-num-toggle')
+        badge.title = 'Expand note'
+        badge.onmousedown = (ev) => {
+          ev.preventDefault()
+          view.state.facet(suggestionCallbacks)?.toggleAnnotationCollapsed?.(this.ann.id, view)
+        }
+      }
       head.appendChild(badge)
     }
     head.appendChild(document.createTextNode(this.ann.author))
     card.appendChild(head)
+
+    // Collapsed: author + number only.
+    if (this.ann.collapsed) return card
 
     // 2. Quote snippet
     const snippet = this.ann.to > this.ann.from
@@ -316,36 +369,56 @@ class AnnotationCardWidget extends WidgetType {
       card.appendChild(quoteEl)
     }
 
-    // 3. Note body
+    const actions = document.createElement('span')
+    actions.className = 'cm-annot-actions'
+
+    // 3a. Editing state: a textarea + Save / Cancel. Keystrokes stay local to
+    //     the DOM (no per-keystroke dispatch) so focus and in-progress text
+    //     survive unrelated redraws.
+    if (this.ann.editing) {
+      const ta = document.createElement('textarea')
+      ta.className = 'cm-annot-edit-input'
+      ta.value = this.ann.note
+      ta.rows = 3
+      ta.placeholder = 'Add a note…'
+      card.appendChild(ta)
+      requestAnimationFrame(() => {
+        ta.focus()
+        ta.setSelectionRange(ta.value.length, ta.value.length)
+      })
+      actions.appendChild(mkBtn('Save', 'cm-annot-save', (cb) => {
+        const text = ta.value
+        if (text.trim() === '') cb.dismissAnnotation?.(this.ann.id, view)
+        else cb.saveAnnotationNote?.(this.ann.id, text, view)
+      }))
+      actions.appendChild(mkBtn('Cancel', 'cm-annot-cancel', (cb) => {
+        // Brand-new (empty) note → dismiss; otherwise restore the original and close editing.
+        if (this.ann.note.trim() === '') cb.dismissAnnotation?.(this.ann.id, view)
+        else cb.saveAnnotationNote?.(this.ann.id, this.ann.note, view)
+      }))
+      card.appendChild(actions)
+      return card
+    }
+
+    // 3b. Expanded (normal): note body + actions.
     const body = document.createElement('span')
     body.className = 'cm-annot-note'
     body.textContent = this.ann.note
     card.appendChild(body)
 
-    // 4. Actions
-    const actions = document.createElement('span')
-    actions.className = 'cm-annot-actions'
-    const mkBtn = (label: string, cls: string, run: (cb: SuggestionCallbacks) => void) => {
-      const b = document.createElement('button')
-      b.type = 'button'
-      b.className = cls
-      b.textContent = label
-      b.onmousedown = (ev) => {
-        ev.preventDefault()
-        const cb = view.state.facet(suggestionCallbacks)
-        if (cb) run(cb)
-      }
-      return b
-    }
     if (this.ann.suggestedReplacement != null) {
       actions.appendChild(mkBtn('Accept', 'cm-annot-accept', (cb) => cb.acceptAnnotation?.(this.ann.id, view)))
     }
+    actions.appendChild(mkBtn('Edit', 'cm-annot-edit', (cb) => cb.editAnnotation?.(this.ann.id, view)))
+    actions.appendChild(mkBtn('Collapse', 'cm-annot-collapse', (cb) => cb.toggleAnnotationCollapsed?.(this.ann.id, view)))
     actions.appendChild(mkBtn('Dismiss', 'cm-annot-dismiss', (cb) => cb.dismissAnnotation?.(this.ann.id, view)))
     card.appendChild(actions)
     return card
   }
   ignoreEvent() {
-    return false
+    // Interactive widget: let the textarea/buttons handle their own events so
+    // the editor doesn't hijack typing or selection inside the card.
+    return true
   }
 }
 
@@ -583,6 +656,29 @@ const suggestionTheme = EditorView.baseTheme({
   '.cm-annot-accept': { color: 'rgb(var(--success-fg))', fontWeight: '600' },
   '.cm-annot-dismiss': { color: 'rgb(var(--text-subtle))' },
   '.cm-annot-discuss': { color: 'rgb(var(--accent))' },
+  '.cm-annot-edit': { color: 'rgb(var(--accent))' },
+  '.cm-annot-collapse': { color: 'rgb(var(--text-subtle))' },
+  '.cm-annot-save': { color: 'rgb(var(--success-fg))', fontWeight: '600' },
+  '.cm-annot-cancel': { color: 'rgb(var(--text-subtle))' },
+  // Collapsed: tighten the card to a single author + number row.
+  '.cm-annot-card--collapsed': { padding: '3px 9px', margin: '2px 0 4px 1.5em' },
+  '.cm-annot-card--collapsed .cm-annot-author': { marginBottom: '0' },
+  '.cm-annot-num-toggle': { cursor: 'pointer' },
+  '.cm-annot-edit-input': {
+    display: 'block',
+    width: '100%',
+    boxSizing: 'border-box',
+    margin: '2px 0 4px',
+    padding: '4px 6px',
+    borderRadius: '4px',
+    border: '1px solid rgb(var(--border-default))',
+    background: 'rgb(var(--bg-default))',
+    color: 'rgb(var(--text-default))',
+    fontFamily: 'inherit',
+    fontSize: '12px',
+    lineHeight: '1.5',
+    resize: 'vertical',
+  },
 })
 
 /** The full extension to add to an editor. */

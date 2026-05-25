@@ -77,6 +77,13 @@ describe('anchorReviewNotes', () => {
     expect(result[0].quote).toBe('Hello')
     expect(result[1].quote).toBe('not there')
   })
+
+  it('anchors a quote mid-document when run over the whole document (spanFrom 0)', () => {
+    const doc = 'First paragraph.\n\nA telling detail mid-document.\n\nFinal line.'
+    const result = anchorReviewNotes(doc, 0, [{ quote: 'telling detail', comment: 'note' }])
+    const idx = doc.indexOf('telling detail')
+    expect(result).toMatchObject([{ from: idx, to: idx + 'telling detail'.length, note: 'note' }])
+  })
 })
 
 describe('anchorReviewNotes tolerance', () => {

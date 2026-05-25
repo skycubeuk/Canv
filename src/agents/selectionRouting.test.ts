@@ -22,6 +22,14 @@ describe('routeSelectionAgentResult', () => {
     expect(routeSelectionAgentResult({ outputMode: 'feedback-only', hasRange: true, original: 'a', feedback: '   ' }))
       .toEqual({ emitDiff: false, emitAnnotation: false, suppressPanel: false })
   })
+  it('feedback-only with no range (whole document) → annotation still emits', () => {
+    expect(routeSelectionAgentResult({ outputMode: 'feedback-only', hasRange: false, original: 'a', feedback: 'note' }))
+      .toEqual({ emitDiff: false, emitAnnotation: true, suppressPanel: true })
+  })
+  it('feedback-and-rewrite with no range → annotation emits, diff does not', () => {
+    expect(routeSelectionAgentResult({ outputMode: 'feedback-and-rewrite', hasRange: false, original: 'a', rewrite: 'b', feedback: 'note' }))
+      .toEqual({ emitDiff: false, emitAnnotation: true, suppressPanel: true })
+  })
   it('feedback-and-rewrite with both → diff + annotation, suppress panel', () => {
     expect(routeSelectionAgentResult({ outputMode: 'feedback-and-rewrite', hasRange: true, original: 'a', rewrite: 'b', feedback: 'note' }))
       .toEqual({ emitDiff: true, emitAnnotation: true, suppressPanel: true })

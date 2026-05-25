@@ -9,6 +9,10 @@ import {
   findHunk,
   findAnnotation,
   addAnnotation as addAnnotationEffect,
+  setAnnotationEditing,
+  updateAnnotationNote,
+  setAnnotationCollapsed,
+  setAllAnnotationsCollapsed,
   acceptAnnotationInView,
   dismissAnnotationInView,
   annotationField,
@@ -46,15 +50,25 @@ export interface UseSuggestionsApi {
   acceptAll: (view?: EditorView) => Promise<void>
   rejectAll: (view?: EditorView) => void
   addAnnotation: (range: { from: number; to: number }, note: string, author: string, suggestedReplacement?: string, quote?: string) => void
+  /** Create an empty user-authored note on a span and open it in edit mode. */
+  addUserAnnotation: (range: { from: number; to: number }, text: string) => void
   dismissAnnotation: (id: string, view?: EditorView) => void
   acceptAnnotation: (id: string, view?: EditorView) => Promise<void>
+  editAnnotation: (id: string, view?: EditorView) => void
+  saveAnnotationNote: (id: string, note: string, view?: EditorView) => void
+  toggleAnnotationCollapsed: (id: string, view?: EditorView) => void
+  collapseAllAnnotations: (collapsed: boolean, view?: EditorView) => void
   discuss: (id: string, view?: EditorView) => void
   pendingCount: number
+  annotationCount: number
+  allAnnotationsCollapsed: boolean
   callbacks: SuggestionCallbacks
 }
 
 export function useSuggestions(deps: UseSuggestionsDeps): UseSuggestionsApi {
   const [pendingCount, setPendingCount] = useState(0)
+  const [annotationCount, setAnnotationCount] = useState(0)
+  const [allAnnotationsCollapsed, setAllCollapsed] = useState(false)
   const originRef = useRef<DiffOrigin | null>(null)
   const annotSeq = useRef(0)
   // Which file's annotations are already loaded — guards a single load per open.
@@ -69,6 +83,9 @@ export function useSuggestions(deps: UseSuggestionsDeps): UseSuggestionsApi {
   const syncCount = useCallback((view: EditorView | null) => {
     const n = view ? view.state.field(suggestionField).filter((h) => h.status === 'pending').length : 0
     setPendingCount(n)
+    const open = view ? view.state.field(annotationField).filter((a) => a.status === 'open') : []
+    setAnnotationCount(open.length)
+    setAllCollapsed(open.length > 0 && open.every((a) => a.collapsed === true))
   }, [])
 
   // Debounce-persist the current open annotations for the active file. Each
@@ -170,25 +187,72 @@ export function useSuggestions(deps: UseSuggestionsDeps): UseSuggestionsApi {
       view.dispatch({
         effects: addAnnotationEffect.of({ id, from: range.from, to: range.to, note, author, suggestedReplacement, quote, status: 'open' }),
       })
+      syncCount(view)
       scheduleSave()
     },
-    [scheduleSave],
+    [scheduleSave, syncCount],
   )
+
+  const addUserAnnotation = useCallback((range: { from: number; to: number }, text: string) => {
+    const view = depsRef.current.getActiveEditor()
+    if (!view) return
+    const id = `annot-${Date.now().toString(36)}-${(annotSeq.current++).toString(36)}`
+    view.dispatch({
+      effects: addAnnotationEffect.of({
+        id, from: range.from, to: range.to, note: '', author: 'You', quote: text, editing: true, status: 'open',
+      }),
+      // Collapse the native selection so its highlight doesn't blend with the
+      // new annotation highlight (mirrors the AI emit path).
+      selection: { anchor: range.from },
+    })
+    syncCount(view)
+    scheduleSave()
+  }, [scheduleSave, syncCount])
 
   const dismissAnnotation = useCallback((id: string, viewArg?: EditorView) => {
     const view = viewArg ?? depsRef.current.getActiveEditor()
     if (!view) return
     dismissAnnotationInView(view, id)
+    syncCount(view)
+    scheduleSave()
+  }, [scheduleSave, syncCount])
+
+  const editAnnotation = useCallback((id: string, viewArg?: EditorView) => {
+    const view = viewArg ?? depsRef.current.getActiveEditor()
+    if (!view) return
+    view.dispatch({ effects: setAnnotationEditing.of({ id, editing: true }) })
+  }, [])
+
+  const saveAnnotationNote = useCallback((id: string, note: string, viewArg?: EditorView) => {
+    const view = viewArg ?? depsRef.current.getActiveEditor()
+    if (!view) return
+    view.dispatch({ effects: [updateAnnotationNote.of({ id, note }), setAnnotationEditing.of({ id, editing: false })] })
     scheduleSave()
   }, [scheduleSave])
+
+  const toggleAnnotationCollapsed = useCallback((id: string, viewArg?: EditorView) => {
+    const view = viewArg ?? depsRef.current.getActiveEditor()
+    if (!view) return
+    const current = findAnnotation(view, id)
+    view.dispatch({ effects: setAnnotationCollapsed.of({ id, collapsed: !current?.collapsed }) })
+    syncCount(view)
+  }, [syncCount])
+
+  const collapseAllAnnotations = useCallback((collapsed: boolean, viewArg?: EditorView) => {
+    const view = viewArg ?? depsRef.current.getActiveEditor()
+    if (!view) return
+    view.dispatch({ effects: setAllAnnotationsCollapsed.of(collapsed) })
+    syncCount(view)
+  }, [syncCount])
 
   const acceptAnnotation = useCallback(async (id: string, viewArg?: EditorView) => {
     const view = viewArg ?? depsRef.current.getActiveEditor()
     if (!view) return
     // Applies a doc change → route through the history-snapshot bracket.
     await runWithSnapshot(async () => { acceptAnnotationInView(view, id) })
+    syncCount(view)
     scheduleSave()
-  }, [runWithSnapshot, scheduleSave])
+  }, [runWithSnapshot, scheduleSave, syncCount])
 
   // Load persisted annotations once per file open: when activeMarkdownRel
   // becomes a new non-null value and the editor is available, read the sidecar,
@@ -224,6 +288,7 @@ export function useSuggestions(deps: UseSuggestionsDeps): UseSuggestionsApi {
           }),
         })
       }
+      syncCount(current)
     })()
     return () => { cancelled = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- load once per rel; getActiveEditor read live via depsRef inside the async body
@@ -255,13 +320,16 @@ export function useSuggestions(deps: UseSuggestionsDeps): UseSuggestionsApi {
       rejectAll: (view) => { rejectAll(view) },
       acceptAnnotation: (id, view) => { void acceptAnnotation(id, view) },
       dismissAnnotation: (id, view) => { dismissAnnotation(id, view) },
+      editAnnotation: (id, view) => { editAnnotation(id, view) },
+      saveAnnotationNote: (id, note, view) => { saveAnnotationNote(id, note, view) },
+      toggleAnnotationCollapsed: (id, view) => { toggleAnnotationCollapsed(id, view) },
       discuss: (id, view) => { discuss(id, view) },
     }),
-    [accept, reject, acceptAll, rejectAll, acceptAnnotation, dismissAnnotation, discuss],
+    [accept, reject, acceptAll, rejectAll, acceptAnnotation, dismissAnnotation, editAnnotation, saveAnnotationNote, toggleAnnotationCollapsed, discuss],
   )
 
   return useMemo<UseSuggestionsApi>(
-    () => ({ addDiffSuggestion, accept, reject, acceptAll, rejectAll, addAnnotation, dismissAnnotation, acceptAnnotation, discuss, pendingCount, callbacks }),
-    [addDiffSuggestion, accept, reject, acceptAll, rejectAll, addAnnotation, dismissAnnotation, acceptAnnotation, discuss, pendingCount, callbacks],
+    () => ({ addDiffSuggestion, accept, reject, acceptAll, rejectAll, addAnnotation, addUserAnnotation, dismissAnnotation, acceptAnnotation, editAnnotation, saveAnnotationNote, toggleAnnotationCollapsed, collapseAllAnnotations, discuss, pendingCount, annotationCount, allAnnotationsCollapsed, callbacks }),
+    [addDiffSuggestion, accept, reject, acceptAll, rejectAll, addAnnotation, addUserAnnotation, dismissAnnotation, acceptAnnotation, editAnnotation, saveAnnotationNote, toggleAnnotationCollapsed, collapseAllAnnotations, discuss, pendingCount, annotationCount, allAnnotationsCollapsed, callbacks],
   )
 }

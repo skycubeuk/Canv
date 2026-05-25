@@ -49,4 +49,8 @@ export interface Annotation {
   /** Verbatim text the note refers to. Display fallback for the card when the
    *  span can't be anchored (from === to). Session-only — not persisted. */
   quote?: string
+  /** Card is collapsed to just author + number badge. Session-only — not persisted. */
+  collapsed?: boolean
+  /** Card is open in its inline text-editing state. Session-only — not persisted. */
+  editing?: boolean
 }

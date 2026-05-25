@@ -235,22 +235,26 @@ export function useSelectionAgent(args: UseSelectionAgentArgs): UseSelectionAgen
             model,
           })
         }
-        if (routing.emitAnnotation && range) {
+        if (routing.emitAnnotation) {
+          // Whole-document runs have no selection range; anchor from offset 0.
+          const spanFrom = range ? range.from : 0
           // Per-span: a review that returns the structured JSON array becomes
           // one annotation per note, each anchored to its quoted span.
           // Otherwise (holistic notes / non-JSON) fall back to a single note.
           const structured = parseReviewNotes(final)
           if (structured) {
-            for (const a of anchorReviewNotes(text, range.from, structured)) {
+            for (const a of anchorReviewNotes(text, spanFrom, structured)) {
               emitAnnotation({ from: a.from, to: a.to }, a.note, agent.label, undefined, a.quote)
             }
           } else if (parsed.feedback) {
-            emitAnnotation({ from: range.from, to: range.to }, parsed.feedback, agent.label)
+            // Anchor a holistic note to the selection, or a zero-width anchor at the
+            // document start for whole-doc runs (no highlight, card still shows the note).
+            emitAnnotation({ from: spanFrom, to: range ? range.to : spanFrom }, parsed.feedback, agent.label)
           }
           // Collapse the editor's text selection so the blue selection highlight
           // doesn't visually blend with the annotation highlights.
           const v = getActiveEditor()
-          if (v && !v.state.selection.main.empty) v.dispatch({ selection: { anchor: range.from } })
+          if (v && !v.state.selection.main.empty) v.dispatch({ selection: { anchor: spanFrom } })
         }
       } catch (e) {
         const aborted = e instanceof DOMException && e.name === 'AbortError'

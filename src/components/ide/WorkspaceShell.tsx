@@ -18,6 +18,7 @@ import { BottomExtensionPanelSlot } from '../extensions/BottomExtensionPanelSlot
 import { OutlinePanel } from './sidebar/OutlinePanel'
 import { Canvas } from '../Canvas'
 import { SuggestionBar } from './SuggestionBar'
+import { AnnotationBar } from './AnnotationBar'
 import { SettingsTab } from './tabs/SettingsTab'
 import { DiffTab } from './tabs/DiffTab'
 import { ActivityBar, type BuiltinTab } from './ActivityBar'
@@ -423,6 +424,13 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
                           count={suggestions.pendingCount}
                           onAcceptAll={() => suggestions.acceptAll()}
                           onRejectAll={() => suggestions.rejectAll()}
+                        />
+                      )}
+                      {isActive && groupId === workspace.activeGroupId && (
+                        <AnnotationBar
+                          count={suggestions.annotationCount}
+                          allCollapsed={suggestions.allAnnotationsCollapsed}
+                          onToggleCollapseAll={(collapsed) => suggestions.collapseAllAnnotations(collapsed)}
                         />
                       )}
                     </>

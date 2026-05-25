@@ -6,9 +6,15 @@ import {
   addAnnotation,
   removeAnnotation,
   clearAnnotations,
+  setAnnotationEditing,
+  updateAnnotationNote,
+  setAnnotationCollapsed,
+  setAllAnnotationsCollapsed,
   acceptAnnotationInView,
   dismissAnnotationInView,
   suggestionExtension,
+  suggestionCallbacks,
+  type SuggestionCallbacks,
 } from './suggestionLayer'
 import type { Annotation } from '../suggestions/types'
 
@@ -57,6 +63,142 @@ describe('annotationField', () => {
     expect(afterRemove.field(annotationField).map((a) => a.id)).toEqual(['b'])
     const cleared = afterRemove.update({ effects: clearAnnotations.of(null) }).state
     expect(cleared.field(annotationField)).toEqual([])
+  })
+})
+
+describe('annotation editing + collapse effects', () => {
+  it('setAnnotationEditing toggles the editing flag on the matching annotation', () => {
+    const s = stateWith('the cat sat', [ann({ id: 'a' })])
+    const on = s.update({ effects: setAnnotationEditing.of({ id: 'a', editing: true }) }).state
+    expect(on.field(annotationField)[0].editing).toBe(true)
+    const off = on.update({ effects: setAnnotationEditing.of({ id: 'a', editing: false }) }).state
+    expect(off.field(annotationField)[0].editing).toBe(false)
+  })
+
+  it('updateAnnotationNote replaces the note text', () => {
+    const s = stateWith('the cat sat', [ann({ id: 'a', note: 'old' })])
+    const next = s.update({ effects: updateAnnotationNote.of({ id: 'a', note: 'new text' }) }).state
+    expect(next.field(annotationField)[0].note).toBe('new text')
+  })
+
+  it('setAnnotationCollapsed sets collapsed on only the matching annotation', () => {
+    const s = stateWith('the cat sat', [ann({ id: 'a' }), ann({ id: 'b' })])
+    const next = s.update({ effects: setAnnotationCollapsed.of({ id: 'b', collapsed: true }) }).state
+    const byId = Object.fromEntries(next.field(annotationField).map((a) => [a.id, a.collapsed]))
+    expect(byId).toEqual({ a: undefined, b: true })
+  })
+
+  it('setAllAnnotationsCollapsed collapses/expands every open annotation', () => {
+    const s = stateWith('the cat sat', [ann({ id: 'a' }), ann({ id: 'b' })])
+    const all = s.update({ effects: setAllAnnotationsCollapsed.of(true) }).state
+    expect(all.field(annotationField).every((a) => a.collapsed === true)).toBe(true)
+    const none = all.update({ effects: setAllAnnotationsCollapsed.of(false) }).state
+    expect(none.field(annotationField).every((a) => a.collapsed === false)).toBe(true)
+  })
+})
+
+describe('annotation card states (mounted)', () => {
+  function mountWith(anns: Annotation[]) {
+    const view = new EditorView({
+      state: EditorState.create({ doc: 'the cat sat', extensions: [suggestionExtension()] }),
+      parent: document.body,
+    })
+    for (const a of anns) view.dispatch({ effects: addAnnotation.of(a) })
+    return view
+  }
+
+  it('expanded card shows Edit and Collapse actions alongside Dismiss', () => {
+    const view = mountWith([ann({ from: 4, to: 7 })])
+    expect(view.dom.querySelector('.cm-annot-edit')).not.toBeNull()
+    expect(view.dom.querySelector('.cm-annot-collapse')).not.toBeNull()
+    expect(view.dom.querySelector('.cm-annot-dismiss')).not.toBeNull()
+    view.destroy()
+  })
+
+  it('editing card renders a textarea prefilled with the note and a Save action', () => {
+    const view = mountWith([ann({ from: 4, to: 7, note: 'my draft note', editing: true })])
+    const ta = view.dom.querySelector('.cm-annot-card textarea') as HTMLTextAreaElement | null
+    expect(ta).not.toBeNull()
+    expect(ta?.value).toBe('my draft note')
+    expect(view.dom.querySelector('.cm-annot-save')).not.toBeNull()
+    view.destroy()
+  })
+
+  it('collapsed card shows only the author + number, not the note body', () => {
+    const view = mountWith([ann({ from: 4, to: 7, note: 'hidden when collapsed', author: 'You', collapsed: true })])
+    const card = view.dom.querySelector('.cm-annot-card')
+    expect(card?.textContent).toContain('You')
+    expect(card?.querySelector('.cm-annot-num')).not.toBeNull()
+    expect(card?.textContent).not.toContain('hidden when collapsed')
+    // No note body and no edit affordance while collapsed.
+    expect(card?.querySelector('.cm-annot-note')).toBeNull()
+    view.destroy()
+  })
+})
+
+describe('annotation card interactions (mounted, wired callbacks)', () => {
+  function mountWith(anns: Annotation[], cb: Partial<SuggestionCallbacks>) {
+    const view = new EditorView({
+      state: EditorState.create({
+        doc: 'the cat sat',
+        extensions: [suggestionExtension(), suggestionCallbacks.of(cb as SuggestionCallbacks)],
+      }),
+      parent: document.body,
+    })
+    for (const a of anns) view.dispatch({ effects: addAnnotation.of(a) })
+    return view
+  }
+  const mousedown = (el: Element | null) =>
+    el?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }))
+
+  it('typing in the editor textarea and clicking Save passes the typed value through', () => {
+    const saved: Array<{ id: string; note: string }> = []
+    const view = mountWith(
+      [ann({ id: 'n1', from: 4, to: 7, note: '', editing: true })],
+      { saveAnnotationNote: (id, note) => saved.push({ id, note }) },
+    )
+    const ta = view.dom.querySelector('.cm-annot-card textarea') as HTMLTextAreaElement
+    ta.value = 'a reader note'
+    mousedown(view.dom.querySelector('.cm-annot-save'))
+    expect(saved).toEqual([{ id: 'n1', note: 'a reader note' }])
+    view.destroy()
+  })
+
+  it('Save on an empty draft dismisses instead of saving an empty note', () => {
+    const calls: string[] = []
+    const view = mountWith(
+      [ann({ id: 'n2', from: 4, to: 7, note: '', editing: true })],
+      {
+        saveAnnotationNote: () => calls.push('save'),
+        dismissAnnotation: () => calls.push('dismiss'),
+      },
+    )
+    // textarea left blank
+    mousedown(view.dom.querySelector('.cm-annot-save'))
+    expect(calls).toEqual(['dismiss'])
+    view.destroy()
+  })
+
+  it('Collapse button toggles collapse for that annotation', () => {
+    const toggled: string[] = []
+    const view = mountWith(
+      [ann({ id: 'n3', from: 4, to: 7 })],
+      { toggleAnnotationCollapsed: (id) => toggled.push(id) },
+    )
+    mousedown(view.dom.querySelector('.cm-annot-collapse'))
+    expect(toggled).toEqual(['n3'])
+    view.destroy()
+  })
+
+  it('clicking the number badge on a collapsed card expands it', () => {
+    const toggled: string[] = []
+    const view = mountWith(
+      [ann({ id: 'n4', from: 4, to: 7, collapsed: true })],
+      { toggleAnnotationCollapsed: (id) => toggled.push(id) },
+    )
+    mousedown(view.dom.querySelector('.cm-annot-card .cm-annot-num'))
+    expect(toggled).toEqual(['n4'])
+    view.destroy()
   })
 })
 

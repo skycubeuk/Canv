@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, type ReactNode } from 'react'
 import { ChevronDown, ChevronRight, RotateCw } from 'lucide-react'
 import { computeDiff } from '../lib/diff'
 import { parseAgentResponse } from '../agents/runner'
+import { parseReviewNotes } from '../lib/suggestions/reviewNotes'
 import type { Action as AgentDef } from '../config/types'
 import { useModes, getModeById, getActionById } from '../hooks/useModes'
 import { AutoGrowTextarea } from './AutoGrowTextarea'
@@ -119,6 +120,19 @@ export function RunView({
     return parseAgentResponse(agent, run.response)
   }, [agent, run.response])
 
+  // Some agents (e.g. Test Reader) emit a JSON array of {quote, comment} that
+  // becomes inline annotations in the document. Showing that raw JSON in the
+  // panel confuses non-technical users, so render it as a readable list and,
+  // while the JSON is still streaming, show a friendly progress state instead.
+  const reviewNotes = useMemo(() => parseReviewNotes(run.response), [run.response])
+  const looksStructured = useMemo(() => {
+    // Replacement agents produce prose rewrites, never review-note JSON.
+    if (agent?.outputMode === 'replacement') return false
+    if (reviewNotes) return true
+    const t = run.response.trimStart()
+    return t.startsWith('[') || t.startsWith('```')
+  }, [agent?.outputMode, reviewNotes, run.response])
+
   const busy = run.status === 'streaming' || run.status === 'refining'
   const refineCount = run.followups?.length ?? 0
   const canRefine = !!run.basePrompt
@@ -198,7 +212,43 @@ export function RunView({
         </div>
       )}
 
-      {parsed.feedback && (
+      {/* Structured review notes: a readable list (or a progress state while the
+          JSON is still streaming) instead of the raw JSON array. */}
+      {looksStructured ? (
+        busy ? (
+          <Section title="Reading…">
+            <div className="text-sm text-subtle streaming-cursor">Reading your text and noting reactions…</div>
+          </Section>
+        ) : reviewNotes ? (
+          <Section title={`Notes (${reviewNotes.length})`}>
+            <div className="space-y-3">
+              {reviewNotes.map((n, i) => (
+                <div key={i} className="text-sm">
+                  <div className="text-xs text-subtle italic mb-0.5">“{n.quote}”</div>
+                  <div className="leading-relaxed">{n.comment}</div>
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center gap-2 mt-3">
+              <span className="text-xs text-subtle italic flex-1">Marked in the document ↑</span>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() =>
+                  navigator.clipboard.writeText(reviewNotes.map((n) => `“${n.quote}”\n${n.comment}`).join('\n\n'))
+                }
+              >
+                Copy
+              </button>
+            </div>
+          </Section>
+        ) : (
+          // Done but the JSON didn't parse — fall back to the raw text so nothing is lost.
+          <Section title="Notes">
+            <div className="text-sm whitespace-pre-wrap leading-relaxed">{parsed.feedback ?? run.response}</div>
+          </Section>
+        )
+      ) : parsed.feedback ? (
         <Section title={agent?.outputMode === 'feedback-only' && agent.id === 'summarise' ? 'Summary' : 'Notes'}>
           <div className="text-sm whitespace-pre-wrap leading-relaxed">{parsed.feedback}</div>
           {agent?.outputMode === 'feedback-only' && !busy && (
@@ -213,7 +263,7 @@ export function RunView({
             </div>
           )}
         </Section>
-      )}
+      ) : null}
 
       {parsed.rewrite && agent?.outputMode !== 'feedback-only' && (
         <Section title={parsed.feedback ? 'Suggested rewrite' : 'Result'}>

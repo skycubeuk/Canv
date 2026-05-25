@@ -60,6 +60,8 @@ TEXT TO REVIEW:
 
 {{context}}
 
+Treat the categories above as a palette, not a checklist. Let the number of notes follow the text: flag every distinct issue you find — don't merge several problems into one note, and don't stop after the first — but never manufacture notes to hit a number or pad with trivia. Each note should be a full sentence or two pinpointing one specific problem.
+
 Respond with ONLY a JSON array and nothing else. Each element is an object {"quote": "<an exact, verbatim substring of the passage that this note refers to>", "comment": "<your note>"}. The "quote" MUST be copied exactly from the passage so it can be located. If you have no notes, respond with [].
 
 TEXT TO REVIEW:
@@ -295,6 +297,8 @@ TEXT TO EDIT:
         "prompt": "You are a sharp logic and consistency checker. Review the text for: contradictions, gaps in reasoning, unclear references, factual inconsistencies, and unsupported claims.
 
 {{context}}
+
+Treat the categories above as a palette, not a checklist. Let the number of notes follow the text: flag every distinct issue you find — don't merge several problems into one note, and don't stop after the first — but never manufacture notes to hit a number or pad with trivia. Each note should be a full sentence or two pinpointing one specific problem.
 
 Respond with ONLY a JSON array and nothing else. Each element is an object {"quote": "<an exact, verbatim substring of the passage that this note refers to>", "comment": "<your note>"}. The "quote" MUST be copied exactly from the passage so it can be located. If you have no notes, respond with [].
 
@@ -587,6 +591,8 @@ TEXT TO EDIT:
         "prompt": "You are a sharp technical-claim checker. Review the text for: contradictions, gaps in reasoning, claims unsupported by stated evidence, undefined terminology, ambiguous references, and steps that assume knowledge not yet introduced.
 
 {{context}}
+
+Treat the categories above as a palette, not a checklist. Let the number of notes follow the text: flag every distinct issue you find — don't merge several problems into one note, and don't stop after the first — but never manufacture notes to hit a number or pad with trivia. Each note should be a full sentence or two pinpointing one specific problem.
 
 Respond with ONLY a JSON array and nothing else. Each element is an object {"quote": "<an exact, verbatim substring of the passage that this note refers to>", "comment": "<your note>"}. The "quote" MUST be copied exactly from the passage so it can be located. If you have no notes, respond with [].
 
