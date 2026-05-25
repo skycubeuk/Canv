@@ -14,6 +14,7 @@ import {
   dismissAnnotationInView,
   suggestionExtension,
   suggestionCallbacks,
+  patchAnnotation,
   type SuggestionCallbacks,
 } from './suggestionLayer'
 import type { Annotation } from '../suggestions/types'
@@ -363,5 +364,28 @@ describe('annotation badge numbers + quote-in-card', () => {
     expect(cardAfter).not.toBe(cardBefore)
     expect(cardAfter?.querySelector('.cm-annot-quote')?.textContent).toContain('cat')
     view.destroy()
+  })
+})
+
+describe('patchAnnotation', () => {
+  it('patches only the provided fields, leaving others intact', () => {
+    let s = EditorState.create({ doc: 'the cat sat', extensions: [annotationField] })
+    s = s.update({ effects: addAnnotation.of({ id: 'a1', from: 4, to: 7, note: 'old', author: 'Assistant', status: 'open' }) }).state
+    s = s.update({ effects: patchAnnotation.of({ id: 'a1', note: 'new', suggestedReplacement: 'dog' }) }).state
+    const a = s.field(annotationField)[0]
+    expect(a.note).toBe('new')
+    expect(a.suggestedReplacement).toBe('dog')
+    expect(a.author).toBe('Assistant')
+    expect(a.from).toBe(4)
+    expect(a.to).toBe(7)
+  })
+
+  it('leaves note unchanged when only suggestedReplacement is patched', () => {
+    let s = EditorState.create({ doc: 'the cat sat', extensions: [annotationField] })
+    s = s.update({ effects: addAnnotation.of({ id: 'a1', from: 4, to: 7, note: 'keep', author: 'A', status: 'open' }) }).state
+    s = s.update({ effects: patchAnnotation.of({ id: 'a1', suggestedReplacement: 'dog' }) }).state
+    const a = s.field(annotationField)[0]
+    expect(a.note).toBe('keep')
+    expect(a.suggestedReplacement).toBe('dog')
   })
 })
