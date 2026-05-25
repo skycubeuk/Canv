@@ -91,3 +91,23 @@ export function cycleHeading(view: EditorView): boolean {
   view.dispatch({ changes, userEvent: 'input' })
   return true
 }
+
+/**
+ * Replace the selection with `[selection](url)`. When `url` is empty/omitted
+ * (keyboard path) the cursor is parked inside the empty `()` so the user can
+ * type the URL; otherwise the cursor lands after the closing `)`.
+ */
+export function insertLink(view: EditorView, url?: string): boolean {
+  const { state } = view
+  const { from, to } = state.selection.main
+  const text = state.doc.sliceString(from, to)
+  const u = url ?? ''
+  const insert = `[${text}](${u})`
+  const cursor = u ? from + insert.length : from + `[${text}](`.length
+  view.dispatch({
+    changes: { from, to, insert },
+    selection: { anchor: cursor },
+    userEvent: 'input',
+  })
+  return true
+}
