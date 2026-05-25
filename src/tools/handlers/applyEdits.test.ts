@@ -12,6 +12,12 @@ function makeCtx(apply: ApplyFn): ToolCtx {
     getEditorContent: () => null,
     applyEditorEdit: async () => {},
     workspace: { applyEdits: apply },
+    annotations: {
+      list: () => null,
+      add: () => { throw new Error('annotations stub') },
+      update: () => { throw new Error('annotations stub') },
+      remove: () => { throw new Error('annotations stub') },
+    },
     signal: new AbortController().signal,
   }
 }

@@ -16,6 +16,8 @@ export interface ToolCtx {
   workspace: {
     applyEdits: (edits: AnchorEdit[]) => Promise<ApplyEditsResult>
   }
+  /** Read/edit annotations on the active document. */
+  annotations: AnnotationsCapability
   signal: AbortSignal
 }
 

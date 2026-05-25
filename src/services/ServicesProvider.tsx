@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from 'react'
+import { useMemo, useRef, useEffect, type ReactNode } from 'react'
 import { useDialogs } from '../lib/dialogs'
 import { useNotifications } from '../hooks/useNotifications'
 import { useSettings } from '../hooks/useSettings'
@@ -115,6 +115,8 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
   const raEnabled = setup.config?.revisionArchaeology.enabled === true
   const historyClient = raEnabled ? getCanvHistory() : null
 
+  const suggestionsRef = useRef<ReturnType<typeof useSuggestions> | null>(null)
+
   const chatSessions = useChatSessions({
     settings: settingsApi.settings,
     update: settingsApi.update,
@@ -127,6 +129,7 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
     dismissRetryUndo: notifications.dismissRetryUndo,
     dialogs,
     historyClient,
+    getSuggestions: () => suggestionsRef.current,
   })
 
   const suggestions = useSuggestions({
@@ -143,6 +146,7 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
     startSeededChat: chatSessions.startSeededChat,
     showChatTab: () => ideLayout.showBottomTab('chat'),
   })
+  useEffect(() => { suggestionsRef.current = suggestions }, [suggestions])
 
   const chatEditPreview = useChatEditPreview({
     pendingApprovals: chatSessions.pendingApprovals,

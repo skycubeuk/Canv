@@ -16,6 +16,7 @@ import { pickDefaultProviderModel } from '../lib/effectiveProvider'
 import { getFs } from '../lib/fs'
 import type { ToolCall } from '../adapters/types'
 import type { CanvHistory } from '../lib/history'
+import { createAnnotationsCapability, type SuggestionsForTools } from '../tools/annotationsCapability'
 
 type SettingsApi = ReturnType<typeof useSettings>
 type WorkspaceApi = ReturnType<typeof useWorkspace>
@@ -50,6 +51,7 @@ export interface UseChatSessionsArgs {
   dismissRetryUndo: () => void
   dialogs: DialogsApi
   historyClient?: CanvHistory | null
+  getSuggestions: () => SuggestionsForTools | null
 }
 
 export interface SessionSummary {
@@ -414,6 +416,11 @@ export function useChatSessions(args: UseChatSessionsArgs): UseChatSessionsApi {
               v.dispatch({ changes: { from: 0, to: v.state.doc.length, insert: newContent } })
             },
             workspace: { applyEdits: args.workspace.applyEdits },
+            annotations: createAnnotationsCapability({
+              getActiveEditor: args.getActiveEditor,
+              getActiveDocPath: () => args.workspace.activeMarkdownRel ?? null,
+              getSuggestions: args.getSuggestions,
+            }),
             signal: rt.abort.signal,
           },
           requestApproval: (call, preview) => requestApproval(sessionId, call, preview),
