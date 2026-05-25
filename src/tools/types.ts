@@ -19,6 +19,28 @@ export interface ToolCtx {
   signal: AbortSignal
 }
 
+/** Chat-safe projection of an annotation. Address by `id` (update/remove) or by `quote` (add). */
+export interface AnnotationView {
+  id: string
+  quote: string
+  note: string
+  author: string
+  status: 'open' | 'invalidated'
+  suggestedReplacement?: string
+}
+
+/** Annotation operations exposed to chat tools, scoped to the active document. */
+export interface AnnotationsCapability {
+  /** Open annotations on the active doc; null when `path` is not the active doc. */
+  list: (path: string) => AnnotationView[] | null
+  /** Anchor a note to a unique `quote`; throws on 0/>1 matches or non-active path. Returns the new id. */
+  add: (path: string, a: { quote: string; note: string; suggestedReplacement?: string }) => { id: string }
+  /** Patch an existing annotation; throws on unknown id or non-active path. */
+  update: (path: string, a: { id: string; note?: string; suggestedReplacement?: string }) => void
+  /** Remove an annotation by id; throws on unknown id or non-active path. */
+  remove: (path: string, id: string) => void
+}
+
 export interface Tool<TInput = unknown, TOutput = unknown> {
   name: string
   description: string
