@@ -76,6 +76,10 @@ export function markdownEditorExtensions(opts: MarkdownEditorOptions): Extension
 
   return [
     history(),
+    // Formatting shortcuts, prepended so they win over defaultKeymap. Note that
+    // on Linux/Windows Mod-k is Ctrl-k, which intentionally shadows CodeMirror's
+    // default deleteToLineEnd binding — Cmd/Ctrl-k for "insert link" is the
+    // expected convention in a writing app. Don't "fix" this without checking.
     keymap.of([
       { key: 'Mod-b', run: (v) => toggleInline(v, '**'), preventDefault: true },
       { key: 'Mod-i', run: (v) => toggleInline(v, '*'), preventDefault: true },
