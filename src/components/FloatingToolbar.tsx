@@ -305,7 +305,7 @@ export function FloatingToolbar(props: Props) {
           <div className="border-t border-default -mx-1" />
           <FormatRow
             view={view}
-            onLink={() => setMode({ kind: 'link' })}
+            onLink={() => { setLinkUrl(''); setMode({ kind: 'link' }) }}
             onAddNote={addNote}
           />
         </div>
