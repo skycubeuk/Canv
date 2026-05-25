@@ -14,6 +14,10 @@ describe('resolveUniqueQuote', () => {
     expect(() => resolveUniqueQuote('na na na', 'na')).toThrow(/appears 3 times/)
   })
 
+  it('throws when overlapping occurrences make the quote ambiguous', () => {
+    expect(() => resolveUniqueQuote('aaab', 'aa')).toThrow(/appears 2 times/)
+  })
+
   it('throws on an empty quote', () => {
     expect(() => resolveUniqueQuote('abc', '')).toThrow(/empty/)
   })

@@ -9,7 +9,7 @@ export function resolveUniqueQuote(docText: string, quote: string): { from: numb
   let i = docText.indexOf(quote)
   while (i !== -1) {
     occurrences.push(i)
-    i = docText.indexOf(quote, i + quote.length)
+    i = docText.indexOf(quote, i + 1)
   }
   if (occurrences.length === 0) {
     throw new Error(`quote not found in the document: "${quote.slice(0, 60)}"`)

@@ -238,10 +238,9 @@ export function useSuggestions(deps: UseSuggestionsDeps): UseSuggestionsApi {
       const view = viewArg ?? depsRef.current.getActiveEditor()
       if (!view) return
       view.dispatch({ effects: patchAnnotation.of({ id, ...patch }) })
-      syncCount(view)
       scheduleSave()
     },
-    [scheduleSave, syncCount],
+    [scheduleSave],
   )
 
   const toggleAnnotationCollapsed = useCallback((id: string, viewArg?: EditorView) => {
