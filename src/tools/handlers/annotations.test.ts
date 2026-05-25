@@ -75,4 +75,16 @@ describe('remove_annotation', () => {
     expect(annotations.remove).toHaveBeenCalledWith('doc.md', 'a1')
     expect(out).toEqual({ ok: true })
   })
+
+  it('errors when id is missing', async () => {
+    const annotations = caps()
+    const ctx = makeCtx({ fs: makeMockFs({}), activeDocPath: 'doc.md', annotations })
+    await expect(removeAnnotationTool.handler({} as never, ctx)).rejects.toThrow(/id is required/)
+    expect(annotations.remove).not.toHaveBeenCalled()
+  })
+
+  it('errors when no document is open', async () => {
+    const ctx = makeCtx({ fs: makeMockFs({}), activeDocPath: null, annotations: caps() })
+    await expect(removeAnnotationTool.handler({ id: 'a1' }, ctx)).rejects.toThrow(/no document is open/)
+  })
 })
