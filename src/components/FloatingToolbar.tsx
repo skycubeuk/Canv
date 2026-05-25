@@ -1,8 +1,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react'
-import { Zap, MessageSquarePlus } from 'lucide-react'
+import { Zap, Link } from 'lucide-react'
 import type { Action } from '../config/types'
 import { useContextMenu } from '../lib/contextMenu'
 import { useService } from '../services/useService'
+import { FormatRow } from './FormatRow'
+import { insertLink } from '../lib/cm/markdownFormat'
 
 interface Props {
   onAgent: (agent: Action, range: { from: number; to: number }, text: string, instruction?: string) => void
@@ -15,7 +17,7 @@ interface Pos {
   left: number
 }
 
-type Mode = { kind: 'idle' } | { kind: 'presets' } | { kind: 'instruction'; agent: Action }
+type Mode = { kind: 'idle' } | { kind: 'presets' } | { kind: 'instruction'; agent: Action } | { kind: 'link' }
 
 export function FloatingToolbar(props: Props) {
   const { onAgent, onAddNote } = props
@@ -30,6 +32,7 @@ export function FloatingToolbar(props: Props) {
   const [selection, setSelection] = useState<{ from: number; to: number; text: string } | null>(null)
   const [mode, setMode] = useState<Mode>({ kind: 'idle' })
   const [instructionText, setInstructionText] = useState('')
+  const [linkUrl, setLinkUrl] = useState('')
   const [presetsAbove, setPresetsAbove] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const presetsRef = useRef<HTMLDivElement>(null)
@@ -186,6 +189,16 @@ export function FloatingToolbar(props: Props) {
     setSelection(null)
   }
 
+  const submitLink = () => {
+    if (!view || !selection) return
+    insertLink(view, linkUrl.trim())
+    view.focus()
+    setMode({ kind: 'idle' })
+    setLinkUrl('')
+    setPos(null)
+    setSelection(null)
+  }
+
   return (
     <div
       ref={ref}
@@ -194,7 +207,30 @@ export function FloatingToolbar(props: Props) {
       className="fixed z-40 bg-elev border border-default rounded-lg shadow-lg p-1"
       onMouseDown={(e) => e.preventDefault()}
     >
-      {mode.kind === 'instruction' ? (
+      {mode.kind === 'link' ? (
+        <div className="flex items-center gap-2 p-1 min-w-[320px]">
+          <Link aria-hidden className="w-4 h-4" />
+          <input
+            autoFocus
+            value={linkUrl}
+            onChange={(e) => setLinkUrl(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && linkUrl.trim()) submitLink()
+              if (e.key === 'Escape') setMode({ kind: 'idle' })
+            }}
+            placeholder="https://…"
+            className="flex-1 px-2 py-1 text-sm bg-transparent focus:outline-hidden"
+          />
+          <button
+            type="button"
+            onClick={submitLink}
+            disabled={!linkUrl.trim()}
+            className="btn-primary btn-sm disabled:opacity-50"
+          >
+            Add link
+          </button>
+        </div>
+      ) : mode.kind === 'instruction' ? (
         <div className="flex items-center gap-2 p-1 min-w-[320px]">
           <mode.agent.icon aria-hidden className="w-4 h-4" />
           <input
@@ -267,18 +303,11 @@ export function FloatingToolbar(props: Props) {
 
           {/* Divider + Row 2 — non-AI tools (no model call) */}
           <div className="border-t border-default -mx-1" />
-          <div className="flex items-center gap-0.5">
-            <button
-              type="button"
-              data-testid="floating-toolbar-add-note"
-              title="Add note"
-              onClick={addNote}
-              className="btn-icon flex items-center gap-1 px-1.5 w-auto"
-            >
-              <MessageSquarePlus aria-hidden className="w-4 h-4" />
-              <span className="text-xs">Note</span>
-            </button>
-          </div>
+          <FormatRow
+            view={view}
+            onLink={() => setMode({ kind: 'link' })}
+            onAddNote={addNote}
+          />
         </div>
       )}
     </div>
