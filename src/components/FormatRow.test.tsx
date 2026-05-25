@@ -30,6 +30,13 @@ describe('FormatRow', () => {
     expect(view.state.doc.toString()).toBe('the **cat** sat')
   })
 
+  it('does not throw when view is null', async () => {
+    const user = userEvent.setup()
+    render(<FormatRow view={null} onLink={vi.fn()} onAddNote={vi.fn()} />)
+    await user.click(screen.getByRole('button', { name: /bold/i }))
+    // no assertion needed — clicking a format button with no active editor must be a no-op, not a crash
+  })
+
   it('delegates Link and Note to their callbacks', async () => {
     const user = userEvent.setup()
     const onLink = vi.fn()

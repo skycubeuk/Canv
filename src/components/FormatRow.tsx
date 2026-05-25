@@ -5,7 +5,9 @@ import { toggleInline, cycleHeading } from '../lib/cm/markdownFormat'
 interface Props {
   /** The active editor, or null when none is focused. */
   view: EditorView | null
-  /** Open the link-URL input (owned by the parent toolbar). */
+  /** Open the link-URL input (owned by the parent toolbar). The parent owns
+   *  focus management for this path — unlike the inline commands, FormatRow
+   *  does not refocus the editor here. */
   onLink: () => void
   /** Create a user-authored annotation on the selection. */
   onAddNote: () => void
@@ -67,6 +69,8 @@ export function FormatRow({ view, onLink, onAddNote }: Props) {
       >
         <Heading aria-hidden className="w-4 h-4" />
       </button>
+      {/* onLink (not run()) — the parent opens a URL input and owns focus,
+          so we deliberately do not refocus the editor here. */}
       <button
         type="button"
         aria-label="Link"
