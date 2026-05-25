@@ -6,6 +6,7 @@ import { markdown } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
 import { searchKeymap } from '@codemirror/search'
 import { suggestionExtension } from './suggestionLayer'
+import { toggleInline, insertLink } from './markdownFormat'
 
 /**
  * Shared compartment instance for the language extension.
@@ -75,6 +76,11 @@ export function markdownEditorExtensions(opts: MarkdownEditorOptions): Extension
 
   return [
     history(),
+    keymap.of([
+      { key: 'Mod-b', run: (v) => toggleInline(v, '**'), preventDefault: true },
+      { key: 'Mod-i', run: (v) => toggleInline(v, '*'), preventDefault: true },
+      { key: 'Mod-k', run: (v) => insertLink(v), preventDefault: true },
+    ]),
     keymap.of([indentWithTab, ...defaultKeymap, ...historyKeymap, ...searchKeymap]),
     languageCompartment.of(markdown({ codeLanguages: languages })),
     syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
