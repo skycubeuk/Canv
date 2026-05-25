@@ -8,6 +8,12 @@ const makeCtx = (): ToolCtx => ({
   getEditorContent: () => null,
   applyEditorEdit: async () => {},
   workspace: { applyEdits: async () => ({ ok: false, error: { reason: 'write-failed', path: '?', detail: 'no test stub' } }) },
+  annotations: {
+    list: () => null,
+    add: () => { throw new Error('annotations stub') },
+    update: () => { throw new Error('annotations stub') },
+    remove: () => { throw new Error('annotations stub') },
+  },
   signal: new AbortController().signal,
 })
 

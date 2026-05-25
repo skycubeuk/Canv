@@ -1,4 +1,4 @@
-import { useMemo, type ReactNode } from 'react'
+import { useMemo, useRef, type ReactNode } from 'react'
 import { useDialogs } from '../lib/dialogs'
 import { useNotifications } from '../hooks/useNotifications'
 import { useSettings } from '../hooks/useSettings'
@@ -115,6 +115,8 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
   const raEnabled = setup.config?.revisionArchaeology.enabled === true
   const historyClient = raEnabled ? getCanvHistory() : null
 
+  const suggestionsRef = useRef<ReturnType<typeof useSuggestions> | null>(null)
+
   const chatSessions = useChatSessions({
     settings: settingsApi.settings,
     update: settingsApi.update,
@@ -127,6 +129,7 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
     dismissRetryUndo: notifications.dismissRetryUndo,
     dialogs,
     historyClient,
+    getSuggestions: () => suggestionsRef.current,
   })
 
   const suggestions = useSuggestions({
@@ -143,6 +146,8 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
     startSeededChat: chatSessions.startSeededChat,
     showChatTab: () => ideLayout.showBottomTab('chat'),
   })
+  // eslint-disable-next-line react-hooks/refs -- suggestionsRef is read only at tool-run time (async user action), never during render; assigning here closes the one-render gap the useEffect version leaves, matching depsRef.current = deps in useSuggestions.ts
+  suggestionsRef.current = suggestions
 
   const chatEditPreview = useChatEditPreview({
     pendingApprovals: chatSessions.pendingApprovals,

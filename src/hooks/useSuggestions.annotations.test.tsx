@@ -166,3 +166,26 @@ describe('useSuggestions — discuss', () => {
     view.destroy()
   })
 })
+
+describe('useSuggestions — chat annotation editing', () => {
+  it('addAnnotation returns the new id', () => {
+    const view = mountView('the cat sat')
+    const { result } = renderHook(() => useSuggestions(deps(view)))
+    let id = ''
+    act(() => { id = result.current.addAnnotation({ from: 4, to: 7 }, 'note', 'Assistant') })
+    expect(id).toBe(view.state.field(annotationField)[0].id)
+    view.destroy()
+  })
+
+  it('updateAnnotation patches note and suggestedReplacement', () => {
+    const view = mountView('the cat sat')
+    const { result } = renderHook(() => useSuggestions(deps(view)))
+    let id = ''
+    act(() => { id = result.current.addAnnotation({ from: 4, to: 7 }, 'old', 'Assistant') })
+    act(() => { result.current.updateAnnotation(id, { note: 'new', suggestedReplacement: 'dog' }) })
+    const a = view.state.field(annotationField)[0]
+    expect(a.note).toBe('new')
+    expect(a.suggestedReplacement).toBe('dog')
+    view.destroy()
+  })
+})

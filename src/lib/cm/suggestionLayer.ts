@@ -51,6 +51,8 @@ export const clearAnnotations = StateEffect.define<null>()
 export const setAnnotationEditing = StateEffect.define<{ id: string; editing: boolean }>()
 /** Commit edited note text. */
 export const updateAnnotationNote = StateEffect.define<{ id: string; note: string }>()
+/** Patch an existing annotation's note and/or suggested replacement (used by chat tools). */
+export const patchAnnotation = StateEffect.define<{ id: string; note?: string; suggestedReplacement?: string }>()
 /** Collapse/expand a single annotation card to just its author + number badge. */
 export const setAnnotationCollapsed = StateEffect.define<{ id: string; collapsed: boolean }>()
 /** Collapse/expand every open annotation at once. */
@@ -180,6 +182,16 @@ export const annotationField = StateField.define<Annotation[]>({
         annotations = annotations.map((a) => (a.id === e.value.id ? { ...a, editing: e.value.editing } : a))
       else if (e.is(updateAnnotationNote))
         annotations = annotations.map((a) => (a.id === e.value.id ? { ...a, note: e.value.note } : a))
+      else if (e.is(patchAnnotation))
+        annotations = annotations.map((a) =>
+          a.id === e.value.id
+            ? {
+                ...a,
+                ...(e.value.note !== undefined ? { note: e.value.note } : {}),
+                ...(e.value.suggestedReplacement !== undefined ? { suggestedReplacement: e.value.suggestedReplacement } : {}),
+              }
+            : a,
+        )
       else if (e.is(setAnnotationCollapsed))
         annotations = annotations.map((a) => (a.id === e.value.id ? { ...a, collapsed: e.value.collapsed } : a))
       else if (e.is(setAllAnnotationsCollapsed))

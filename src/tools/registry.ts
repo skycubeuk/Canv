@@ -10,6 +10,10 @@ import { deleteFileTool } from './handlers/deleteFile'
 import { renameFileTool } from './handlers/renameFile'
 import { createFolderTool } from './handlers/createFolder'
 import { setTodosTool } from './handlers/setTodos'
+import { listAnnotationsTool } from './handlers/listAnnotations'
+import { addAnnotationTool } from './handlers/addAnnotation'
+import { updateAnnotationTool } from './handlers/updateAnnotation'
+import { removeAnnotationTool } from './handlers/removeAnnotation'
 import { siteRegisterTool } from './handlers/siteRegister'
 import { siteUpdateTool } from './handlers/siteUpdate'
 import { applyEditsTool } from './handlers/applyEdits'
@@ -19,6 +23,7 @@ const TOOLS: Tool[] = [
   createFileTool, editFileTool, applyEditsTool,
   deleteFileTool, renameFileTool, createFolderTool,
   setTodosTool,
+  listAnnotationsTool, addAnnotationTool, updateAnnotationTool, removeAnnotationTool,
   siteRegisterTool, siteUpdateTool,
 ] as Tool[]
 

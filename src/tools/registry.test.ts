@@ -2,14 +2,16 @@ import { describe, it, expect } from 'vitest'
 import { allTools, getTool, mutatingNames, toolSchemas } from './registry'
 
 describe('registry', () => {
-  it('exports all 13 tools', () => {
+  it('exports all 17 tools', () => {
     const names = allTools().map((t) => t.name)
     expect(names.sort()).toEqual([
-      'apply_edits',
+      'add_annotation', 'apply_edits',
       'create_file', 'create_folder', 'delete_file', 'edit_file',
       'file_metadata',
-      'list_dir', 'read_file', 'rename_file', 'search_workspace', 'set_todos',
+      'list_annotations', 'list_dir',
+      'read_file', 'remove_annotation', 'rename_file', 'search_workspace', 'set_todos',
       'site_register', 'site_update',
+      'update_annotation',
     ])
   })
 
@@ -20,15 +22,17 @@ describe('registry', () => {
 
   it('marks the right tools as mutating', () => {
     expect(mutatingNames().sort()).toEqual([
-      'apply_edits',
-      'create_file', 'create_folder', 'delete_file', 'edit_file', 'rename_file',
+      'add_annotation', 'apply_edits',
+      'create_file', 'create_folder', 'delete_file', 'edit_file',
+      'remove_annotation', 'rename_file',
       'site_register', 'site_update',
+      'update_annotation',
     ])
   })
 
   it('produces schemas with name/description/inputSchema only', () => {
     const schemas = toolSchemas()
-    expect(schemas).toHaveLength(13)
+    expect(schemas).toHaveLength(17)
     for (const s of schemas) {
       expect(typeof s.name).toBe('string')
       expect(typeof s.description).toBe('string')
@@ -64,5 +68,18 @@ describe('registry — set_todos', () => {
 
   it('is included in allTools()', () => {
     expect(allTools().map((t) => t.name)).toContain('set_todos')
+  })
+})
+
+describe('annotation tools registration', () => {
+  it('registers all four annotation tools', () => {
+    for (const name of ['list_annotations', 'add_annotation', 'update_annotation', 'remove_annotation']) {
+      expect(getTool(name)).toBeDefined()
+    }
+  })
+  it('list_annotations is read-only; the other three are mutating', () => {
+    const m = mutatingNames()
+    expect(m).not.toContain('list_annotations')
+    expect(m).toEqual(expect.arrayContaining(['add_annotation', 'update_annotation', 'remove_annotation']))
   })
 })

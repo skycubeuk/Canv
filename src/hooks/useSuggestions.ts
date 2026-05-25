@@ -11,6 +11,7 @@ import {
   addAnnotation as addAnnotationEffect,
   setAnnotationEditing,
   updateAnnotationNote,
+  patchAnnotation,
   setAnnotationCollapsed,
   setAllAnnotationsCollapsed,
   acceptAnnotationInView,
@@ -49,7 +50,8 @@ export interface UseSuggestionsApi {
   reject: (hunkId: string, view?: EditorView) => void
   acceptAll: (view?: EditorView) => Promise<void>
   rejectAll: (view?: EditorView) => void
-  addAnnotation: (range: { from: number; to: number }, note: string, author: string, suggestedReplacement?: string, quote?: string) => void
+  addAnnotation: (range: { from: number; to: number }, note: string, author: string, suggestedReplacement?: string, quote?: string) => string
+  updateAnnotation: (id: string, patch: { note?: string; suggestedReplacement?: string }, view?: EditorView) => void
   /** Create an empty user-authored note on a span and open it in edit mode. */
   addUserAnnotation: (range: { from: number; to: number }, text: string) => void
   dismissAnnotation: (id: string, view?: EditorView) => void
@@ -180,15 +182,16 @@ export function useSuggestions(deps: UseSuggestionsDeps): UseSuggestionsApi {
   }, [syncCount])
 
   const addAnnotation = useCallback(
-    (range: { from: number; to: number }, note: string, author: string, suggestedReplacement?: string, quote?: string) => {
+    (range: { from: number; to: number }, note: string, author: string, suggestedReplacement?: string, quote?: string): string => {
       const view = depsRef.current.getActiveEditor()
-      if (!view) return
       const id = `annot-${Date.now().toString(36)}-${(annotSeq.current++).toString(36)}`
+      if (!view) return id
       view.dispatch({
         effects: addAnnotationEffect.of({ id, from: range.from, to: range.to, note, author, suggestedReplacement, quote, status: 'open' }),
       })
       syncCount(view)
       scheduleSave()
+      return id
     },
     [scheduleSave, syncCount],
   )
@@ -229,6 +232,19 @@ export function useSuggestions(deps: UseSuggestionsDeps): UseSuggestionsApi {
     view.dispatch({ effects: [updateAnnotationNote.of({ id, note }), setAnnotationEditing.of({ id, editing: false })] })
     scheduleSave()
   }, [scheduleSave])
+
+  const updateAnnotation = useCallback(
+    (id: string, patch: { note?: string; suggestedReplacement?: string }, viewArg?: EditorView) => {
+      const view = viewArg ?? depsRef.current.getActiveEditor()
+      if (!view) return
+      view.dispatch({ effects: patchAnnotation.of({ id, ...patch }) })
+      // No syncCount: patchAnnotation only changes note/suggestedReplacement, not
+      // the open-annotation count or any `collapsed` flag, so syncCount would be a
+      // pure no-op re-render here (cf. saveAnnotationNote).
+      scheduleSave()
+    },
+    [scheduleSave],
+  )
 
   const toggleAnnotationCollapsed = useCallback((id: string, viewArg?: EditorView) => {
     const view = viewArg ?? depsRef.current.getActiveEditor()
@@ -329,7 +345,7 @@ export function useSuggestions(deps: UseSuggestionsDeps): UseSuggestionsApi {
   )
 
   return useMemo<UseSuggestionsApi>(
-    () => ({ addDiffSuggestion, accept, reject, acceptAll, rejectAll, addAnnotation, addUserAnnotation, dismissAnnotation, acceptAnnotation, editAnnotation, saveAnnotationNote, toggleAnnotationCollapsed, collapseAllAnnotations, discuss, pendingCount, annotationCount, allAnnotationsCollapsed, callbacks }),
-    [addDiffSuggestion, accept, reject, acceptAll, rejectAll, addAnnotation, addUserAnnotation, dismissAnnotation, acceptAnnotation, editAnnotation, saveAnnotationNote, toggleAnnotationCollapsed, collapseAllAnnotations, discuss, pendingCount, annotationCount, allAnnotationsCollapsed, callbacks],
+    () => ({ addDiffSuggestion, accept, reject, acceptAll, rejectAll, addAnnotation, addUserAnnotation, dismissAnnotation, acceptAnnotation, editAnnotation, saveAnnotationNote, updateAnnotation, toggleAnnotationCollapsed, collapseAllAnnotations, discuss, pendingCount, annotationCount, allAnnotationsCollapsed, callbacks }),
+    [addDiffSuggestion, accept, reject, acceptAll, rejectAll, addAnnotation, addUserAnnotation, dismissAnnotation, acceptAnnotation, editAnnotation, saveAnnotationNote, updateAnnotation, toggleAnnotationCollapsed, collapseAllAnnotations, discuss, pendingCount, annotationCount, allAnnotationsCollapsed, callbacks],
   )
 }
