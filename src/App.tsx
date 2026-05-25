@@ -51,6 +51,7 @@ function AppInner({ migrationOpen, setMigrationOpen }: AppInnerProps) {
   const workspace = useService('workspace')
   const ideLayout = useService('ideLayout')
   const selectionAgent = useService('selectionAgent')
+  const suggestions = useService('suggestions')
 
   const contributions = useService('contributions')
   const commandsSvc = useService('commands')
@@ -110,7 +111,10 @@ function AppInner({ migrationOpen, setMigrationOpen }: AppInnerProps) {
         onViewHistory={openFileHistory}
         bottomPanelTabs={bottomPanelTabs}
       />
-      <FloatingToolbar onAgent={selectionAgent.handleAgentFromToolbar} />
+      <FloatingToolbar
+        onAgent={selectionAgent.handleAgentFromToolbar}
+        onAddNote={(range, text) => suggestions.addUserAnnotation(range, text)}
+      />
       <AppOverlays
         migrationOpen={migrationOpen}
         onMigrationComplete={() => { setMigrationOpen(false); window.location.reload() }}

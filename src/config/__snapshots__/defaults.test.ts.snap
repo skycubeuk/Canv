@@ -40,10 +40,9 @@ TEXT TO EDIT:
 
 {{context}}
 
-Respond in this exact format:
+Consider dimensions like opening hook, pacing, scene structure, character motivation and behaviour, tension and stakes, dialogue, prose rhythm and sentence variety, emotional arc, payoff vs setup, and what feels missing or underdeveloped — but treat these as a palette, not a checklist. Let the amount of feedback follow the text: a short passage may warrant only one or two notes; a full chapter, many more. Flag only what genuinely matters — never manufacture notes to hit a number, never pad, never reduce to generic advice. Each note should be a full sentence or two with a concrete observation tied to a specific moment in the text.
 
-NOTES:
-- [Aim for 6–10 distinct bullets covering different dimensions: opening hook, pacing, scene structure, character motivation and behaviour, tension and stakes, dialogue, prose rhythm and sentence variety, emotional arc, payoff vs setup, and what feels missing or underdeveloped. Each bullet should be a full sentence or two with a concrete observation tied to the text — quote a phrase or name a moment when useful. Skip dimensions that genuinely don't apply, but don't pad and don't reduce to generic notes.]
+Respond with ONLY a JSON array and nothing else. Each element is an object {"quote": "<an exact, verbatim substring of the passage that this note refers to>", "comment": "<your note>"}. The "quote" MUST be copied exactly from the passage so it can be located. If you have no notes, respond with [].
 
 TEXT TO REVIEW:
 {{text}}
@@ -61,10 +60,9 @@ TEXT TO REVIEW:
 
 {{context}}
 
-Respond in this exact format:
+Treat the categories above as a palette, not a checklist. Let the number of notes follow the text: flag every distinct issue you find — don't merge several problems into one note, and don't stop after the first — but never manufacture notes to hit a number or pad with trivia. Each note should be a full sentence or two pinpointing one specific problem.
 
-NOTES:
-- [bulleted analysis: what holds together, what doesn't, what's unclear. Quote a phrase or name a moment when useful.]
+Respond with ONLY a JSON array and nothing else. Each element is an object {"quote": "<an exact, verbatim substring of the passage that this note refers to>", "comment": "<your note>"}. The "quote" MUST be copied exactly from the passage so it can be located. If you have no notes, respond with [].
 
 TEXT TO REVIEW:
 {{text}}
@@ -82,10 +80,9 @@ TEXT TO REVIEW:
 
 {{context}}
 
-Respond in this exact format:
+React to whatever facets of the reading experience genuinely struck you: what gripped you, what confused you, what felt slow or rushed, what surprised you, what made you laugh or wince or care, questions you found yourself asking, things you wanted more or less of, your impression of the voice and tone, who you pictured the narrator/characters as, and how the ending landed. Let the number of reactions follow the text: a short passage may prompt only one or two; a full chapter, many more. Don't pad or manufacture reactions to hit a number. Each reaction should be a full sentence or two — point to specific moments or phrases when you can. Stay in-character as a reader reacting, not an editor diagnosing.
 
-NOTES:
-- [Aim for 6–10 distinct first-person bullets covering different facets of your reading experience: what gripped you, what confused you, what felt slow or rushed, what surprised you, what made you laugh or wince or care, questions you found yourself asking, things you wanted more or less of, your impression of the voice and tone, who you pictured the narrator/characters as, and how the ending landed. Each bullet should be a full sentence or two — point to specific moments or phrases when you can. Stay in-character as a reader reacting, not an editor diagnosing.]
+Respond with ONLY a JSON array and nothing else. Each element is an object {"quote": "<an exact, verbatim substring of the passage that this reaction refers to>", "comment": "<your reaction in first person>"}. The "quote" MUST be copied exactly from the passage so it can be located. If you have no reactions, respond with [].
 
 TEXT YOU JUST READ:
 {{text}}
@@ -301,10 +298,9 @@ TEXT TO EDIT:
 
 {{context}}
 
-Respond in this exact format:
+Treat the categories above as a palette, not a checklist. Let the number of notes follow the text: flag every distinct issue you find — don't merge several problems into one note, and don't stop after the first — but never manufacture notes to hit a number or pad with trivia. Each note should be a full sentence or two pinpointing one specific problem.
 
-NOTES:
-- [bulleted analysis: what works, what doesn't, what's unclear]
+Respond with ONLY a JSON array and nothing else. Each element is an object {"quote": "<an exact, verbatim substring of the passage that this note refers to>", "comment": "<your note>"}. The "quote" MUST be copied exactly from the passage so it can be located. If you have no notes, respond with [].
 
 TEXT TO REVIEW:
 {{text}}
@@ -322,10 +318,9 @@ TEXT TO REVIEW:
 
 {{context}}
 
-Respond in this exact format:
+React to whatever facets of the reading experience genuinely struck you: what gripped you, what confused you, what felt slow or rushed, what surprised you, what made you laugh or wince or care, questions you found yourself asking, things you wanted more or less of, your impression of the voice and tone, who you pictured the narrator/characters as, and how the ending landed. Let the number of reactions follow the text: a short passage may prompt only one or two; a full chapter, many more. Don't pad or manufacture reactions to hit a number. Each reaction should be a full sentence or two — point to specific moments or phrases when you can. Stay in-character as a reader reacting, not an editor diagnosing.
 
-NOTES:
-- [Aim for 6–10 distinct first-person bullets covering different facets of your reading experience: what gripped you, what confused you, what felt slow or rushed, what surprised you, what made you laugh or wince or care, questions you found yourself asking, things you wanted more or less of, your impression of the voice and tone, who you pictured the narrator/characters as, and how the ending landed. Each bullet should be a full sentence or two — point to specific moments or phrases when you can. Stay in-character as a reader reacting, not an editor diagnosing.]
+Respond with ONLY a JSON array and nothing else. Each element is an object {"quote": "<an exact, verbatim substring of the passage that this reaction refers to>", "comment": "<your reaction in first person>"}. The "quote" MUST be copied exactly from the passage so it can be located. If you have no reactions, respond with [].
 
 TEXT YOU JUST READ:
 {{text}}
@@ -597,10 +592,9 @@ TEXT TO EDIT:
 
 {{context}}
 
-Respond in this exact format:
+Treat the categories above as a palette, not a checklist. Let the number of notes follow the text: flag every distinct issue you find — don't merge several problems into one note, and don't stop after the first — but never manufacture notes to hit a number or pad with trivia. Each note should be a full sentence or two pinpointing one specific problem.
 
-NOTES:
-- [bulleted analysis: which claims are well-supported, which need evidence, which terms are undefined, where the reasoning skips a step]
+Respond with ONLY a JSON array and nothing else. Each element is an object {"quote": "<an exact, verbatim substring of the passage that this note refers to>", "comment": "<your note>"}. The "quote" MUST be copied exactly from the passage so it can be located. If you have no notes, respond with [].
 
 TEXT TO REVIEW:
 {{text}}
@@ -618,10 +612,9 @@ TEXT TO REVIEW:
 
 {{context}}
 
-Respond in this exact format:
+React to whatever genuinely affected your ability to use the document: what was clear, what was ambiguous, where you got stuck, what assumed knowledge tripped you up, what examples you wanted, what definitions you needed earlier, whether the structure helped or hindered, and what was missing. Let the number of reactions follow the text: a short passage may prompt only one or two; a long document, many more. Don't pad or manufacture reactions to hit a number. Point to specific sentences or sections when you can.
 
-NOTES:
-- [Aim for 6–10 first-person bullets covering: what was clear, what was ambiguous, where you got stuck, what assumed knowledge tripped you up, what examples you wanted, what definitions you needed earlier, whether the structure helped or hindered, and what was missing. Point to specific sentences or sections when you can.]
+Respond with ONLY a JSON array and nothing else. Each element is an object {"quote": "<an exact, verbatim substring of the passage that this reaction refers to>", "comment": "<your reaction in first person>"}. The "quote" MUST be copied exactly from the passage so it can be located. If you have no reactions, respond with [].
 
 TEXT YOU JUST READ:
 {{text}}

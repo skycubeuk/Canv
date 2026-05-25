@@ -3,7 +3,9 @@ import { type RunRecord } from '../components/ResultsPanel'
 import type { Action as AgentDef, Mode } from '../config/types'
 import type { EditorGroupId } from '../types/workspace'
 import { EditorView } from '@codemirror/view'
-import { runAgent, buildPrompt } from '../agents/runner'
+import { runAgent, buildPrompt, parseAgentResponse } from '../agents/runner'
+import { routeSelectionAgentResult } from '../agents/selectionRouting'
+import { parseReviewNotes, anchorReviewNotes } from '../lib/suggestions/reviewNotes'
 import { getActionById } from './useModes'
 import { getAdapter } from '../adapters'
 import { decideApply } from '../lib/applyDecision'
@@ -29,6 +31,15 @@ export interface UseSelectionAgentArgs {
   showToast: (msg: string) => void
   openSettingsTab: () => void
   showBottomTab: (tab: BottomTab) => void
+  /** Emit a finished selection rewrite as an inline diff in the document. */
+  emitDiffSuggestion: (
+    range: { from: number; to: number },
+    original: string,
+    rewrite: string,
+    origin: { agentId: string; agentLabel: string; provider: string; model: string },
+  ) => void
+  /** Emit a finished run's notes as an inline annotation. */
+  emitAnnotation: (range: { from: number; to: number }, note: string, author: string, suggestedReplacement?: string, quote?: string) => void
 }
 
 export interface UseSelectionAgentApi {
@@ -47,7 +58,7 @@ export function useSelectionAgent(args: UseSelectionAgentArgs): UseSelectionAgen
   const {
     settings, modelForAgent, activeProfile, activeProfileId, workspace,
     getActiveEditor, getActiveEditorForGroup,
-    showToast, openSettingsTab, showBottomTab,
+    showToast, openSettingsTab, showBottomTab, emitDiffSuggestion, emitAnnotation,
   } = args
 
   const [runs, setRuns] = useLocalStorage<RunRecord[]>('canv:runs', [])
@@ -145,6 +156,7 @@ export function useSelectionAgent(args: UseSelectionAgentArgs): UseSelectionAgen
         basePrompt,
         followups: [],
         schemaVersion: 2,
+        inlineEmitted: false,
       }
 
       setRuns((prev) => {
@@ -152,6 +164,9 @@ export function useSelectionAgent(args: UseSelectionAgentArgs): UseSelectionAgen
         return next.slice(0, MAX_RUNS)
       })
       setActiveTabId(id)
+      // Surface the run immediately so the user SEES it streaming — that
+      // "it's working" feedback is the whole point of the Runs panel. The
+      // result also renders inline (diff / annotations) once it arrives.
       showBottomTab('runs')
 
       const startedAt = Date.now()
@@ -184,6 +199,16 @@ export function useSelectionAgent(args: UseSelectionAgentArgs): UseSelectionAgen
           chunkDelayMs: settings.streamChunkDelayMs,
         })
 
+        const parsed = parseAgentResponse(agent, final)
+        const rewrite = agent.outputMode === 'replacement' ? final.trim() : parsed.rewrite
+        const routing = routeSelectionAgentResult({
+          outputMode: agent.outputMode,
+          hasRange: range != null,
+          original: text,
+          rewrite,
+          feedback: parsed.feedback,
+        })
+
         setRuns((prev) =>
           prev.map((r) =>
             r.id === id
@@ -196,10 +221,41 @@ export function useSelectionAgent(args: UseSelectionAgentArgs): UseSelectionAgen
                   rawMessages,
                   tokenUsage,
                   elapsedMs: Date.now() - startedAt,
+                  inlineEmitted: routing.emitDiff,
                 }
               : r,
           ),
         )
+
+        if (routing.emitDiff && range && rewrite) {
+          emitDiffSuggestion(range, text, rewrite, {
+            agentId: agent.id,
+            agentLabel: agent.label,
+            provider: adapter.id,
+            model,
+          })
+        }
+        if (routing.emitAnnotation) {
+          // Whole-document runs have no selection range; anchor from offset 0.
+          const spanFrom = range ? range.from : 0
+          // Per-span: a review that returns the structured JSON array becomes
+          // one annotation per note, each anchored to its quoted span.
+          // Otherwise (holistic notes / non-JSON) fall back to a single note.
+          const structured = parseReviewNotes(final)
+          if (structured) {
+            for (const a of anchorReviewNotes(text, spanFrom, structured)) {
+              emitAnnotation({ from: a.from, to: a.to }, a.note, agent.label, undefined, a.quote)
+            }
+          } else if (parsed.feedback) {
+            // Anchor a holistic note to the selection, or a zero-width anchor at the
+            // document start for whole-doc runs (no highlight, card still shows the note).
+            emitAnnotation({ from: spanFrom, to: range ? range.to : spanFrom }, parsed.feedback, agent.label)
+          }
+          // Collapse the editor's text selection so the blue selection highlight
+          // doesn't visually blend with the annotation highlights.
+          const v = getActiveEditor()
+          if (v && !v.state.selection.main.empty) v.dispatch({ selection: { anchor: spanFrom } })
+        }
       } catch (e) {
         const aborted = e instanceof DOMException && e.name === 'AbortError'
         const msg = e instanceof Error ? e.message : String(e)
@@ -215,11 +271,12 @@ export function useSelectionAgent(args: UseSelectionAgentArgs): UseSelectionAgen
               : r,
           ),
         )
+        if (range != null) showBottomTab('runs')
       } finally {
         runAbort.current.delete(id)
       }
     },
-    [activeProfileId, settings, modelForAgent, ensurePinnedReady, getActiveEditor, setRuns, showToast, openSettingsTab, showBottomTab],
+    [activeProfileId, settings, modelForAgent, ensurePinnedReady, getActiveEditor, setRuns, showToast, openSettingsTab, showBottomTab, emitDiffSuggestion, emitAnnotation],
   )
 
   const handleAgentFromToolbar = useCallback(

@@ -9,6 +9,7 @@ import type { useIdeLayout } from '../hooks/useIdeLayout'
 import type { useModes } from '../hooks/useModes'
 import type { useChatSessions } from '../hooks/useChatSessions'
 import type { useSelectionAgent } from '../hooks/useSelectionAgent'
+import type { useSuggestions } from '../hooks/useSuggestions'
 import type { useLintIssues } from '../hooks/useLintIssues'
 import type { useWorkspaceFileOps } from '../hooks/useWorkspaceFileOps'
 import type { useEditorStats } from '../hooks/useEditorStats'
@@ -45,8 +46,16 @@ export interface ICanvServices {
     profile: string | null
     setProfile: (p: string | null) => void
   }
-  chatSessions: ReturnType<typeof useChatSessions>
+  chatSessions: ReturnType<typeof useChatSessions> & {
+    /**
+     * The callId of the approval that is currently shown as an inline diff
+     * preview in the active editor. Null when no inline preview is active.
+     * Used by useBottomPanelTabs to suppress the duplicate approval card.
+     */
+    inlinePreviewedCallId: string | null
+  }
   selectionAgent: ReturnType<typeof useSelectionAgent>
+  suggestions: ReturnType<typeof useSuggestions>
   lint: ReturnType<typeof useLintIssues>
   workspaceFileOps: ReturnType<typeof useWorkspaceFileOps>
   editorStats: ReturnType<typeof useEditorStats>

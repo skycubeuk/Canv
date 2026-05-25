@@ -3,7 +3,6 @@ import { z } from 'zod'
 const ID_RE = /^[a-zA-Z0-9-]+$/
 const FEEDBACK_HEADER_RE = /^\s*(?:ISSUES|NOTES)\s*:/im
 const REWRITE_HEADER_RE = /^\s*(?:CORRECTED|SUGGESTED REWRITE)\s*:/im
-const NOTES_HEADER_RE = /^\s*NOTES\s*:/im
 
 const inputModeSchema = z.enum(['selection', 'document', 'selection-or-document'])
 const outputModeSchema = z.enum(['replacement', 'feedback-and-rewrite', 'feedback-only'])
@@ -59,15 +58,8 @@ export const actionSchema = z
         })
       }
     }
-    if (a.outputMode === 'feedback-only') {
-      if (!NOTES_HEADER_RE.test(a.prompt)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['prompt'],
-          message: 'feedback-only prompts must include a NOTES: section header (the parser looks for it)',
-        })
-      }
-    }
+    // feedback-only prompts may use either a NOTES: prose format or a JSON-array format;
+    // no structural check is enforced here.
   })
 
 export const modeSchema = z.object({

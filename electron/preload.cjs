@@ -233,6 +233,11 @@ if (!isDockPopout()) {
     reconnectServer: (name) => ipcRenderer.invoke('canvMcp:reconnectServer', name),
   })
 
+  contextBridge.exposeInMainWorld('canvAnnotations', {
+    load: (rel) => ipcRenderer.invoke('canvAnnotations:load', rel),
+    save: (rel, records) => ipcRenderer.invoke('canvAnnotations:save', rel, records),
+  })
+
   contextBridge.exposeInMainWorld('canvExtensionsDev', {
     spawnTest:   (fixtureName, bounds) => ipcRenderer.invoke('canvExtDev:spawnTest', fixtureName, bounds),
     destroyTest: (id) => ipcRenderer.invoke('canvExtDev:destroyTest', id),

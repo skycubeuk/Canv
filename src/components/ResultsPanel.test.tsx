@@ -125,6 +125,46 @@ describe('RunView', () => {
     expect(screen.getByRole('button', { name: /copy/i })).toBeInTheDocument()
   })
 
+  it('structured review JSON renders as a readable list, not raw JSON', () => {
+    const json = JSON.stringify([
+      { quote: 'the opening line', comment: 'This gripped me right away.' },
+      { quote: 'a quiet ending', comment: 'I wanted a touch more here.' },
+    ])
+    const run = baseRun({
+      agentId: 'story',
+      agentLabel: 'Story Reviewer',
+      response: json,
+      originalResponse: json,
+    })
+    render(
+      <ContextMenuProvider><RunView run={run} onApply={vi.fn()} onRerun={vi.fn()} onRefine={vi.fn()} /></ContextMenuProvider>,
+    )
+    // Friendly list: comments + quoted snippets are shown…
+    expect(screen.getByText('This gripped me right away.')).toBeInTheDocument()
+    expect(screen.getByText(/the opening line/)).toBeInTheDocument()
+    expect(screen.getByText(/notes \(2\)/i)).toBeInTheDocument()
+    // …and the raw JSON punctuation is NOT dumped into the panel.
+    expect(screen.queryByText(/"comment"/)).toBeNull()
+    expect(screen.queryByText(/\[\{/)).toBeNull()
+  })
+
+  it('while structured JSON is still streaming, shows a Reading state not raw JSON', () => {
+    const partial = '[\n  {\n    "quote": "the opening line",\n    "comment": "This gri'
+    const run = baseRun({
+      agentId: 'story',
+      agentLabel: 'Story Reviewer',
+      status: 'streaming',
+      response: partial,
+      originalResponse: partial,
+    })
+    render(
+      <ContextMenuProvider><RunView run={run} onApply={vi.fn()} onRerun={vi.fn()} onRefine={vi.fn()} /></ContextMenuProvider>,
+    )
+    expect(screen.getByText(/reading your text/i)).toBeInTheDocument()
+    // The partial JSON keys must not be shown to the user.
+    expect(screen.queryByText(/"quote"/)).toBeNull()
+  })
+
   it('refinements render as plain panel-scale text, not chat bubbles', () => {
     const run = baseRun({
       followups: [

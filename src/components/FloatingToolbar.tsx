@@ -1,11 +1,15 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react'
-import { Zap } from 'lucide-react'
+import { Zap, Link } from 'lucide-react'
 import type { Action } from '../config/types'
 import { useContextMenu } from '../lib/contextMenu'
 import { useService } from '../services/useService'
+import { FormatRow } from './FormatRow'
+import { insertLink } from '../lib/cm/markdownFormat'
 
 interface Props {
   onAgent: (agent: Action, range: { from: number; to: number }, text: string, instruction?: string) => void
+  /** Non-AI tools row: create a user-authored annotation on the selection. */
+  onAddNote: (range: { from: number; to: number }, text: string) => void
 }
 
 interface Pos {
@@ -13,10 +17,10 @@ interface Pos {
   left: number
 }
 
-type Mode = { kind: 'idle' } | { kind: 'presets' } | { kind: 'instruction'; agent: Action }
+type Mode = { kind: 'idle' } | { kind: 'presets' } | { kind: 'instruction'; agent: Action } | { kind: 'link' }
 
 export function FloatingToolbar(props: Props) {
-  const { onAgent } = props
+  const { onAgent, onAddNote } = props
   const editorRegistry = useService('editorRegistry')
   const view = editorRegistry.getActiveEditor()
   const modesSvc = useService('modes')
@@ -28,6 +32,7 @@ export function FloatingToolbar(props: Props) {
   const [selection, setSelection] = useState<{ from: number; to: number; text: string } | null>(null)
   const [mode, setMode] = useState<Mode>({ kind: 'idle' })
   const [instructionText, setInstructionText] = useState('')
+  const [linkUrl, setLinkUrl] = useState('')
   const [presetsAbove, setPresetsAbove] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const presetsRef = useRef<HTMLDivElement>(null)
@@ -176,6 +181,24 @@ export function FloatingToolbar(props: Props) {
     fire(mode.agent, instructionText.trim())
   }
 
+  const addNote = () => {
+    onAddNote({ from: selection.from, to: selection.to }, selection.text)
+    setMode({ kind: 'idle' })
+    setInstructionText('')
+    setPos(null)
+    setSelection(null)
+  }
+
+  const submitLink = () => {
+    if (!view || !selection) return
+    insertLink(view, linkUrl.trim())
+    view.focus()
+    setMode({ kind: 'idle' })
+    setLinkUrl('')
+    setPos(null)
+    setSelection(null)
+  }
+
   return (
     <div
       ref={ref}
@@ -184,7 +207,30 @@ export function FloatingToolbar(props: Props) {
       className="fixed z-40 bg-elev border border-default rounded-lg shadow-lg p-1"
       onMouseDown={(e) => e.preventDefault()}
     >
-      {mode.kind === 'instruction' ? (
+      {mode.kind === 'link' ? (
+        <div className="flex items-center gap-2 p-1 min-w-[320px]">
+          <Link aria-hidden className="w-4 h-4" />
+          <input
+            autoFocus
+            value={linkUrl}
+            onChange={(e) => setLinkUrl(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && linkUrl.trim()) submitLink()
+              if (e.key === 'Escape') setMode({ kind: 'idle' })
+            }}
+            placeholder="https://…"
+            className="flex-1 px-2 py-1 text-sm bg-transparent focus:outline-hidden"
+          />
+          <button
+            type="button"
+            onClick={submitLink}
+            disabled={!linkUrl.trim()}
+            className="btn-primary btn-sm disabled:opacity-50"
+          >
+            Add link
+          </button>
+        </div>
+      ) : mode.kind === 'instruction' ? (
         <div className="flex items-center gap-2 p-1 min-w-[320px]">
           <mode.agent.icon aria-hidden className="w-4 h-4" />
           <input
@@ -208,49 +254,60 @@ export function FloatingToolbar(props: Props) {
           </button>
         </div>
       ) : (
-        <div className="flex items-center gap-0.5">
-          {core.map((agent) => (
-            <button
-              key={agent.id}
-              type="button"
-              title={agent.label}
-              onClick={() => handleClick(agent)}
-              className="btn-icon"
-            >
-              <agent.icon aria-hidden className="w-4 h-4" />
-            </button>
-          ))}
-          {presets.length > 0 && <div className="w-px h-5 bg-border-default mx-1" />}
-          {presets.length > 0 && <div className="relative">
-            <button
-              type="button"
-              title="Quick presets"
-              onClick={() => setMode((m) => (m.kind === 'presets' ? { kind: 'idle' } : { kind: 'presets' }))}
-              className={`btn-icon ${mode.kind === 'presets' ? 'bg-active' : ''}`}
-            >
-              <Zap aria-hidden className="w-4 h-4" />
-            </button>
-            {mode.kind === 'presets' && (
-              <div
-                ref={presetsRef}
-                className={`absolute left-1/2 -translate-x-1/2 bg-elev border border-default rounded-lg shadow-lg p-1 min-w-[200px] z-10 ${
-                  presetsAbove ? 'bottom-full mb-1' : 'top-full mt-1'
-                }`}
+        <div className="flex flex-col gap-1">
+          {/* Row 1 — AI tools */}
+          <div className="flex items-center gap-0.5">
+            {core.map((agent) => (
+              <button
+                key={agent.id}
+                type="button"
+                title={agent.label}
+                onClick={() => handleClick(agent)}
+                className="btn-icon"
               >
-                {presets.map((agent) => (
-                  <button
-                    key={agent.id}
-                    type="button"
-                    onClick={() => handleClick(agent)}
-                    className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded-sm hover:bg-hover text-default text-left"
-                  >
-                    <agent.icon aria-hidden className="w-4 h-4" />
-                    <span>{agent.label}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>}
+                <agent.icon aria-hidden className="w-4 h-4" />
+              </button>
+            ))}
+            {presets.length > 0 && <div className="w-px h-5 bg-border-default mx-1" />}
+            {presets.length > 0 && <div className="relative">
+              <button
+                type="button"
+                title="Quick presets"
+                onClick={() => setMode((m) => (m.kind === 'presets' ? { kind: 'idle' } : { kind: 'presets' }))}
+                className={`btn-icon ${mode.kind === 'presets' ? 'bg-active' : ''}`}
+              >
+                <Zap aria-hidden className="w-4 h-4" />
+              </button>
+              {mode.kind === 'presets' && (
+                <div
+                  ref={presetsRef}
+                  className={`absolute left-1/2 -translate-x-1/2 bg-elev border border-default rounded-lg shadow-lg p-1 min-w-[200px] z-10 ${
+                    presetsAbove ? 'bottom-full mb-1' : 'top-full mt-1'
+                  }`}
+                >
+                  {presets.map((agent) => (
+                    <button
+                      key={agent.id}
+                      type="button"
+                      onClick={() => handleClick(agent)}
+                      className="w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded-sm hover:bg-hover text-default text-left"
+                    >
+                      <agent.icon aria-hidden className="w-4 h-4" />
+                      <span>{agent.label}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>}
+          </div>
+
+          {/* Divider + Row 2 — non-AI tools (no model call) */}
+          <div className="border-t border-default -mx-1" />
+          <FormatRow
+            view={view}
+            onLink={() => { setLinkUrl(''); setMode({ kind: 'link' }) }}
+            onAddNote={addNote}
+          />
         </div>
       )}
     </div>

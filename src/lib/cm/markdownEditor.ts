@@ -5,6 +5,8 @@ import { syntaxHighlighting, defaultHighlightStyle, indentUnit } from '@codemirr
 import { markdown } from '@codemirror/lang-markdown'
 import { languages } from '@codemirror/language-data'
 import { searchKeymap } from '@codemirror/search'
+import { suggestionExtension } from './suggestionLayer'
+import { toggleInline, insertLink } from './markdownFormat'
 
 /**
  * Shared compartment instance for the language extension.
@@ -74,6 +76,15 @@ export function markdownEditorExtensions(opts: MarkdownEditorOptions): Extension
 
   return [
     history(),
+    // Formatting shortcuts, prepended so they win over defaultKeymap. Note that
+    // on Linux/Windows Mod-k is Ctrl-k, which intentionally shadows CodeMirror's
+    // default deleteToLineEnd binding — Cmd/Ctrl-k for "insert link" is the
+    // expected convention in a writing app. Don't "fix" this without checking.
+    keymap.of([
+      { key: 'Mod-b', run: (v) => toggleInline(v, '**'), preventDefault: true },
+      { key: 'Mod-i', run: (v) => toggleInline(v, '*'), preventDefault: true },
+      { key: 'Mod-k', run: (v) => insertLink(v), preventDefault: true },
+    ]),
     keymap.of([indentWithTab, ...defaultKeymap, ...historyKeymap, ...searchKeymap]),
     languageCompartment.of(markdown({ codeLanguages: languages })),
     syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
@@ -81,6 +92,7 @@ export function markdownEditorExtensions(opts: MarkdownEditorOptions): Extension
     indentUnit.of('  '),
     EditorState.allowMultipleSelections.of(true),
     ...(opts.showLineNumbers ? [lineNumbers()] : []),
+    suggestionExtension(),
     updateListener,
   ]
 }

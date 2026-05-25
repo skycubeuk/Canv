@@ -1,0 +1,112 @@
+import { useEffect, useRef, useState, useCallback } from 'react'
+import type { EditorView } from '@codemirror/view'
+import { setEditPreview, clearEditPreview } from '../lib/cm/suggestionLayer'
+import { locateChatEdit } from '../lib/suggestions/chatEditPreview'
+import type { PendingApproval } from '../components/ChatPanel'
+import type { ApprovalDecision } from '../agents/chatRunner'
+
+export interface UseChatEditPreviewDeps {
+  pendingApprovals: Map<string, PendingApproval>
+  onApprovalDecide: (callId: string, decision: ApprovalDecision) => void
+  getActiveEditor: () => EditorView | null
+  activeMarkdownRel: string | null
+}
+
+/**
+ * Watches `pendingApprovals` for a pending `edit_file` or `apply_edits` approval
+ * that targets the currently open file, then renders it as an inline diff preview
+ * via the `editPreviewField` effect rather than the normal approval card.
+ *
+ * For `apply_edits`, the inline path is taken ONLY IF every edit targets the
+ * active file and every oldText appears exactly once (unambiguous). Otherwise
+ * the card fallback is used.
+ *
+ * Returns the callId of the approval currently shown inline so that
+ * `useBottomPanelTabs` can suppress the duplicate card.
+ *
+ * Accept/reject flow: approving/rejecting via the inline controls resolves
+ * the existing `onApprovalDecide` promise — the chat tool write path is
+ * untouched. The inline preview itself is NEVER applied to the document.
+ */
+export function useChatEditPreview(deps: UseChatEditPreviewDeps): {
+  previewedCallId: string | null
+  approveEdit: (callId: string, view: EditorView) => void
+  rejectEdit: (callId: string, view: EditorView) => void
+} {
+  // Keep deps fresh without recreating stable callbacks on every render.
+  const depsRef = useRef(deps)
+  // eslint-disable-next-line react-hooks/refs -- stable callbacks read depsRef in event handlers only
+  depsRef.current = deps
+
+  const [previewedCallId, setPreviewedCallId] = useState<string | null>(null)
+  // The effect and the accept/reject callbacks keep this ref in lock-step with
+  // the state (every setPreviewedCallId is paired with a ref write), so no
+  // render-time sync is needed.
+  const previewedCallIdRef = useRef<string | null>(null)
+
+  // Core effect: scan pendingApprovals every time they (or the active file) change.
+  useEffect(() => {
+    const { pendingApprovals, activeMarkdownRel, getActiveEditor } = deps
+
+    const view = getActiveEditor()
+
+    // Find the first pending approval that resolves to an inline preview on the active file.
+    let found: { callId: string; hunks: Array<{ from: number; to: number; rewrite: string }> } | null = null
+    for (const [, approval] of pendingApprovals) {
+      if (approval.state !== 'pending') continue
+      const result = locateChatEdit(
+        view ? view.state.doc.toString() : '',
+        activeMarkdownRel,
+        approval.callId,
+        approval.preview,
+      )
+      if (result && result.hunks.length > 0) {
+        found = {
+          callId: result.callId,
+          hunks: result.hunks.map(({ from, to, rewrite }) => ({ from, to, rewrite })),
+        }
+        break
+      }
+    }
+
+    const currentId = previewedCallIdRef.current
+
+    if (found) {
+      // If it's a different call (or no current), dispatch the preview.
+      if (found.callId !== currentId) {
+        if (view) {
+          view.dispatch({ effects: setEditPreview.of({ callId: found.callId, hunks: found.hunks }) })
+        }
+        setPreviewedCallId(found.callId)
+        previewedCallIdRef.current = found.callId
+      }
+    } else {
+      // No matching pending approval — clear any active preview.
+      if (currentId !== null) {
+        const v = getActiveEditor()
+        if (v) v.dispatch({ effects: clearEditPreview.of(null) })
+        setPreviewedCallId(null)
+        previewedCallIdRef.current = null
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: run when pendingApprovals or activeMarkdownRel change
+  }, [deps.pendingApprovals, deps.activeMarkdownRel])
+
+  const approveEdit = useCallback((callId: string, view: EditorView) => {
+    // Resolve the approval (chat tool does the write).
+    depsRef.current.onApprovalDecide(callId, 'approve')
+    // Clear the inline preview decoration — the approval card will update.
+    view.dispatch({ effects: clearEditPreview.of(null) })
+    setPreviewedCallId(null)
+    previewedCallIdRef.current = null
+  }, [])
+
+  const rejectEdit = useCallback((callId: string, view: EditorView) => {
+    depsRef.current.onApprovalDecide(callId, 'deny')
+    view.dispatch({ effects: clearEditPreview.of(null) })
+    setPreviewedCallId(null)
+    previewedCallIdRef.current = null
+  }, [])
+
+  return { previewedCallId, approveEdit, rejectEdit }
+}

@@ -16,8 +16,11 @@ import { useLintIssues } from '../hooks/useLintIssues'
 import { useProfilePicker } from '../hooks/useProfilePicker'
 import { useChatSessions } from '../hooks/useChatSessions'
 import { useSelectionAgent } from '../hooks/useSelectionAgent'
+import { useSuggestions } from '../hooks/useSuggestions'
+import { useChatEditPreview } from '../hooks/useChatEditPreview'
 import { useWorkspaceSetup } from '../hooks/useWorkspaceSetup'
 import { getCanvHistory } from '../lib/history'
+import { type AiEditHistoryClient } from '../lib/history/withAiEditSnapshot'
 import { getFs } from '../lib/fs'
 import { ServicesContext } from './useService'
 import type { ICanvServices } from './index'
@@ -126,6 +129,43 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
     historyClient,
   })
 
+  const suggestions = useSuggestions({
+    getActiveEditor: editorRegistry.getActiveEditor,
+    activeMarkdownRel: workspace.activeMarkdownRel,
+    // canv-history client is a structural superset of AiEditHistoryClient.
+    historyClient: historyClient as unknown as AiEditHistoryClient | null,
+    flushAll: workspace.flushAll,
+    saveActive: () => {
+      const view = editorRegistry.getActiveEditor()
+      const rel = workspace.activeMarkdownRel
+      if (view && rel) workspace.saveTab(rel, view.state.doc.toString())
+    },
+    startSeededChat: chatSessions.startSeededChat,
+    showChatTab: () => ideLayout.showBottomTab('chat'),
+  })
+
+  const chatEditPreview = useChatEditPreview({
+    pendingApprovals: chatSessions.pendingApprovals,
+    onApprovalDecide: chatSessions.onApprovalDecide,
+    getActiveEditor: editorRegistry.getActiveEditor,
+    activeMarkdownRel: workspace.activeMarkdownRel,
+  })
+
+  // Extend the suggestions callbacks with the chat-edit approval resolvers.
+  // Memoised so its identity is stable across renders (it feeds the services
+  // useMemo below); recomputed only when suggestions or the resolvers change.
+  const suggestionsWithEditPreview = useMemo(
+    () => ({
+      ...suggestions,
+      callbacks: {
+        ...suggestions.callbacks,
+        approveEdit: chatEditPreview.approveEdit,
+        rejectEdit: chatEditPreview.rejectEdit,
+      },
+    }),
+    [suggestions, chatEditPreview.approveEdit, chatEditPreview.rejectEdit],
+  )
+
   const selectionAgent = useSelectionAgent({
     settings: settingsApi.settings,
     modelForAgent: settingsApi.modelForAgent,
@@ -137,6 +177,8 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
     showToast: notifications.showToast,
     openSettingsTab: workspace.openSettingsTab,
     showBottomTab: ideLayout.showBottomTab,
+    emitDiffSuggestion: suggestions.addDiffSuggestion,
+    emitAnnotation: suggestions.addAnnotation,
   })
 
   const services = useMemo<ICanvServices>(() => ({
@@ -149,8 +191,9 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
     notifications,
     ideLayout,
     modes: { ...modes, profile, setProfile },
-    chatSessions,
+    chatSessions: { ...chatSessions, inlinePreviewedCallId: chatEditPreview.previewedCallId },
     selectionAgent,
+    suggestions: suggestionsWithEditPreview,
     lint,
     workspaceFileOps,
     editorStats,
@@ -169,7 +212,9 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
     profile,
     setProfile,
     chatSessions,
+    chatEditPreview.previewedCallId,
     selectionAgent,
+    suggestionsWithEditPreview,
     lint,
     workspaceFileOps,
     editorStats,
