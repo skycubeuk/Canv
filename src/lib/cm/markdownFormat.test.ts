@@ -41,6 +41,13 @@ describe('toggleInline', () => {
     expect(v.state.selection.main.empty).toBe(true)
     expect(v.state.selection.main.from).toBe(5) // between the two '*'
   })
+
+  it('does not strip to empty when the selection is only the markers', () => {
+    const v = viewWith('a ** b', 2, 4) // selects "**"
+    toggleInline(v, '*')
+    // must NOT become 'a  b' (content deleted); falls through to wrap instead
+    expect(v.state.doc.toString()).not.toBe('a  b')
+  })
 })
 
 describe('cycleHeading', () => {
@@ -60,6 +67,12 @@ describe('cycleHeading', () => {
     const v = viewWith('one\n## two', 0, 'one\n## two'.length)
     cycleHeading(v)
     expect(v.state.doc.toString()).toBe('# one\n# two')
+  })
+
+  it('strips an H4+ heading down to none rather than corrupting it', () => {
+    const v = viewWith('#### deep', 0)
+    cycleHeading(v) // level clamped to 3 -> target 0 -> strip
+    expect(v.state.doc.toString()).toBe('deep')
   })
 })
 
@@ -86,5 +99,12 @@ describe('insertLink', () => {
     const v = viewWith('see  here', 4)
     insertLink(v, 'https://x.dev')
     expect(v.state.doc.toString()).toBe('see [](https://x.dev) here')
+  })
+
+  it('parks the cursor inside the parens for an empty selection with no url', () => {
+    const v = viewWith('see  here', 4)
+    insertLink(v)
+    expect(v.state.doc.toString()).toBe('see []() here')
+    expect(v.state.selection.main.from).toBe('see []('.length) // inside the ()
   })
 })

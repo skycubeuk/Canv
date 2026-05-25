@@ -10,7 +10,7 @@ export type InlineMarker = '**' | '*' | '~~' | '`'
  * - Otherwise: wrap, keeping the selection on the inner text.
  * Emits a single transaction (one undo step). Returns true (command-style).
  */
-export function toggleInline(view: EditorView, marker: InlineMarker | string): boolean {
+export function toggleInline(view: EditorView, marker: InlineMarker): boolean {
   const { state } = view
   const { from, to } = state.selection.main
   const len = marker.length
@@ -41,7 +41,7 @@ export function toggleInline(view: EditorView, marker: InlineMarker | string): b
     return true
   }
 
-  if (inner.length >= len * 2 && inner.startsWith(marker) && inner.endsWith(marker)) {
+  if (inner.length > len * 2 && inner.startsWith(marker) && inner.endsWith(marker)) {
     const innerText = inner.slice(len, inner.length - len)
     view.dispatch({
       changes: { from, to, insert: innerText },
@@ -62,7 +62,7 @@ export function toggleInline(view: EditorView, marker: InlineMarker | string): b
   return true
 }
 
-const HEADING_RE = /^(#{1,3}) /
+const HEADING_RE = /^(#{1,6}) /
 
 /**
  * Cycle the heading level of every line the selection touches:
@@ -76,8 +76,8 @@ export function cycleHeading(view: EditorView): boolean {
   const lastLine = state.doc.lineAt(sel.to)
 
   const firstMatch = HEADING_RE.exec(firstLine.text)
-  const currentLevel = firstMatch ? firstMatch[1].length : 0
-  const target = (currentLevel + 1) % 4
+  const level = Math.min(firstMatch ? firstMatch[1].length : 0, 3)
+  const target = (level + 1) % 4
   const prefix = target === 0 ? '' : '#'.repeat(target) + ' '
 
   const changes: { from: number; to: number; insert: string }[] = []
