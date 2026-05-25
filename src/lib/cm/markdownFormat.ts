@@ -61,3 +61,33 @@ export function toggleInline(view: EditorView, marker: InlineMarker | string): b
   })
   return true
 }
+
+const HEADING_RE = /^(#{1,3}) /
+
+/**
+ * Cycle the heading level of every line the selection touches:
+ * none -> `# ` -> `## ` -> `### ` -> none. The target level is derived from
+ * the first touched line and applied uniformly. One transaction.
+ */
+export function cycleHeading(view: EditorView): boolean {
+  const { state } = view
+  const sel = state.selection.main
+  const firstLine = state.doc.lineAt(sel.from)
+  const lastLine = state.doc.lineAt(sel.to)
+
+  const firstMatch = HEADING_RE.exec(firstLine.text)
+  const currentLevel = firstMatch ? firstMatch[1].length : 0
+  const target = (currentLevel + 1) % 4
+  const prefix = target === 0 ? '' : '#'.repeat(target) + ' '
+
+  const changes: { from: number; to: number; insert: string }[] = []
+  for (let n = firstLine.number; n <= lastLine.number; n++) {
+    const line = state.doc.line(n)
+    const m = HEADING_RE.exec(line.text)
+    const stripLen = m ? m[0].length : 0
+    changes.push({ from: line.from, to: line.from + stripLen, insert: prefix })
+  }
+
+  view.dispatch({ changes, userEvent: 'input' })
+  return true
+}

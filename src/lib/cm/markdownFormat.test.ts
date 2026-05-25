@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { EditorState } from '@codemirror/state'
 import { EditorView } from '@codemirror/view'
-import { toggleInline } from './markdownFormat'
+import { toggleInline, cycleHeading } from './markdownFormat'
 
 /** Build a detached EditorView with the given doc and a [from,to] selection. */
 function viewWith(doc: string, from: number, to = from): EditorView {
@@ -40,5 +40,25 @@ describe('toggleInline', () => {
     expect(v.state.doc.toString()).toBe('the ** sat')
     expect(v.state.selection.main.empty).toBe(true)
     expect(v.state.selection.main.from).toBe(5) // between the two '*'
+  })
+})
+
+describe('cycleHeading', () => {
+  it('cycles a single line none -> H1 -> H2 -> H3 -> none', () => {
+    const v = viewWith('hello', 0)
+    cycleHeading(v)
+    expect(v.state.doc.toString()).toBe('# hello')
+    cycleHeading(v)
+    expect(v.state.doc.toString()).toBe('## hello')
+    cycleHeading(v)
+    expect(v.state.doc.toString()).toBe('### hello')
+    cycleHeading(v)
+    expect(v.state.doc.toString()).toBe('hello')
+  })
+
+  it('applies one target level to every line the selection touches', () => {
+    const v = viewWith('one\n## two', 0, 'one\n## two'.length)
+    cycleHeading(v)
+    expect(v.state.doc.toString()).toBe('# one\n# two')
   })
 })
