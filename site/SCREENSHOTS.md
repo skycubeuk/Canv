@@ -12,6 +12,7 @@ Replace each placeholder PNG with a real screenshot before launch.
 | `capability-diff.png` | "Inline diff and one-click apply" card | A side-by-side diff inside the editor with both Apply and Reject buttons visible. |
 | `capability-history.png` | "Revision archaeology" card | The History sidebar tab with a list of workspace snapshots. |
 | `capability-chat.png` | "Talk to an AI alongside your draft" card | The chat panel beside the editor mid-conversation, ideally with a tool-call chip visible. |
+| `capability-readaloud.png` | "Listen to your writing" card | The Recordings panel with a couple of readings, one playing — footer transport (scrubber, speed) and the now-playing strip in the status bar visible, alongside the editor. |
 
 ## Conventions
 

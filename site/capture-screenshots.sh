@@ -87,6 +87,14 @@ In the chat panel, ask: 'Read chapter 2 and tell me what is making the middle dr
 Capture mid-response — ideally with a streaming reply visible
 or a tool-call chip showing the AI reading the file."
 
+shot "capability-readaloud.png" 1200 800 \
+"Set an ElevenLabs key and a default voice in Settings → Read aloud (ElevenLabs).
+Open chapter-02.md, select a paragraph, and click the speaker on the selection
+toolbar (or run 'Read aloud: document') to generate a reading.
+Open the Recordings panel from the left activity bar so the list of readings is
+visible with one playing — the footer transport and the now-playing strip in the
+status bar should both show. Frame the Recordings panel alongside the editor."
+
 echo
 echo "All shots captured into ${OUTDIR}/"
 echo "Next: cd site && npm run build  (and reload the dev server)."

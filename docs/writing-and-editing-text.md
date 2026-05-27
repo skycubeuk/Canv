@@ -30,7 +30,9 @@ matching markdown.
 
 The same floating toolbar also carries the profile's AI actions (Polish, Make
 Shorter, Brainstorm, and so on). Those are covered in
-[Getting the AI to help](getting-the-ai-to-help.md).
+[Getting the AI to help](getting-the-ai-to-help.md). A speaker control on the
+toolbar reads your selection aloud — see
+[Listening to your writing](listening-to-your-writing.md).
 
 ## Reading the rendered page
 
