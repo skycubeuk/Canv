@@ -3,7 +3,7 @@ const fsp = require('node:fs/promises')
 const fs = require('node:fs')
 const path = require('node:path')
 const os = require('node:os')
-const { writeRecording, readIndex, appendRow, deleteRecording, setDuration } = require('./store.cjs')
+const { writeRecording, readIndex, appendRow, deleteRecording, setDuration, recordingFilePath } = require('./store.cjs')
 
 async function tmpDir() { return fsp.mkdtemp(path.join(os.tmpdir(), 'tts-')) }
 
@@ -40,5 +40,13 @@ describe('recordings store', () => {
     await appendRow(dir, { id: 'rec_1', file: 'rec_1.mp3', label: '', createdAt: 1, source: { path: null, kind: 'document' }, voiceId: 'v', voiceName: '', modelId: 'm', characters: 0, durationMs: null, origin: 'user' })
     const index = await setDuration(dir, 'rec_1', 4200)
     expect(index.recordings[0].durationMs).toBe(4200)
+  })
+
+  it('recordingFilePath accepts a plain filename and rejects traversal', () => {
+    const dir = '/ws/.canv/recordings'
+    expect(require('path').normalize(recordingFilePath(dir, 'rec_ab12.mp3'))).toBe(require('path').normalize('/ws/.canv/recordings/rec_ab12.mp3'))
+    for (const bad of ['../config.json', 'sub/../../../passwd', '/etc/passwd', '..', '', 'a/../../b']) {
+      expect(() => recordingFilePath(dir, bad)).toThrow(/invalid recording file/)
+    }
   })
 })

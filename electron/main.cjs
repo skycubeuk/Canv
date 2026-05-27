@@ -481,13 +481,20 @@ app.whenReady().then(() => {
   // webSecurity blocks file:// reads and canvFS.readFile is text-only, so the
   // audio bytes are streamed here. URL shape: canv-rec://recordings/<file>.
   const { RECORDINGS_REL } = require('./services/tts/index.cjs')
+  const ttsStore = require('./services/tts/store.cjs')
   protocol.handle('canv-rec', async (request) => {
     try {
+      // Defence-in-depth: reject traversal in the raw string before URL/decode
+      // can normalise %2e%2e back into '../'. The store helper below is the
+      // real confinement; this just fails fast on obviously hostile URLs.
+      if (/%2e%2e|\.\./i.test(request.url)) return new Response('bad request', { status: 400 })
       const u = new URL(request.url)
       const file = decodeURIComponent(u.pathname.replace(/^\/+/, ''))
       const root = deps.getWorkspace()
       if (!root) return new Response('no workspace', { status: 404 })
-      const abs = deps.safeResolve(root, path.join(RECORDINGS_REL, file)) // throws on traversal
+      const recDir = deps.safeResolve(root, RECORDINGS_REL)
+      // recordingFilePath confines `file` to recDir (throws on '..'/absolute/escape).
+      const abs = ttsStore.recordingFilePath(recDir, file)
       const data = await fsp.readFile(abs)
       return new Response(data, { status: 200, headers: { 'Content-Type': 'audio/mpeg' } })
     } catch (e) {

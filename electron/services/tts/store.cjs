@@ -54,4 +54,23 @@ async function setDuration(dir, id, durationMs) {
   return writeIndex(dir, index)
 }
 
-module.exports = { readIndex, writeIndex, writeRecording, appendRow, deleteRecording, setDuration }
+/**
+ * Resolve a recording filename to an absolute path confined to `dir`.
+ * Pure + synchronous so the canv-rec protocol handler and tests share one
+ * traversal guard. `file` must be a bare filename (or forward-slash subpath
+ * with no '.'/'..' segments); anything that could escape `dir` throws.
+ */
+function recordingFilePath(dir, file) {
+  if (typeof file !== 'string' || !file) throw new Error('invalid recording file')
+  // Reject traversal/absolute BEFORE join: no '..' or '.' segments, no leading slash/drive.
+  const segs = file.split(/[\\/]/)
+  if (segs.some((s) => s === '..' || s === '.' || s === '')) throw new Error('invalid recording file')
+  if (path.isAbsolute(file)) throw new Error('invalid recording file')
+  const abs = path.join(dir, file)
+  // Belt-and-suspenders: final path must stay inside dir.
+  const rel = path.relative(dir, abs)
+  if (rel.startsWith('..') || path.isAbsolute(rel)) throw new Error('invalid recording file')
+  return abs
+}
+
+module.exports = { readIndex, writeIndex, writeRecording, appendRow, deleteRecording, setDuration, recordingFilePath }
