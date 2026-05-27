@@ -13,6 +13,7 @@ const extService      = require('./services/extensions/index.cjs')
 const wsService       = require('./services/workspace/index.cjs')
 const mcpService      = require('./services/mcp/index.cjs')
 const annotationsService = require('./services/annotations/index.cjs')
+const ttsService         = require('./services/tts/index.cjs').createTtsService()
 const uriDispatch     = require('./uri-dispatch.cjs')
 
 let extensionRuntime = null
@@ -471,6 +472,7 @@ app.whenReady().then(() => {
   extService.registerIpcHandlers(ipcMain, deps)
   wsService.registerIpcHandlers(ipcMain, deps)
   annotationsService.registerIpcHandlers(ipcMain, deps)
+  ttsService.registerIpcHandlers(ipcMain, deps)
   // Renderer pushes the active theme's surface + foreground colours so the
   // Chromium-drawn min/max/close overlay matches the in-app theme (not just
   // OS dark/light). No-op on macOS — traffic lights aren't recolourable.

@@ -238,6 +238,15 @@ if (!isDockPopout()) {
     save: (rel, records) => ipcRenderer.invoke('canvAnnotations:save', rel, records),
   })
 
+  contextBridge.exposeInMainWorld('canvTTS', {
+    generate:    (params) => ipcRenderer.invoke('canvTTS:generate', params),
+    list:        () => ipcRenderer.invoke('canvTTS:list'),
+    delete:      (id) => ipcRenderer.invoke('canvTTS:delete', id),
+    setDuration: (id, ms) => ipcRenderer.invoke('canvTTS:setDuration', id, ms),
+    voices:      (provider, apiKey) => ipcRenderer.invoke('canvTTS:voices', provider, apiKey),
+    models:      (provider, apiKey) => ipcRenderer.invoke('canvTTS:models', provider, apiKey),
+  })
+
   contextBridge.exposeInMainWorld('canvExtensionsDev', {
     spawnTest:   (fixtureName, bounds) => ipcRenderer.invoke('canvExtDev:spawnTest', fixtureName, bounds),
     destroyTest: (id) => ipcRenderer.invoke('canvExtDev:destroyTest', id),
