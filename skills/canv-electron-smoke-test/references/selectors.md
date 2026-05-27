@@ -57,6 +57,7 @@ Each button uses `aria-label={label}` and a matching `title`. Built-in tabs (in 
 | Search | `button[aria-label="Search"]` | |
 | History | `button[aria-label="History"]` | Gated on `setup.config.revisionArchaeology.enabled === true` |
 | Sites | `button[aria-label="Sites"]` | |
+| Recordings | `button[aria-label="Recordings"]` | Read-aloud (TTS) recordings panel |
 | Extensions | `button[aria-label="Extensions"]` | |
 
 Extension-contributed activity-bar entries follow `button[aria-label="<panel.title>"]`. React key is `ext:<extensionId>:<panelId>` (not in DOM).
@@ -151,6 +152,33 @@ Renders `ExtensionsTab` containing `ExtensionRow` entries plus an `InstallExtens
 | Trust banner — Review in Sidebar | `button:has-text("Review in Sidebar")` |
 | Trust banner — Always disable | `button:has-text("Always disable")` |
 | Trust banner — Trust this workspace | `button:has-text("Trust this workspace")` |
+
+## Sidebar — Recordings tab (read-aloud / TTS)
+
+Lists generated audio recordings; the panel title bar carries the "Read this document" action (in the panel header, not the body).
+
+| Affordance | Selector | Notes |
+|------------|----------|-------|
+| Recording row | `aside[aria-label="Sidebar"] li` | Each `<li>`: play/pause button, label, duration span (`m:ss` or `--:--`), delete button |
+| Play row | `button[aria-label="Play <label>"]` | Dynamic — `<label>` is the recording label (doc path or text snippet) |
+| Pause row (when playing) | `button[aria-label="Pause <label>"]` | Same button, flips while that row plays |
+| Delete row | `button[aria-label="Delete <label>"]` | Dynamic |
+| Empty state | `text="No recordings yet"` | Shown when there are no recordings |
+| Read this document (header action) | a header-action icon button in the panel header (`SidebarIconButton`) wired to command `tts.readDocument` |
+| Now-playing pill (status bar) | rendered by `TtsNowPlaying` in the status bar while audio plays; Pause button `aria-label="Pause"`, label text = playing recording's label |
+
+Recordings can also be triggered without this panel: the floating selection toolbar's speaker (`[data-testid="floating-toolbar"]` → button `aria-label="Read aloud"`, with a `aria-label="Choose voice"` chevron), the command palette (`Read aloud: document`), and the editor right-click menu ("Read aloud", adaptive selection-vs-document). The recordings bridge is `window.canvTTS` (`generate`/`list`/`delete`/`setDuration`/`voices`/`models`); audio is served via the privileged `canv-rec://recordings/<file>` protocol (CSP must allow `media-src canv-rec:`).
+
+## Settings — Read aloud (ElevenLabs)
+
+Lives inside the `provider-keys` section (`[data-testid="settings-section-provider-keys"]`). Search keywords include `tts` / `elevenlabs` / `voice` / `read aloud` / `speech`.
+
+| Affordance | Selector |
+|------------|----------|
+| ElevenLabs API key input | `input[placeholder="ElevenLabs API key"]` (labelled `<Field label="Read aloud (ElevenLabs) — API key">`) |
+| Default voice select | inside `<Field label="Default voice">` — a `<select>` populated from `getTts().voices(provider, key)` |
+| Default model select | inside `<Field label="Default model">` — `<select>` populated from `getTts().models(provider, key)` |
+| Refresh voices | `button:has-text("Refresh voices")` |
 
 ## Outline pane (in sidebar — only when an active document has headings)
 
