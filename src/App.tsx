@@ -28,6 +28,7 @@ import './contributions/commands.contribution'
 import './contributions/dock-bridge.contribution'
 import './contributions/mcp.contribution'
 import './contributions/extension-host-bridge.contribution'
+import './contributions/tts.contribution'
 
 export default function App() {
   const [migrationOpen, setMigrationOpen] = useState(() => isElectron() && legacyStateExists())

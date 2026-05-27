@@ -12,8 +12,10 @@ import { tabSourceFromMarkdown, type OpenTabSource } from './useLintIssues'
 import { useContextMenu, type ContextMenuItem } from '../lib/contextMenu'
 import { tabKey } from '../lib/tabKey'
 import type { useWorkspace } from './useWorkspace'
+import type { useRecordings } from './useRecordings'
 
 type WorkspaceApi = ReturnType<typeof useWorkspace>
+type RecordingsApi = ReturnType<typeof useRecordings>
 
 export function editorMapKey(groupId: EditorGroupId, rel: string): string {
   return `${groupId}:${rel}`
@@ -21,6 +23,9 @@ export function editorMapKey(groupId: EditorGroupId, rel: string): string {
 
 export interface UseEditorRegistryArgs {
   workspace: WorkspaceApi
+  /** Optional recordings service — when provided, a "Read aloud" entry is
+   *  included in the editor right-click context menu. */
+  recordings?: RecordingsApi
 }
 
 export interface UseEditorRegistryApi {
@@ -48,7 +53,7 @@ export interface UseEditorRegistryApi {
 }
 
 export function useEditorRegistry(args: UseEditorRegistryArgs): UseEditorRegistryApi {
-  const { workspace } = args
+  const { workspace, recordings } = args
 
   // Map from `${groupId}:${rel}` → EditorView instance, populated when a Canvas mounts.
   const editorsRef = useRef<Map<string, EditorView>>(new Map())
@@ -64,6 +69,12 @@ export function useEditorRegistry(args: UseEditorRegistryArgs): UseEditorRegistr
   // A stable ref holds the current workspace so the getter closure never goes stale.
   const workspaceRef = useRef(workspace)
   useEffect(() => { workspaceRef.current = workspace })
+
+  // Stable ref for recordings — updated every render so the context-menu
+  // handler always calls the latest recordings.readAloud without needing
+  // to be included in the contextmenu effect's deps.
+  const recordingsRef = useRef(recordings)
+  useEffect(() => { recordingsRef.current = recordings })
   useEffect(() => {
     liveDocsChannel.setGetter((key) => {
       const view = editorsRef.current.get(key)
@@ -329,6 +340,34 @@ export function useEditorRegistry(args: UseEditorRegistryArgs): UseEditorRegistr
           onClick: () => {
             view.focus()
             cmSelectAll(view)
+          },
+        },
+        { separator: true },
+        {
+          id: 'tts.readAloud',
+          label: 'Read aloud',
+          onClick: () => {
+            const rec = recordingsRef.current
+            if (!rec) return
+            const ws = workspaceRef.current
+            const currentSel = view.state.selection.main
+            if (!currentSel.empty) {
+              const text = view.state.sliceDoc(currentSel.from, currentSel.to)
+              rec.readAloud({
+                text,
+                sourcePath: ws.activeMarkdownRel ?? null,
+                sourceKind: 'selection',
+                label: text.slice(0, 60),
+              })
+            } else {
+              const text = view.state.doc.toString()
+              rec.readAloud({
+                text,
+                sourcePath: ws.activeMarkdownRel ?? null,
+                sourceKind: 'document',
+                label: ws.activeMarkdownRel ?? 'Document',
+              })
+            }
           },
         },
       ]

@@ -71,8 +71,32 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
   const commands = useCommands()
   const contributions = useContributions()
 
+  // Recordings — depends only on settingsApi/notifications/dialogs, so it
+  // can be created before editorRegistry and passed in for the context menu.
+  const ttsSettingsEarly = (settingsApi.settings as {
+    tts?: {
+      provider?: import('../lib/tts').TtsProvider
+      apiKey?: string
+      defaultVoiceId?: string
+      defaultVoiceName?: string
+      defaultModelId?: string
+    }
+  }).tts
+  const recordings = useRecordings({
+    getProvider: () => ttsSettingsEarly?.provider ?? 'elevenlabs',
+    getApiKey: () => ttsSettingsEarly?.apiKey ?? '',
+    getDefaultVoice: () => ({
+      voiceId: ttsSettingsEarly?.defaultVoiceId ?? '',
+      voiceName: ttsSettingsEarly?.defaultVoiceName ?? '',
+    }),
+    getDefaultModel: () => ttsSettingsEarly?.defaultModelId ?? 'eleven_multilingual_v2',
+    getWorkspaceFileUrl: (file) => `canv-rec://recordings/${file}`,
+    showToast: notifications.showToast,
+    confirm: dialogs.confirm,
+  })
+
   // Editor registry + everything that consumes it.
-  const editorRegistryRaw = useEditorRegistry({ workspace })
+  const editorRegistryRaw = useEditorRegistry({ workspace, recordings })
   const onActiveEditorUpdate = useExtensionEventBridge(workspace.activeMarkdownRel)
   const editorRegistry = useMemo(
     () => ({ ...editorRegistryRaw, onActiveEditorUpdate }),
@@ -185,30 +209,6 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
     showBottomTab: ideLayout.showBottomTab,
     emitDiffSuggestion: suggestions.addDiffSuggestion,
     emitAnnotation: suggestions.addAnnotation,
-  })
-
-  // settings.tts arrives in a later task; read it through a narrow cast with
-  // safe fallbacks so the build stays green until then.
-  const ttsSettings = (settingsApi.settings as {
-    tts?: {
-      provider?: import('../lib/tts').TtsProvider
-      apiKey?: string
-      defaultVoiceId?: string
-      defaultVoiceName?: string
-      defaultModelId?: string
-    }
-  }).tts
-  const recordings = useRecordings({
-    getProvider: () => ttsSettings?.provider ?? 'elevenlabs',
-    getApiKey: () => ttsSettings?.apiKey ?? '',
-    getDefaultVoice: () => ({
-      voiceId: ttsSettings?.defaultVoiceId ?? '',
-      voiceName: ttsSettings?.defaultVoiceName ?? '',
-    }),
-    getDefaultModel: () => ttsSettings?.defaultModelId ?? 'eleven_multilingual_v2',
-    getWorkspaceFileUrl: (file) => `canv-rec://recordings/${file}`,
-    showToast: notifications.showToast,
-    confirm: dialogs.confirm,
   })
 
   const services = useMemo<ICanvServices>(() => ({
