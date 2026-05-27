@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Bold, Italic, Strikethrough, Code, Heading, Link, MessageSquarePlus, Volume2, ChevronDown } from 'lucide-react'
 import type { EditorView } from '@codemirror/view'
 import { toggleInline, cycleHeading } from '../lib/cm/markdownFormat'
@@ -42,17 +42,19 @@ export function FormatRow({ view, onLink, onAddNote, onReadAloud, ttsProvider, t
   const [voicePopoverOpen, setVoicePopoverOpen] = useState(false)
   const [voices, setVoices] = useState<VoiceOption[]>([])
   const [loadingVoices, setLoadingVoices] = useState(false)
+  const popoverRef = useRef<HTMLDivElement | null>(null)
+  // Cache the fetched voice list so re-opening the popover doesn't re-hit the API.
+  const voicesLoadedRef = useRef(false)
 
   const openVoicePopover = async () => {
-    setVoicePopoverOpen((prev) => {
-      if (prev) return false  // toggle off
-      return true
-    })
-    if (!voicePopoverOpen && isTtsAvailable() && ttsProvider && ttsApiKey) {
+    const willOpen = !voicePopoverOpen
+    setVoicePopoverOpen(willOpen)
+    if (willOpen && !voicesLoadedRef.current && isTtsAvailable() && ttsProvider && ttsApiKey) {
       setLoadingVoices(true)
       try {
         const list = await getTts().voices(ttsProvider as import('../lib/tts').TtsProvider, ttsApiKey)
         setVoices(list)
+        voicesLoadedRef.current = true
       } catch {
         setVoices([])
       } finally {
@@ -65,6 +67,19 @@ export function FormatRow({ view, onLink, onAddNote, onReadAloud, ttsProvider, t
     setVoicePopoverOpen(false)
     onReadAloud({ voiceId: voice.voiceId, voiceName: voice.name })
   }
+
+  // Dismiss the voice popover on an outside click (mirrors DocumentAgentMenu).
+  useEffect(() => {
+    if (!voicePopoverOpen) return
+    const onDocMouseDown = (e: MouseEvent) => {
+      const root = popoverRef.current
+      if (!root) return
+      if (e.target instanceof Node && root.contains(e.target)) return
+      setVoicePopoverOpen(false)
+    }
+    document.addEventListener('mousedown', onDocMouseDown)
+    return () => document.removeEventListener('mousedown', onDocMouseDown)
+  }, [voicePopoverOpen])
 
   return (
     <div className="flex items-center gap-0.5">
@@ -148,7 +163,7 @@ export function FormatRow({ view, onLink, onAddNote, onReadAloud, ttsProvider, t
       >
         <Volume2 aria-hidden className="w-4 h-4" />
       </button>
-      <div className="relative">
+      <div ref={popoverRef} className="relative">
         <button
           type="button"
           aria-label="Choose voice"
