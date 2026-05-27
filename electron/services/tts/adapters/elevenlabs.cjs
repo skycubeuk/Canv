@@ -44,14 +44,14 @@ async function synthesize({ apiKey, voiceId, modelId, text, outputFormat = DEFAU
 
 async function listVoices(apiKey, fetchImpl = globalThis.fetch) {
   const res = await fetchImpl(`${ELEVEN_BASE}/v2/voices`, { headers: { 'xi-api-key': apiKey } })
-  if (!res.ok) throw new Error(`ElevenLabs voices ${res.status}`)
+  if (!res.ok) throw parseError(res.status, await res.text().catch(() => ''))
   const data = await res.json()
   return (data.voices || []).map((v) => ({ voiceId: v.voice_id, name: v.name }))
 }
 
 async function listModels(apiKey, fetchImpl = globalThis.fetch) {
   const res = await fetchImpl(`${ELEVEN_BASE}/v1/models`, { headers: { 'xi-api-key': apiKey } })
-  if (!res.ok) throw new Error(`ElevenLabs models ${res.status}`)
+  if (!res.ok) throw parseError(res.status, await res.text().catch(() => ''))
   const data = await res.json()
   return (Array.isArray(data) ? data : []).filter((m) => m.can_do_text_to_speech).map((m) => ({ modelId: m.model_id, name: m.name }))
 }

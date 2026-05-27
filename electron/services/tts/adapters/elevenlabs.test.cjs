@@ -41,6 +41,17 @@ describe('elevenlabsAdapter.synthesize', () => {
       .rejects.toThrow(/no text/i)
   })
 
+  it('rejects the whole call if a later chunk fails (no partial audio)', async () => {
+    let n = 0
+    const fetchImpl = async () => {
+      n++
+      if (n === 2) return { ok: false, status: 500, text: async () => JSON.stringify({ detail: { message: 'boom' } }) }
+      return okAudio(Buffer.from('X'))
+    }
+    await expect(elevenlabsAdapter.synthesize({ apiKey: 'k', voiceId: 'v1', modelId: 'm', text: 'AAAA. BBBB. CCCC.', fetchImpl, charLimit: 6 }))
+      .rejects.toMatchObject({ status: 500 })
+  })
+
   it('listVoices maps the v2/voices payload', async () => {
     const fetchImpl = async (url, init) => {
       expect(url).toBe('https://api.elevenlabs.io/v2/voices')
