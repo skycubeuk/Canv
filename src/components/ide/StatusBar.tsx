@@ -45,6 +45,7 @@ export function StatusBar() {
   // TTS now-playing pill
   const playingLabel = recordings?.list?.find((r) => r.id === recordings.playingId)?.label ?? null
   const openRecordings = () => {
+    // Guards the test service stub, which omits setSidebarTab; in prod it always exists.
     if (!ideLayout.setSidebarTab) return
     ideLayout.setSidebarTab('recordings')
     if (ideLayout.layout.sidebar && !ideLayout.layout.sidebar.visible) {

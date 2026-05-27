@@ -64,7 +64,9 @@ export function useRecordings(cfg: RecordingsConfig) {
     const row = list.find((r) => r.id === id)
     if (!a || !row) return
     const url = cfg.getWorkspaceFileUrl(row.file)
-    if (a.src !== url) { a.src = url; a.load() }
+    // Switching tracks: reset transport state so the footer scrubber never has
+    // value > max while the new track's metadata/timeupdate events are pending.
+    if (a.src !== url) { a.src = url; a.load(); setPosition(0); setDuration(0) }
     a.playbackRate = rate
     void a.play().catch(() => {})
     setPlayingId(id)
@@ -96,6 +98,8 @@ export function useRecordings(cfg: RecordingsConfig) {
       setList((prev) => [rec, ...prev.filter((r) => r.id !== rec.id)])
       setPlayingId(rec.id)
       const a = audioRef.current
+      // New track: reset transport state before the new src's events arrive.
+      setPosition(0); setDuration(0)
       if (a) { a.src = cfg.getWorkspaceFileUrl(rec.file); a.playbackRate = rate; void a.play().catch(() => {}) }
     } catch (err) {
       cfg.showToast(err instanceof Error ? err.message : 'Read-aloud failed.')
