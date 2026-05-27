@@ -117,7 +117,7 @@ export function SettingsTab(props: Props) {
     {
       id: 'provider-keys',
       title: 'API keys & endpoints',
-      keywords: ['api', 'key', 'anthropic', 'openai', 'ollama', 'url', 'endpoint', 'base url', 'refresh'],
+      keywords: ['api', 'key', 'anthropic', 'openai', 'ollama', 'url', 'endpoint', 'base url', 'refresh', 'tts', 'elevenlabs', 'voice', 'read aloud', 'speech'],
       body: (
         <>
           <p className="text-xs text-muted mb-3">
