@@ -716,6 +716,7 @@ function TtsVoiceModelFields({ settings, onUpdate }: { settings: Settings; onUpd
     } catch { /* surfaced on next generate */ } finally { setLoading(false) }
   }, [provider, key])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- setState calls are inside an async callback, not synchronously in the effect body
   useEffect(() => { void load() }, [load])
 
   if (!key) return <p className="text-xs text-muted">Enter a key to load voices and models.</p>
