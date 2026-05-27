@@ -5,6 +5,7 @@ import { useContextMenu } from '../lib/contextMenu'
 import { useService } from '../services/useService'
 import { FormatRow } from './FormatRow'
 import { insertLink } from '../lib/cm/markdownFormat'
+import { placeToolbarTop } from '../lib/floatingToolbarPlacement'
 
 interface Props {
   onAgent: (agent: Action, range: { from: number; to: number }, text: string, instruction?: string) => void
@@ -13,11 +14,17 @@ interface Props {
 }
 
 interface Pos {
-  top: number
+  /** Viewport-relative top/bottom of the selected line(s); placement is derived in a layout effect. */
+  selTop: number
+  selBottom: number
   left: number
 }
 
 type Mode = { kind: 'idle' } | { kind: 'presets' } | { kind: 'instruction'; agent: Action } | { kind: 'link' }
+
+/** Delay before the toolbar appears after a selection settles — kills mid-drag flicker
+ * and gives double-click a tidy pause instead of popping instantly. */
+const SHOW_DELAY_MS = 200
 
 export function FloatingToolbar(props: Props) {
   const { onAgent, onAddNote } = props
@@ -36,6 +43,8 @@ export function FloatingToolbar(props: Props) {
   const [presetsAbove, setPresetsAbove] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const presetsRef = useRef<HTMLDivElement>(null)
+  const pointerDownRef = useRef(false)
+  const showTimerRef = useRef<number | null>(null)
 
   const { isOpen: ctxOpen } = useContextMenu()
 
@@ -68,11 +77,30 @@ export function FloatingToolbar(props: Props) {
     const startCoords = view.coordsAtPos(sel.from)
     const endCoords = view.coordsAtPos(sel.to)
     if (!startCoords || !endCoords) { setPos(null); return }
-    const top = Math.min(startCoords.top, endCoords.top) - 48
+    const selTop = Math.min(startCoords.top, endCoords.top)
+    const selBottom = Math.max(startCoords.bottom, endCoords.bottom)
     const left = (startCoords.left + endCoords.right) / 2
-    setPos({ top: Math.max(top, 8), left })
+    setPos({ selTop, selBottom, left })
     setSelection({ from: sel.from, to: sel.to, text })
   }, [view])
+
+  // Hide without churning renders: setPos/setSelection bail on null; setMode bails when
+  // already idle. Lets us call hide() every rAF frame during a drag without re-rendering.
+  const hide = useCallback(() => {
+    setPos(null)
+    setSelection(null)
+    setMode((m) => (m.kind === 'idle' ? m : { kind: 'idle' }))
+  }, [])
+
+  // Debounced show — the "tidy delay". Resets on each call so rapid selection changes
+  // (drag, shift+arrow) only resolve once the selection settles.
+  const requestShow = useCallback(() => {
+    if (showTimerRef.current !== null) clearTimeout(showTimerRef.current)
+    showTimerRef.current = window.setTimeout(() => {
+      showTimerRef.current = null
+      recompute()
+    }, SHOW_DELAY_MS)
+  }, [recompute])
 
   // Self-subscribe to selection changes via a rAF poll on the view's selection
   // range. Previously the parent (App.tsx) held a `selectionTick` useState that
@@ -82,23 +110,58 @@ export function FloatingToolbar(props: Props) {
   useEffect(() => {
     if (!view) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: clear toolbar state when the active editor goes away
-      recompute()
+      hide()
       return
     }
     let raf = 0
     let lastKey = `${view.state.selection.main.from}-${view.state.selection.main.to}-${view.state.doc.length}`
+    // On mount/editor-swap there's no in-flight drag, so reflect any existing selection now.
     recompute()
     const tick = () => {
       const key = `${view.state.selection.main.from}-${view.state.selection.main.to}-${view.state.doc.length}`
       if (key !== lastKey) {
         lastKey = key
-        recompute()
+        const sel = view.state.selection.main
+        const hasText = !sel.empty && view.state.sliceDoc(sel.from, sel.to).trim().length > 0
+        // While the mouse is held (drag-selecting) keep it hidden — the toolbar would
+        // otherwise pop up over the text and chase the cursor. mouseup shows it.
+        if (pointerDownRef.current || !hasText) hide()
+        else requestShow() // keyboard / programmatic selection: debounced show
       }
       raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(raf)
-  }, [view, recompute])
+    return () => {
+      cancelAnimationFrame(raf)
+      if (showTimerRef.current !== null) { clearTimeout(showTimerRef.current); showTimerRef.current = null }
+    }
+  }, [view, recompute, requestShow, hide])
+
+  // Gate showing on pointer state: hide while dragging, reveal (after the tidy delay) on
+  // release. mouseup is on window so a drag that ends outside the editor still resolves.
+  useEffect(() => {
+    if (!view) return
+    const editorEl = view.dom
+    const onDown = () => {
+      pointerDownRef.current = true
+      if (showTimerRef.current !== null) { clearTimeout(showTimerRef.current); showTimerRef.current = null }
+      hide()
+    }
+    const onUp = () => {
+      if (!pointerDownRef.current) return
+      pointerDownRef.current = false
+      const sel = view.state.selection.main
+      const hasText = !sel.empty && view.state.sliceDoc(sel.from, sel.to).trim().length > 0
+      if (hasText) requestShow()
+      else hide()
+    }
+    editorEl.addEventListener('mousedown', onDown)
+    window.addEventListener('mouseup', onUp)
+    return () => {
+      editorEl.removeEventListener('mousedown', onDown)
+      window.removeEventListener('mouseup', onUp)
+    }
+  }, [view, requestShow, hide])
 
   // Layout-only events (window resize, scroll) — same as before.
   useEffect(() => {
@@ -132,6 +195,14 @@ export function FloatingToolbar(props: Props) {
     if (!ref.current || !pos) return
     const el = ref.current
     const margin = 8
+    // Vertical: anchor by the measured toolbar height so a multi-row toolbar clears the
+    // selection instead of sitting on top of it; flip below when there's no room above.
+    el.style.top = `${placeToolbarTop({
+      selTop: pos.selTop,
+      selBottom: pos.selBottom,
+      toolbarHeight: el.offsetHeight,
+      viewportHeight: window.innerHeight,
+    })}px`
     el.style.transform = 'translateX(-50%)'
     const rect = el.getBoundingClientRect()
     const vw = window.innerWidth
@@ -203,7 +274,7 @@ export function FloatingToolbar(props: Props) {
     <div
       ref={ref}
       data-testid="floating-toolbar"
-      style={{ top: pos.top, left: pos.left, transform: 'translateX(-50%)' }}
+      style={{ top: pos.selTop, left: pos.left, transform: 'translateX(-50%)' }}
       className="fixed z-40 bg-elev border border-default rounded-lg shadow-lg p-1"
       onMouseDown={(e) => e.preventDefault()}
     >
