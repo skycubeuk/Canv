@@ -2,6 +2,7 @@ import { MessageSquare, Settings } from 'lucide-react'
 import { useContributions } from '../../hooks/useContributions'
 import { useService } from '../../services/useService'
 import { StatusBarItem } from './StatusBarItem'
+import { TtsNowPlaying } from './TtsNowPlaying'
 
 function basenameOrNull(p: string | null): string {
   if (!p) return ''
@@ -16,6 +17,7 @@ export function StatusBar() {
   const editorStats = useService('editorStats')
   const ideLayout = useService('ideLayout')
   const profilePicker = useService('profilePicker')
+  const recordings = useService('recordings')
 
   const saveState: 'saved' | 'unsaved' | 'saving' | 'conflict' = workspace.conflict
     ? 'conflict'
@@ -39,6 +41,18 @@ export function StatusBar() {
   const onClickProfile = profilePicker.openSwitcher
   const onClickApiKeyWarning = () => workspace.openSettingsTab()
   const onOpenSettings = () => workspace.openSettingsTab()
+
+  // TTS now-playing pill
+  const playingLabel = recordings?.list?.find((r) => r.id === recordings.playingId)?.label ?? null
+  const openRecordings = () => {
+    // Guards the test service stub, which omits setSidebarTab; in prod it always exists.
+    if (!ideLayout.setSidebarTab) return
+    ideLayout.setSidebarTab('recordings')
+    if (ideLayout.layout.sidebar && !ideLayout.layout.sidebar.visible) {
+      ideLayout.toggleSidebar?.()
+    }
+  }
+
   const chatVisible = ideLayout.layout.bottom.visible && ideLayout.layout.bottom.activeTab === 'chat'
   const onToggleChat = () => {
     const { visible, activeTab } = ideLayout.layout.bottom
@@ -125,6 +139,17 @@ export function StatusBar() {
           command={item.command} onCommandInvoke={onCommandInvoke}
         />
       ))}
+
+      {playingLabel && (
+        <>
+          <span aria-hidden className="w-px h-3 bg-border-default" />
+          <TtsNowPlaying
+            playingLabel={playingLabel}
+            onPause={() => recordings?.pause?.()}
+            onOpen={openRecordings}
+          />
+        </>
+      )}
 
       <div className="ml-auto flex items-center gap-3">
         {rightItems.map((item) => (

@@ -96,6 +96,14 @@ const MaxOutputTokens = z.object({
 
 const BaseUrls = z.partialRecord(Provider, z.string()).default({ ollama: '' })
 
+const Tts = z.object({
+  provider: z.enum(['elevenlabs']).default('elevenlabs'),  // adapter id; enum grows per provider
+  apiKey: z.string().default(''),
+  defaultVoiceId: z.string().default(''),
+  defaultVoiceName: z.string().default(''),
+  defaultModelId: z.string().default('eleven_multilingual_v2'),
+}).default({ provider: 'elevenlabs', apiKey: '', defaultVoiceId: '', defaultVoiceName: '', defaultModelId: 'eleven_multilingual_v2' })
+
 export const SettingsSchema = z.object({
   provider: Provider.default('anthropic').meta({
     ui: 'auto', section: 'provider', label: 'Default provider', scope: 'workspace',
@@ -141,6 +149,7 @@ export const SettingsSchema = z.object({
     ui: 'auto', section: 'chat', label: 'Auto-scroll chat',
   }),
   lintRules: LintRules,  // bespoke UI (toggle group)
+  tts: Tts,
   // Permissive storage shape on purpose: the SchemaSettingsForm-driven editor
   // allows partially-filled rows while the user types (name blank, command
   // blank, etc.) — those would fail the strict per-item schema and, if the

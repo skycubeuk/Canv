@@ -17,6 +17,7 @@ import { useProfilePicker } from '../hooks/useProfilePicker'
 import { useChatSessions } from '../hooks/useChatSessions'
 import { useSelectionAgent } from '../hooks/useSelectionAgent'
 import { useSuggestions } from '../hooks/useSuggestions'
+import { useRecordings } from '../hooks/useRecordings'
 import { useChatEditPreview } from '../hooks/useChatEditPreview'
 import { useWorkspaceSetup } from '../hooks/useWorkspaceSetup'
 import { getCanvHistory } from '../lib/history'
@@ -70,8 +71,32 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
   const commands = useCommands()
   const contributions = useContributions()
 
+  // Recordings — depends only on settingsApi/notifications/dialogs, so it
+  // can be created before editorRegistry and passed in for the context menu.
+  const ttsSettingsEarly = (settingsApi.settings as {
+    tts?: {
+      provider?: import('../lib/tts').TtsProvider
+      apiKey?: string
+      defaultVoiceId?: string
+      defaultVoiceName?: string
+      defaultModelId?: string
+    }
+  }).tts
+  const recordings = useRecordings({
+    getProvider: () => ttsSettingsEarly?.provider ?? 'elevenlabs',
+    getApiKey: () => ttsSettingsEarly?.apiKey ?? '',
+    getDefaultVoice: () => ({
+      voiceId: ttsSettingsEarly?.defaultVoiceId ?? '',
+      voiceName: ttsSettingsEarly?.defaultVoiceName ?? '',
+    }),
+    getDefaultModel: () => ttsSettingsEarly?.defaultModelId ?? 'eleven_multilingual_v2',
+    getWorkspaceFileUrl: (file) => `canv-rec://recordings/${file}`,
+    showToast: notifications.showToast,
+    confirm: dialogs.confirm,
+  })
+
   // Editor registry + everything that consumes it.
-  const editorRegistryRaw = useEditorRegistry({ workspace })
+  const editorRegistryRaw = useEditorRegistry({ workspace, recordings })
   const onActiveEditorUpdate = useExtensionEventBridge(workspace.activeMarkdownRel)
   const editorRegistry = useMemo(
     () => ({ ...editorRegistryRaw, onActiveEditorUpdate }),
@@ -199,6 +224,7 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
     chatSessions: { ...chatSessions, inlinePreviewedCallId: chatEditPreview.previewedCallId },
     selectionAgent,
     suggestions: suggestionsWithEditPreview,
+    recordings,
     lint,
     workspaceFileOps,
     editorStats,
@@ -220,6 +246,7 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
     chatEditPreview.previewedCallId,
     selectionAgent,
     suggestionsWithEditPreview,
+    recordings,
     lint,
     workspaceFileOps,
     editorStats,

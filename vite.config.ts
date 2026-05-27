@@ -23,6 +23,10 @@ const PROD_CSP =
   "style-src 'self' 'unsafe-inline'; " +
   "font-src 'self' data:; " +
   "img-src 'self' data: blob:; " +
+  // Read-aloud recordings are streamed from Electron main via the privileged
+  // canv-rec:// protocol; without this, <audio> loads fall back to default-src
+  // 'self' and Chromium's CSP blocks playback.
+  "media-src 'self' canv-rec:; " +
   "connect-src http: https://api.anthropic.com https://api.openai.com canv-extension:; " +
   "worker-src 'self' blob:; " +
   "object-src 'none'; " +
@@ -35,6 +39,7 @@ const DEV_CSP =
   "style-src 'self' 'unsafe-inline'; " +
   "font-src 'self' data:; " +
   "img-src 'self' data: blob:; " +
+  "media-src 'self' canv-rec:; " +
   "connect-src 'self' ws: wss: http: https://api.anthropic.com https://api.openai.com canv-extension:; " +
   "worker-src 'self' blob:;"
 

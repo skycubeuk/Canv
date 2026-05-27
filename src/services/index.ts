@@ -16,6 +16,7 @@ import type { useEditorStats } from '../hooks/useEditorStats'
 import type { useProfilePicker } from '../hooks/useProfilePicker'
 import type { useExtensionEventBridge } from '../hooks/useExtensionEventBridge'
 import type { useWorkspaceSetup } from '../hooks/useWorkspaceSetup'
+import type { useRecordings } from '../hooks/useRecordings'
 
 /**
  * The full service registry exposed to React components via useService(...)
@@ -56,6 +57,7 @@ export interface ICanvServices {
   }
   selectionAgent: ReturnType<typeof useSelectionAgent>
   suggestions: ReturnType<typeof useSuggestions>
+  recordings: ReturnType<typeof useRecordings>
   lint: ReturnType<typeof useLintIssues>
   workspaceFileOps: ReturnType<typeof useWorkspaceFileOps>
   editorStats: ReturnType<typeof useEditorStats>

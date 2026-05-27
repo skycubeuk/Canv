@@ -134,6 +134,11 @@ describe('SettingsSchema', () => {
     }
   })
 
+  it('defaults the tts block for users with no tts settings', () => {
+    const parsed = SettingsSchema.parse({})
+    expect(parsed.tts).toEqual({ provider: 'elevenlabs', apiKey: '', defaultVoiceId: '', defaultVoiceName: '', defaultModelId: 'eleven_multilingual_v2' })
+  })
+
   it('Settings type matches the inferred type (compile-time check)', () => {
     // This test is here to anchor the type alias in the test surface.
     // The schema is intentionally permissive on perAgentModel / pricingOverrides

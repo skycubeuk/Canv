@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { adapterList, configuredProviders } from '../../../adapters'
 import { ollamaAdapter } from '../../../adapters/ollama'
@@ -7,6 +7,7 @@ import { useModes } from '../../../hooks/useModes'
 import type { Provider, Settings } from '../../../hooks/useSettings'
 import { importBackup } from '../../../lib/backup'
 import { useDialogs } from '../../../lib/dialogs'
+import { getTts, isTtsAvailable } from '../../../lib/tts'
 import { AppearanceSection } from '../AppearanceSection'
 import { SchemaSettingsForm } from '../../settings/SchemaSettingsForm'
 import { SettingsSchema } from '../../../hooks/settingsSchema'
@@ -116,7 +117,7 @@ export function SettingsTab(props: Props) {
     {
       id: 'provider-keys',
       title: 'API keys & endpoints',
-      keywords: ['api', 'key', 'anthropic', 'openai', 'ollama', 'url', 'endpoint', 'base url', 'refresh'],
+      keywords: ['api', 'key', 'anthropic', 'openai', 'ollama', 'url', 'endpoint', 'base url', 'refresh', 'tts', 'elevenlabs', 'voice', 'read aloud', 'speech'],
       body: (
         <>
           <p className="text-xs text-muted mb-3">
@@ -162,6 +163,27 @@ export function SettingsTab(props: Props) {
               Stored in browser localStorage. Calls go directly from your browser to OpenAI.
             </p>
           </Field>
+
+          {/* Read aloud (ElevenLabs) */}
+          <Field label="Read aloud (ElevenLabs) — API key">
+            <div className="flex gap-2">
+              <input
+                type={keyVisible ? 'text' : 'password'}
+                className="input flex-1"
+                value={settings.tts.apiKey ?? ''}
+                placeholder="ElevenLabs API key"
+                onChange={(e) => onUpdate({ tts: { ...settings.tts, apiKey: e.target.value } })}
+              />
+              <button type="button" className="btn-secondary" onClick={() => setKeyVisible((v) => !v)}>
+                {keyVisible ? 'Hide' : 'Show'}
+              </button>
+            </div>
+            <p className="text-xs text-muted mt-1">
+              Stored in browser localStorage. Calls go through the desktop app to ElevenLabs.
+            </p>
+          </Field>
+
+          <TtsVoiceModelFields settings={settings} onUpdate={onUpdate} />
 
           <Field label="Ollama base URL">
             <input
@@ -675,5 +697,49 @@ function Field({ label, children }: { label: ReactNode; children: ReactNode }) {
       <label className="block text-sm font-medium mb-1.5">{label}</label>
       {children}
     </div>
+  )
+}
+
+function TtsVoiceModelFields({ settings, onUpdate }: { settings: Settings; onUpdate: (patch: Partial<Settings>) => void }) {
+  const [voices, setVoices] = useState<{ voiceId: string; name: string }[]>([])
+  const [models, setModels] = useState<{ modelId: string; name: string }[]>([])
+  const [loading, setLoading] = useState(false)
+  const key = settings.tts.apiKey
+  const provider = settings.tts.provider
+
+  const load = useCallback(async () => {
+    if (!isTtsAvailable() || !key) return
+    setLoading(true)
+    try {
+      const [v, m] = await Promise.all([getTts().voices(provider, key), getTts().models(provider, key)])
+      setVoices(v); setModels(m)
+    } catch { /* surfaced on next generate */ } finally { setLoading(false) }
+  }, [provider, key])
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- setState calls are inside an async callback, not synchronously in the effect body
+  useEffect(() => { void load() }, [load])
+
+  if (!key) return <p className="text-xs text-muted">Enter a key to load voices and models.</p>
+  return (
+    <>
+      <Field label="Default voice">
+        <select className="input" value={settings.tts.defaultVoiceId}
+          onChange={(e) => {
+            const v = voices.find((x) => x.voiceId === e.target.value)
+            onUpdate({ tts: { ...settings.tts, defaultVoiceId: e.target.value, defaultVoiceName: v?.name ?? '' } })
+          }}>
+          <option value="">{loading ? 'Loading…' : 'Select a voice'}</option>
+          {voices.map((v) => <option key={v.voiceId} value={v.voiceId}>{v.name}</option>)}
+        </select>
+      </Field>
+      <Field label="Default model">
+        <select className="input" value={settings.tts.defaultModelId}
+          onChange={(e) => onUpdate({ tts: { ...settings.tts, defaultModelId: e.target.value } })}>
+          {models.length === 0 && <option value="eleven_multilingual_v2">eleven_multilingual_v2</option>}
+          {models.map((m) => <option key={m.modelId} value={m.modelId}>{m.name}</option>)}
+        </select>
+        <button type="button" className="btn-secondary btn-sm mt-2" onClick={() => void load()}>Refresh voices</button>
+      </Field>
+    </>
   )
 }
