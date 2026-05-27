@@ -56,7 +56,14 @@ export function useRecordings(cfg: RecordingsConfig) {
     const onTime = () => setPosition(a.currentTime)
     const onMeta = () => {
       setDuration(a.duration)
-      if (playingId && Number.isFinite(a.duration)) void getTts().setDuration(playingId, Math.round(a.duration * 1000)).catch(() => {})
+      if (playingId && Number.isFinite(a.duration)) {
+        const ms = Math.round(a.duration * 1000)
+        // Reflect the duration in the list row immediately (the row shows
+        // fmt(durationMs); without this it stays --:-- until a full reload) and
+        // persist it so it survives reopening the workspace.
+        setList((prev) => prev.map((r) => (r.id === playingId && r.durationMs !== ms ? { ...r, durationMs: ms } : r)))
+        void getTts().setDuration(playingId, ms).catch(() => {})
+      }
     }
     const onEnd = () => setPlayingId(null)
     // Surface load/decode failures instead of swallowing them — a CSP block or a
