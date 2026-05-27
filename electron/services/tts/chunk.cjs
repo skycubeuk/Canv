@@ -3,11 +3,16 @@
 /**
  * Split `text` into chunks no longer than `limit` characters, preferring
  * sentence boundaries. A single sentence longer than `limit` is hard-split.
- * Whitespace-only input yields [].
+ * Whitespace-only input (or a nonsensical `limit < 1`) yields [].
+ *
+ * Note: leading sentence-terminator characters are not preserved (a string
+ * starting with `.`/`!`/`?` loses them). This is an accepted limitation since
+ * we only feed it cleaned prose.
  */
 function chunkText(text, limit) {
   const trimmed = String(text).trim()
   if (!trimmed) return []
+  if (limit < 1) return []
   if (trimmed.length <= limit) return [trimmed]
 
   // Split into sentences keeping the terminator; fall back to the whole string.
@@ -16,8 +21,7 @@ function chunkText(text, limit) {
   let cur = ''
   const push = () => { if (cur.trim()) chunks.push(cur.trim()); cur = '' }
 
-  for (const s of sentences) {
-    const piece = s
+  for (const piece of sentences) {
     if (piece.length > limit) {
       push()
       // Hard-split the oversized sentence.

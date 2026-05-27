@@ -18,9 +18,14 @@ describe('chunkText', () => {
     const text = 'x'.repeat(50)
     const out = chunkText(text, 20)
     expect(out).toEqual(['x'.repeat(20), 'x'.repeat(20), 'x'.repeat(10)])
+    expect(out.join('')).toBe('x'.repeat(50))
   })
 
   it('returns [] for empty/whitespace input', () => {
     expect(chunkText('   ', 100)).toEqual([])
+  })
+
+  it('returns [] for limit < 1', () => {
+    expect(chunkText('hello', 0)).toEqual([])
   })
 })
