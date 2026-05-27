@@ -10,6 +10,7 @@ import { SearchTab } from './sidebar/SearchTab'
 import { HistoryTab } from './sidebar/HistoryTab'
 import { getCanvHistory } from '../../lib/history'
 import { SitesTab } from './sidebar/SitesTab'
+import { RecordingsTab } from './sidebar/RecordingsTab'
 import { ExtensionsTab } from '../extensions/ExtensionsTab'
 import { InstallExtensionMenu } from '../extensions/InstallExtensionMenu'
 import type { ExtensionsTabHandle } from '../extensions/ExtensionsTab'
@@ -22,7 +23,7 @@ import { AnnotationBar } from './AnnotationBar'
 import { SettingsTab } from './tabs/SettingsTab'
 import { DiffTab } from './tabs/DiffTab'
 import { ActivityBar, type BuiltinTab } from './ActivityBar'
-import { Folder, Search, History as HistoryIcon, LayoutDashboard, Puzzle, Plus, FolderPlus, FolderOpen } from 'lucide-react'
+import { Folder, Search, History as HistoryIcon, LayoutDashboard, Puzzle, Plus, FolderPlus, FolderOpen, AudioLines } from 'lucide-react'
 import { SidebarIconButton } from './sidebar/SidebarChrome'
 import type { SidebarPanelDef } from './LeftSidebar'
 import type { HistoryTabHandle } from './sidebar/HistoryTab'
@@ -79,6 +80,9 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
     workspace.flushAll()
     exportBackup()
   }, [workspace])
+
+  const recordings = useService('recordings')
+  const commands = useService('commands')
 
   const contributions = useContributions()
   const fileHandlerRouting = useFileHandlerRouting()
@@ -180,6 +184,7 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
     { id: 'search', label: 'Search', icon: Search },
     ...(raEnabled ? [{ id: 'history', label: 'History', icon: HistoryIcon }] : []),
     { id: 'sites', label: 'Sites', icon: LayoutDashboard },
+    { id: 'recordings', label: 'Recordings', icon: AudioLines },
     { id: 'extensions', label: 'Extensions', icon: Puzzle },
   ]
 
@@ -303,6 +308,16 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
       id: 'sites',
       title: 'Sites',
       body: <SitesTab onRegenerate={setChatDraft} />,
+    },
+    {
+      id: 'recordings',
+      title: 'Recordings',
+      body: (
+        <RecordingsTab
+          recordings={recordings}
+          onReadDocument={() => commands.runById('tts.readDocument')}
+        />
+      ),
     },
     {
       id: 'extensions',
