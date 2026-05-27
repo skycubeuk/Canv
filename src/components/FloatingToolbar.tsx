@@ -31,6 +31,9 @@ export function FloatingToolbar(props: Props) {
   const editorRegistry = useService('editorRegistry')
   const view = editorRegistry.getActiveEditor()
   const modesSvc = useService('modes')
+  const recordings = useService('recordings')
+  const workspace = useService('workspace')
+  const settingsSvc = useService('settings')
   const activeProfileId = modesSvc.profile ?? modesSvc.defaultModeId
   const profile =
     modesSvc.modes.find((m) => m.id === activeProfileId) ??
@@ -378,6 +381,19 @@ export function FloatingToolbar(props: Props) {
             view={view}
             onLink={() => { setLinkUrl(''); setMode({ kind: 'link' }) }}
             onAddNote={addNote}
+            onReadAloud={(voice) => {
+              recordings.readAloud({
+                text: selection.text,
+                sourcePath: workspace.activeMarkdownRel ?? null,
+                sourceKind: 'selection',
+                label: selection.text.slice(0, 60),
+                voiceId: voice?.voiceId,
+                voiceName: voice?.voiceName,
+              })
+              setPos(null); setSelection(null); setMode({ kind: 'idle' })
+            }}
+            ttsProvider={settingsSvc.settings.tts.provider}
+            ttsApiKey={settingsSvc.settings.tts.apiKey}
           />
         </div>
       )}
