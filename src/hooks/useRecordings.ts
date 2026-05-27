@@ -35,6 +35,12 @@ export function useRecordings(cfg: RecordingsConfig) {
   // eslint-disable-next-line react-hooks/refs -- lazy single init guarded by null check (plus jsdom Audio guard); never read during render
   if (audioRef.current == null && typeof Audio !== 'undefined') audioRef.current = new Audio()
 
+  // Keep the latest config reachable from long-lived audio event listeners
+  // without re-subscribing them every render. Updated in an effect (not during
+  // render) so the audio 'error'/'play' handlers always read the current cfg.
+  const cfgRef = useRef(cfg)
+  useEffect(() => { cfgRef.current = cfg })
+
   const refresh = useCallback(async () => {
     if (!isTtsAvailable()) return
     try { setList(await getTts().list()) } catch { /* no workspace */ }
@@ -53,10 +59,19 @@ export function useRecordings(cfg: RecordingsConfig) {
       if (playingId && Number.isFinite(a.duration)) void getTts().setDuration(playingId, Math.round(a.duration * 1000)).catch(() => {})
     }
     const onEnd = () => setPlayingId(null)
+    // Surface load/decode failures instead of swallowing them — a CSP block or a
+    // missing file fires this with a media error code. Silent failure here was
+    // the original "no audio, no error" bug.
+    const onError = () => {
+      setPlayingId(null)
+      const code = a.error?.code
+      cfgRef.current.showToast(`Couldn't play the recording${code ? ` (media error ${code})` : ''}.`)
+    }
     a.addEventListener('timeupdate', onTime)
     a.addEventListener('loadedmetadata', onMeta)
     a.addEventListener('ended', onEnd)
-    return () => { a.removeEventListener('timeupdate', onTime); a.removeEventListener('loadedmetadata', onMeta); a.removeEventListener('ended', onEnd) }
+    a.addEventListener('error', onError)
+    return () => { a.removeEventListener('timeupdate', onTime); a.removeEventListener('loadedmetadata', onMeta); a.removeEventListener('ended', onEnd); a.removeEventListener('error', onError) }
   }, [playingId])
 
   const play = useCallback((id: string) => {
@@ -68,7 +83,11 @@ export function useRecordings(cfg: RecordingsConfig) {
     // value > max while the new track's metadata/timeupdate events are pending.
     if (a.src !== url) { a.src = url; a.load(); setPosition(0); setDuration(0) }
     a.playbackRate = rate
-    void a.play().catch(() => {})
+    void a.play().catch((e: unknown) => {
+      // Autoplay policy blocked it — tell the user. Load/decode failures fire the
+      // 'error' event instead; AbortError (interrupted by a new load) is benign.
+      if (e instanceof DOMException && e.name === 'NotAllowedError') cfgRef.current.showToast('Autoplay was blocked — press play on the recording.')
+    })
     setPlayingId(id)
   }, [list, rate, cfg])
 
@@ -100,7 +119,12 @@ export function useRecordings(cfg: RecordingsConfig) {
       const a = audioRef.current
       // New track: reset transport state before the new src's events arrive.
       setPosition(0); setDuration(0)
-      if (a) { a.src = cfg.getWorkspaceFileUrl(rec.file); a.playbackRate = rate; void a.play().catch(() => {}) }
+      if (a) {
+        a.src = cfg.getWorkspaceFileUrl(rec.file); a.playbackRate = rate
+        void a.play().catch((e: unknown) => {
+          if (e instanceof DOMException && e.name === 'NotAllowedError') cfg.showToast('Autoplay was blocked — press play on the recording.')
+        })
+      }
     } catch (err) {
       cfg.showToast(err instanceof Error ? err.message : 'Read-aloud failed.')
     }

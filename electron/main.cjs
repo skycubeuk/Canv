@@ -490,7 +490,10 @@ app.whenReady().then(() => {
       if (/%2e%2e|\.\./i.test(request.url)) return new Response('bad request', { status: 400 })
       const u = new URL(request.url)
       const file = decodeURIComponent(u.pathname.replace(/^\/+/, ''))
-      const root = deps.getWorkspace()
+      // getWorkspace() returns the workspace OBJECT; safeResolve needs the root
+      // string (same value requireWorkspace() yields). Using the object here was
+      // the "400 on every recording" bug.
+      const root = deps.getWorkspace()?.root
       if (!root) return new Response('no workspace', { status: 404 })
       const recDir = deps.safeResolve(root, RECORDINGS_REL)
       // recordingFilePath confines `file` to recDir (throws on '..'/absolute/escape).
