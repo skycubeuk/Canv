@@ -17,6 +17,7 @@ import { useProfilePicker } from '../hooks/useProfilePicker'
 import { useChatSessions } from '../hooks/useChatSessions'
 import { useSelectionAgent } from '../hooks/useSelectionAgent'
 import { useSuggestions } from '../hooks/useSuggestions'
+import { useRecordings } from '../hooks/useRecordings'
 import { useChatEditPreview } from '../hooks/useChatEditPreview'
 import { useWorkspaceSetup } from '../hooks/useWorkspaceSetup'
 import { getCanvHistory } from '../lib/history'
@@ -186,6 +187,30 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
     emitAnnotation: suggestions.addAnnotation,
   })
 
+  // settings.tts arrives in a later task; read it through a narrow cast with
+  // safe fallbacks so the build stays green until then.
+  const ttsSettings = (settingsApi.settings as {
+    tts?: {
+      provider?: import('../lib/tts').TtsProvider
+      apiKey?: string
+      defaultVoiceId?: string
+      defaultVoiceName?: string
+      defaultModelId?: string
+    }
+  }).tts
+  const recordings = useRecordings({
+    getProvider: () => ttsSettings?.provider ?? 'elevenlabs',
+    getApiKey: () => ttsSettings?.apiKey ?? '',
+    getDefaultVoice: () => ({
+      voiceId: ttsSettings?.defaultVoiceId ?? '',
+      voiceName: ttsSettings?.defaultVoiceName ?? '',
+    }),
+    getDefaultModel: () => ttsSettings?.defaultModelId ?? 'eleven_multilingual_v2',
+    getWorkspaceFileUrl: (file) => `canv-rec://recordings/${file}`,
+    showToast: notifications.showToast,
+    confirm: dialogs.confirm,
+  })
+
   const services = useMemo<ICanvServices>(() => ({
     workspace,
     settings: settingsApi,
@@ -199,6 +224,7 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
     chatSessions: { ...chatSessions, inlinePreviewedCallId: chatEditPreview.previewedCallId },
     selectionAgent,
     suggestions: suggestionsWithEditPreview,
+    recordings,
     lint,
     workspaceFileOps,
     editorStats,
@@ -220,6 +246,7 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
     chatEditPreview.previewedCallId,
     selectionAgent,
     suggestionsWithEditPreview,
+    recordings,
     lint,
     workspaceFileOps,
     editorStats,

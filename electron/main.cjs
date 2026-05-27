@@ -393,6 +393,10 @@ protocol.registerSchemesAsPrivileged([
       corsEnabled: true,
     },
   },
+  {
+    scheme: 'canv-rec',
+    privileges: { standard: true, secure: true, supportFetchAPI: true, stream: true, corsEnabled: true },
+  },
 ])
 
 // Set by services/extensions during registerIpcHandlers so the workspace-
@@ -473,6 +477,23 @@ app.whenReady().then(() => {
   wsService.registerIpcHandlers(ipcMain, deps)
   annotationsService.registerIpcHandlers(ipcMain, deps)
   ttsService.registerIpcHandlers(ipcMain, deps)
+  // Serve TTS recordings to the renderer over a privileged custom scheme.
+  // webSecurity blocks file:// reads and canvFS.readFile is text-only, so the
+  // audio bytes are streamed here. URL shape: canv-rec://recordings/<file>.
+  const { RECORDINGS_REL } = require('./services/tts/index.cjs')
+  protocol.handle('canv-rec', async (request) => {
+    try {
+      const u = new URL(request.url)
+      const file = decodeURIComponent(u.pathname.replace(/^\/+/, ''))
+      const root = deps.getWorkspace()
+      if (!root) return new Response('no workspace', { status: 404 })
+      const abs = deps.safeResolve(root, path.join(RECORDINGS_REL, file)) // throws on traversal
+      const data = await fsp.readFile(abs)
+      return new Response(data, { status: 200, headers: { 'Content-Type': 'audio/mpeg' } })
+    } catch (e) {
+      return new Response('not found', { status: (e && e.code === 'ENOENT') ? 404 : 400 })
+    }
+  })
   // Renderer pushes the active theme's surface + foreground colours so the
   // Chromium-drawn min/max/close overlay matches the in-app theme (not just
   // OS dark/light). No-op on macOS — traffic lights aren't recolourable.
