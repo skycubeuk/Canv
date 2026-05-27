@@ -15,22 +15,22 @@ function svc(over = {}) {
 
 describe('RecordingsTab', () => {
   it('shows the empty state when there are no recordings', () => {
-    render(<RecordingsTab recordings={svc({ list: [] }) as never} onReadDocument={vi.fn()} />)
+    render(<RecordingsTab recordings={svc({ list: [] }) as never} />)
     expect(screen.getByText(/No recordings yet/i)).toBeTruthy()
   })
 
   it('renders a row and plays it on click', () => {
     const play = vi.fn()
-    render(<RecordingsTab recordings={svc({ play }) as never} onReadDocument={vi.fn()} />)
+    render(<RecordingsTab recordings={svc({ play }) as never} />)
     expect(screen.getByText('Intro paragraph')).toBeTruthy()
     fireEvent.click(screen.getByLabelText('Play Intro paragraph'))
     expect(play).toHaveBeenCalledWith('rec_1')
   })
 
-  it('fires onReadDocument from the header button', () => {
-    const onReadDocument = vi.fn()
-    render(<RecordingsTab recordings={svc() as never} onReadDocument={onReadDocument} />)
-    fireEvent.click(screen.getByText(/Read this document/i))
-    expect(onReadDocument).toHaveBeenCalled()
+  it('deletes a recording on the delete button', () => {
+    const remove = vi.fn()
+    render(<RecordingsTab recordings={svc({ remove }) as never} />)
+    fireEvent.click(screen.getByLabelText('Delete Intro paragraph'))
+    expect(remove).toHaveBeenCalledWith('rec_1')
   })
 })

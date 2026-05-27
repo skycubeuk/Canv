@@ -1,4 +1,4 @@
-import { Volume2, Play, Pause, Trash2 } from 'lucide-react'
+import { Play, Pause, Trash2 } from 'lucide-react'
 import type { useRecordings } from '../../../hooks/useRecordings'
 import { timeAgo } from '../../../lib/timeAgo'
 
@@ -10,18 +10,12 @@ function fmt(ms: number | null): string {
 
 interface Props {
   recordings: ReturnType<typeof useRecordings>
-  onReadDocument: () => void
 }
 
-export function RecordingsTab({ recordings, onReadDocument }: Props) {
+export function RecordingsTab({ recordings }: Props) {
   const { list, playingId, play, pause, remove } = recordings
   return (
     <div className="flex flex-col h-full min-h-0">
-      <div className="flex items-center justify-end px-3 py-1.5 border-b border-default">
-        <button type="button" className="btn-secondary btn-sm flex items-center gap-1" onClick={onReadDocument}>
-          <Volume2 className="w-4 h-4" aria-hidden /> Read this document
-        </button>
-      </div>
       {list.length === 0 ? (
         <div className="p-4 text-sm text-muted">No recordings yet — highlight text and hit the speaker, or read the whole document.</div>
       ) : (

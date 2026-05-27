@@ -23,7 +23,7 @@ import { AnnotationBar } from './AnnotationBar'
 import { SettingsTab } from './tabs/SettingsTab'
 import { DiffTab } from './tabs/DiffTab'
 import { ActivityBar, type BuiltinTab } from './ActivityBar'
-import { Folder, Search, History as HistoryIcon, LayoutDashboard, Puzzle, Plus, FolderPlus, FolderOpen, AudioLines } from 'lucide-react'
+import { Folder, Search, History as HistoryIcon, LayoutDashboard, Puzzle, Plus, FolderPlus, FolderOpen, AudioLines, Volume2 } from 'lucide-react'
 import { SidebarIconButton } from './sidebar/SidebarChrome'
 import type { SidebarPanelDef } from './LeftSidebar'
 import type { HistoryTabHandle } from './sidebar/HistoryTab'
@@ -312,12 +312,15 @@ export function WorkspaceShell(props: WorkspaceShellProps) {
     {
       id: 'recordings',
       title: 'Recordings',
-      body: (
-        <RecordingsTab
-          recordings={recordings}
-          onReadDocument={() => commands.runById('tts.readDocument')}
+      headerActions: (
+        <SidebarIconButton
+          aria-label="Read this document"
+          title="Read this document"
+          icon={Volume2}
+          onClick={() => commands.runById('tts.readDocument')}
         />
       ),
+      body: <RecordingsTab recordings={recordings} />,
     },
     {
       id: 'extensions',
