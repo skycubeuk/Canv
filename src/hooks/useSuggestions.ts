@@ -274,6 +274,11 @@ export function useSuggestions(deps: UseSuggestionsDeps): UseSuggestionsApi {
   // becomes a new non-null value and the editor is available, read the sidecar,
   // re-anchor each record against the current doc text, and add the ones that
   // still resolve (orphaned/unresolved records are skipped for now).
+  //
+  // The cleanup resets `loadedRelRef` so closing a tab and reopening the same
+  // file triggers a fresh load — closing destroys the EditorView (and with it
+  // the annotationField), so without the reset the guard would skip the
+  // reload and the user would see no annotations on reopen.
   useEffect(() => {
     const rel = deps.activeMarkdownRel
     if (!rel) return
@@ -306,7 +311,10 @@ export function useSuggestions(deps: UseSuggestionsDeps): UseSuggestionsApi {
       }
       syncCount(current)
     })()
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+      loadedRelRef.current = null
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- load once per rel; getActiveEditor read live via depsRef inside the async body
   }, [deps.activeMarkdownRel])
 
