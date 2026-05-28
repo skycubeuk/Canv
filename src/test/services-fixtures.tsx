@@ -1,6 +1,7 @@
 import { render, type RenderOptions } from '@testing-library/react'
-import type { ReactElement, ReactNode } from 'react'
-import { ServicesContext } from '../services/useService'
+import { useRef, type ReactElement, type ReactNode } from 'react'
+import { ServicesStoreContext } from '../services/useService'
+import { createServicesStore, type ServicesStore } from '../services/servicesStore'
 import type { ICanvServices } from '../services'
 
 /**
@@ -44,8 +45,14 @@ export function renderWithServices(
   options?: Omit<RenderOptions, 'wrapper'>,
 ) {
   const stub = makeStubServices(services)
-  const Wrapper = ({ children }: { children: ReactNode }) => (
-    <ServicesContext.Provider value={stub}>{children}</ServicesContext.Provider>
-  )
+  const Wrapper = ({ children }: { children: ReactNode }) => {
+    const storeRef = useRef<ServicesStore | null>(null)
+    if (storeRef.current === null) storeRef.current = createServicesStore(stub)
+    return (
+      <ServicesStoreContext.Provider value={storeRef.current}>
+        {children}
+      </ServicesStoreContext.Provider>
+    )
+  }
   return render(ui, { wrapper: Wrapper, ...options })
 }

@@ -66,4 +66,5 @@ export interface ICanvServices {
 }
 
 export { ServicesProvider } from './ServicesProvider'
-export { ServicesContext, useService, useAllServices } from './useService'
+export { ServicesStoreContext, useService, useAllServices } from './useService'
+export { createServicesStore, type ServicesStore } from './servicesStore'

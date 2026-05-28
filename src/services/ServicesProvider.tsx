@@ -1,4 +1,4 @@
-import { useMemo, useRef, type ReactNode } from 'react'
+import { useLayoutEffect, useMemo, useRef, type ReactNode } from 'react'
 import { useDialogs } from '../lib/dialogs'
 import { useNotifications } from '../hooks/useNotifications'
 import { useSettings } from '../hooks/useSettings'
@@ -23,7 +23,8 @@ import { useWorkspaceSetup } from '../hooks/useWorkspaceSetup'
 import { getCanvHistory } from '../lib/history'
 import { type AiEditHistoryClient } from '../lib/history/withAiEditSnapshot'
 import { getFs } from '../lib/fs'
-import { ServicesContext } from './useService'
+import { ServicesStoreContext } from './useService'
+import { createServicesStore, type ServicesStore } from './servicesStore'
 import type { ICanvServices } from './index'
 
 export interface ServicesProviderConfig {
@@ -254,5 +255,18 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
     setup,
   ])
 
-  return <ServicesContext.Provider value={services}>{children}</ServicesContext.Provider>
+  // The store is the React-external source of truth that backs every
+  // `useService(key)`. Created lazily on first render with the initial
+  // `services`, then synced after each commit so subscribers fire after the
+  // updated value is observable via `store.get()`.
+  const storeRef = useRef<ServicesStore | null>(null)
+  if (storeRef.current === null) storeRef.current = createServicesStore(services)
+  // useLayoutEffect (not useEffect) so the update lands BEFORE the browser
+  // paints subsequent reactions — without it, a fast-following render could
+  // observe a stale snapshot.
+  useLayoutEffect(() => {
+    storeRef.current!.update(services)
+  }, [services])
+
+  return <ServicesStoreContext.Provider value={storeRef.current}>{children}</ServicesStoreContext.Provider>
 }
