@@ -30,6 +30,7 @@
     "skill:install": "node scripts/install-skill.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
+    "typecheck": "tsc -b --noEmit",
     "test:coverage": "vitest run --coverage",
     "test:bench": "vitest bench --run"
   },
