@@ -2,16 +2,11 @@ import './components/extensions/registerCanvIcon'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 
-// Standalone React DevTools connector — dev only. The user runs
-// `npx react-devtools` in a separate terminal to launch the DevTools UI on
-// port 8097; this script tells the renderer to connect to it. The injection
-// is gated on `import.meta.env.DEV` so production builds don't reach out to
-// localhost (and so the script isn't even referenced in dist/).
-if (import.meta.env.DEV) {
-  const s = document.createElement('script')
-  s.src = 'http://localhost:8097'
-  document.head.appendChild(s)
-}
+// Note: the React DevTools connector is injected into index.html by the
+// `react-devtools-connector` vite plugin in vite.config.ts. It must load
+// BEFORE any React module initialises (which means before main.tsx runs at
+// all), so it cannot live here — ES module imports above would already have
+// pulled in React by the time a script appended from here gets parsed.
 import '@fontsource/inter/400.css'
 import '@fontsource/inter/500.css'
 import '@fontsource/inter/600.css'
