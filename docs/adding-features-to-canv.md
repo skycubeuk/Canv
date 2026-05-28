@@ -3,79 +3,55 @@
 Canv can be extended with small add-ons that bolt extra features onto the app —
 new panels, viewers for file types Canv doesn't handle on its own, extra
 commands, and more. These add-ons are called **extensions**. This page covers
-what an extension can add, how you install and manage one, and the trust step
-that keeps an extension from running until you've decided to allow it.
-
-An extension is a small bundle of code that someone has written to add a feature
-to Canv. You install it into a workspace, and it only affects that workspace.
-Because an extension runs code, Canv won't let one do anything until you've
-explicitly trusted it — more on that below.
+what they can add, installing one, and the trust steps that keep an extension
+from running until you allow it.
 
 ## What an extension can add
 
-An extension can contribute any of these to the app:
+An extension can contribute any of six kinds of thing:
 
-- **A panel** — a new tab in the left sidebar or in the bottom panel, with its
-  own interface.
-- **A viewer or editor for a file type** — so a file Canv would otherwise treat
-  as plain text (a PDF, a spreadsheet-style file) opens in something purpose-built.
-- **Editing support for a file format** — colouring and structure for a kind of
-  file Canv doesn't recognise on its own.
-- **A command** — a new entry in the command list you can run by name.
-- **A menu item** — an extra option in the file tree's right-click menu.
-- **A status-bar widget** — a small indicator at the bottom of the window.
+- **Panels** — a new panel in the left sidebar or the bottom dock.
+- **File viewers and editors** — a way to open and work with a file type Canv
+  doesn't handle on its own.
+- **Language support** — syntax handling for a particular kind of file.
+- **Commands** — actions that show up in the quick-find over the editor.
+- **File-tree menu items** — extra entries on the right-click menu in the file
+  tree.
+- **Status-bar widgets** — a small readout or control in the bar along the
+  bottom.
 
-## Finding the extensions you've installed
-
-The left sidebar has an **Extensions** tab. It lists every extension installed in
-the current workspace, with a switch to turn each one on or off and a menu for
-the rest of the operations. A freshly opened workspace has none until you add
-one. Extensions live inside the workspace folder, so a different workspace starts
-with its own (empty) list.
+Panels in the bottom dock also appear when you pop the dock out into its own
+window.
 
 ## Installing an extension
 
-In the Extensions tab, use the **+** button. You can install from a folder on
-your disk, or from a single packaged extension file. Either way, before anything
-is installed Canv shows you a summary card describing what the extension adds —
-including its **capabilities** (what it's asking permission to do, such as
-reading your open document, writing to the workspace, or reaching the network)
-and any **network addresses** it wants to contact. Capabilities that can change
-your files or reach the internet are highlighted so they're hard to miss. If the
-extension adds editing support for a file format, Canv shows an extra warning,
-because that kind of add-on runs with broader reach. Read the card, and if you're
-comfortable, confirm the install.
+Extensions install per workspace, from the Extensions tab. You can install one
+from a folder or from a packaged file. Before it installs, Canv shows you what
+the extension is asking for:
 
-## Trusting an extension before it runs
+- Its **capabilities** — what it wants permission to do, such as writing to your
+  workspace, changing the open document, using the AI, or reaching the network.
+  The more far-reaching ones are called out.
+- The **network hosts** it may contact, if any.
+- A clear warning if it wants to take over a file type.
 
-Installing an extension does not, by itself, let it run. Canv gates extensions
-behind trust, in two layers:
+Read that disclosure before you accept it — it's the whole point of the step.
 
-- **Workspace trust.** When you open a workspace that contains extensions, a
-  banner tells you how many it found and that they won't run until you trust the
-  workspace. You can trust the workspace, or choose to keep extensions disabled
-  for it.
-- **Per-extension trust.** Even in a trusted workspace, each extension has to be
-  trusted individually before its on/off switch will turn it on. An untrusted
-  extension shows a marker; its menu has a **Trust this extension** option, and a
-  matching option to revoke that trust later.
+## Trust keeps extensions from running on their own
 
-This two-step gate means opening someone else's workspace, or pulling in a folder
-of files that happens to contain extensions, never silently runs code on your
-machine.
+Opening someone else's workspace never runs their extensions silently. Two things
+have to be true before an extension's code runs: you've **trusted the
+workspace**, and you've **trusted that extension**. Until both are in place, an
+extension stays inert. This means you can open a project from elsewhere, look at
+what's in it, and decide before anything runs.
 
-## Managing extensions
+## Managing installed extensions
 
-Each extension's row in the Extensions tab has:
-
-- An **on/off switch** to enable or disable it. A disabled extension stays
-  installed but doesn't run.
-- A menu with **Trust** / **Revoke trust**, **Reload** (useful if it has
-  misbehaved — a crashed extension shows a warning you can reload past), and
-  **Uninstall** to remove it from the workspace entirely.
+From the Extensions tab you can enable or disable an extension, reload one after
+it's been updated, and uninstall ones you no longer want. Each shows its current
+state and its trust status, and you can revoke trust at any time.
 
 ## Up next
 
-If an installed extension isn't showing its panel or command, the most likely
-cause is the trust step — check the banner and the per-extension trust marker
-described above. Other common snags are in [Troubleshooting](troubleshooting.md).
+If something isn't behaving — an extension, a key, or a file that changed
+underneath you — see [Troubleshooting](troubleshooting.md).

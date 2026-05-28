@@ -1,80 +1,78 @@
-# Reviewing and applying AI suggestions
+# Reviewing and applying suggestions
 
-Every action you trigger from the floating toolbar or the run-on-document menu
-produces a **run** — a record of what you asked, what the AI said, and the
-rewrite (if any) it produced. Runs live in the bottom panel and stick around
-until you close them, so you can compare different attempts side by side, come
-back to an old one tomorrow, or refine a result with a follow-up. This page
-covers reading a result, applying it, and managing the runs in a session.
+When the AI rewrites a passage or reviews your work, the result comes back inside
+your document, where you can weigh it against what you wrote and take it or leave
+it. This page covers reading an inline rewrite and accepting it change by change,
+working with margin notes, and coming back to a result in the panel to refine it.
 
-## What a result looks like
+## Reading a rewrite as an inline diff
 
-A new run opens in the **Runs** tab at the bottom of the window. The top of the
-run shows which action was used (for example, "Polish") and the model that ran
-it. Beneath that, the response is split into sections depending on the action's
-style:
+When you run a rewrite on a selection, the AI's version appears right where your
+text is, shown as a diff: the words it would remove and the words it would add,
+in place, so you can see exactly how heavy-handed the change is. Your document
+isn't altered yet — nothing changes on the page until you say so.
 
-- **Notes** — what the AI noticed: suggestions, things to consider. Some
-  actions, like Story Reviewer, are pure notes with no rewrite at all.
-- **Suggested rewrite** — the rewritten text. Where there's both notes and a
-  rewrite, the rewrite is shown alongside an inline diff against the text you
-  originally selected. The diff highlights additions and removals so you can see
-  at a glance how heavy-handed the rewrite has been.
+Each distinct change carries a small **accept** and **reject** control. Accept
+and that change takes effect; reject and your original stands. You go through
+them one at a time, keeping the changes you like and dropping the ones you don't.
 
-The response streams in live as the AI types it, so you can start reading before
-it finishes.
+When there's more than one change, a small bar at the top of the editor shows how
+many are outstanding, with **Accept all** and **Reject all** for when you've
+decided about the whole thing at once.
 
-## Applying a rewrite
-
-The run header has an **Apply** button. Clicking it replaces the original
-selection in the editor with the AI's rewrite. If the run came from a document
-action rather than a selection action, **Apply** replaces the whole document.
-
-Apply is one click — it doesn't ask you to confirm. If you have revision history
-turned on, the previous text is recoverable from a snapshot; see
+Accepting a change is recorded in your workspace history, so even after you've
+taken a rewrite you can get the previous wording back; see
 [Tracking changes and keeping things tidy](tracking-changes-and-keeping-things-tidy.md).
 
-Each run can only be applied once. After you've applied a rewrite, **Apply** is
-disabled for that run so a second click can't drop in another copy.
+## Working with margin notes
 
-## Asking for another go
+When an action reviews your writing rather than rewriting it — Story Reviewer,
+for instance — its feedback comes back as notes pinned to the parts of the text
+they're about. Each note is a small numbered card in the margin, linked to the
+exact span it refers to, showing who left it, the words it's about, and the
+comment.
 
-If the rewrite isn't quite right, a run gives you two ways to ask again without
-losing what you already have:
+What you can do with a note depends on what it is:
 
-- **Rerun** sends the same request to the AI again. The new response appears as a
-  separate run; the original stays. This is how to get a second draft to compare
-  against the first.
-- **Refine** lets you give the AI a short note about what to change. Type
-  "tighten the dialogue" or "less formal" into the refine box and submit; the AI
-  rewrites with your note in hand, and the result appears as a separate run.
+- If the note comes with a suggested change, its card has an **Accept** button
+  that makes that change for you (again, recorded in history).
+- Otherwise you can **edit** it, **collapse** it to get it out of the way, or
+  **dismiss** it when you're done with it.
 
-Both leave the original intact, so you can line up attempts and pick the best.
+A bar at the top of the editor counts the open notes and lets you collapse or
+expand them all together. These are the same margin notes you can leave yourself
+with the **Note** button (see [Writing and editing text](writing-and-editing-text.md)),
+and they're saved with your workspace, so AI feedback and your own reminders both
+survive closing and reopening the file.
 
-## Going back to an older result
+## Refining a result in the panel
 
-The Runs tab keeps every run from your current session. Click an old run to
-bring it back into the panel; **Apply**, **Rerun**, and **Refine** all still
-work on it. To remove a run you no longer want, use the close control on its tab.
+Every action you run is also recorded as a **run** in the panel at the bottom of
+the window — what you asked, which model answered, and the response as it
+streamed in. When the result is shown inline in your document, the run points you
+up to it rather than repeating it. When it isn't — a rewrite of a whole document,
+say — the run offers an **Apply** button to drop the new version in, and a way to
+copy it instead.
 
-## Reading a cleaner copy or inspecting the raw exchange
+A run is also where you go back for another try without losing what you have:
 
-Next to **Runs** is an **Output** tab. It gives you a cleaner reading view of a
-run — just the notes and the rewrite, with no controls — and also lets you
-inspect the raw exchange behind a chat message. That's helpful when an answer was
-confusing and you want to see exactly what the assistant was sent.
+- **Refine** lets you give the AI a short note about what to change — "softer
+  tone, keep the comma" — and answers again with your note in hand.
+- **Rerun** asks the same thing afresh.
 
-## Watching for problems
+Runs stick around for the session, so you can line up attempts and pick the best,
+and come back to an earlier one to refine it further.
 
-The bottom panel also has a **Problems** tab. Canv runs a few automatic checks
-across your workspace — links to files that don't exist, references to headings
-that aren't there, images that point nowhere, and the like. Each issue links to
-the line it was found on, so clicking jumps you straight there to fix it. You can
-turn individual checks on or off in the settings tab, and rescan from the tab
-when you've moved files around.
+## Checking your workspace for problems
+
+The bottom panel also keeps a list of **problems** Canv finds across your
+workspace — links to files that aren't there, references to headings that don't
+exist, images that point nowhere. Each one links to the line it's on, so you can
+jump straight to it. You can turn individual checks on or off in settings, and
+rescan after you've moved files around.
 
 ## Up next
 
-Once you've applied a result, the obvious next worry is "can I get the old
+Once you've applied a result, the next question is usually "can I get the old
 version back?" — see
 [Tracking changes and keeping things tidy](tracking-changes-and-keeping-things-tidy.md).

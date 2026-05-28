@@ -1,95 +1,84 @@
 # Writing and editing text
 
-This page is about the middle of the window — where your prose lives. It covers
-what the editor does on its own, how to format selected text, how to switch
-between editing and a rendered preview, how to move around long documents, how
-to keep two files visible at once, and how to change the way the app looks.
+This page is about the editor itself: typing and formatting, switching to a
+clean reading view, moving around a long document by its headings, working on
+two files side by side, leaving yourself a note in the margin, and setting the
+theme and text size to something you're comfortable with.
 
-## How the editor behaves
+## Writing in markdown
 
-The editor is a markdown editor that renders formatting as you type. Bold,
-italic, strikethrough, headings, lists, links and inline code all appear with
-their visible style applied; the markdown marks stay in the file but the editor
-decorates them so you can read your prose without the asterisks getting in the
-way.
+You write in plain markdown. A line starting with `#` is a heading, `*` or `-`
+starts a list, and so on — but you don't have to know the syntax to use it. Your
+work saves itself as you write, so there's no save step to remember.
 
-Your changes save to disk automatically. There is no "unsaved" state to worry
-about in normal use — Canv writes the file in the background as you type, with a
-short pause to gather up edits. If something else on the system also changes the
-file (another editor, a sync tool, a script), Canv notices and offers you a
-choice: reload from disk, or keep what is in your editor. See
-[Troubleshooting](troubleshooting.md) for what to do if that prompt appears.
+The word count and an estimated reading time sit in the status bar along the
+bottom. Select a passage and the count narrows to just what you've selected.
 
 ## Formatting selected text
 
-Select any run of text in the editor and a small toolbar appears next to the
-selection. The first row holds formatting controls — bold, italic,
-strikethrough, inline code, headings, bulleted and numbered lists, block quote,
-code block, and a link inserter. Click one and Canv wraps your selection in the
-matching markdown.
+Select any run of text and a small toolbar appears next to it. Its first row
+holds plain formatting controls:
 
-The same floating toolbar also carries the profile's AI actions (Polish, Make
-Shorter, Brainstorm, and so on). Those are covered in
-[Getting the AI to help](getting-the-ai-to-help.md). A speaker control on the
-toolbar reads your selection aloud — see
-[Listening to your writing](listening-to-your-writing.md).
+- **Bold**, **italic**, **strikethrough**, and **inline code** — each wraps your
+  selection in the matching markdown.
+- **Heading** — turns the line into a heading, and clicking again steps it down
+  through the heading levels and back off, so one button cycles you to the level
+  you want.
+- **Link** — opens a small box to paste a web address into; Canv turns your
+  selected text into a link to it.
+
+The same toolbar carries a few more things: a **Note** button for leaving a
+margin comment (below), a **speaker** for reading the selection aloud (see
+[Listening to your writing](listening-to-your-writing.md)), and your profile's
+AI actions (see [Getting the AI to help](getting-the-ai-to-help.md)).
 
 ## Reading the rendered page
 
 The toolbar above the editor has an **Edit / Preview** switch. In Preview the
 markdown is rendered as a clean reading page — headings styled, lists formatted,
-links live — with no marks in view. The preview is for reading; you cannot type
-into it. Flip back to Edit to keep writing.
-
-The preview re-renders when you flip into it, so changes you make in Edit appear
-when you switch back. Headings in the preview are clickable and jump straight to
-that heading in the editor.
+links live — with none of the marks in view. Preview is for reading, not typing;
+flip back to Edit to keep writing. Headings in the preview are clickable and
+jump you to that point in the editor.
 
 ## Jumping by heading
 
-A long document is easier to navigate by structure than by scrolling. The
-outline panel beside the editor lists every heading in the current file as a
-collapsible tree. Click a heading to jump the editor to it. Headings update live
-as you type — rename a section and the outline catches up.
+A long document is easier to move around by structure than by scrolling. The
+outline beside the editor lists every heading in the current file as a tree.
+Click a heading to jump the editor to it. The outline updates live as you write,
+so renaming a section is reflected straight away.
+
+## Leaving yourself a note
+
+The **Note** button on the selection toolbar pins a comment to the text you've
+selected — a margin note that lives alongside the words without changing them.
+Use it to flag something to come back to, or to leave yourself a reminder; the
+note shows as a small numbered card next to the line, and a count of open notes
+sits at the top of the editor with a control to collapse or expand them all.
+
+Your notes are saved with the workspace and come back when you reopen the file.
+The AI uses the same kind of margin note when it has feedback on a passage;
+working with both is covered in
+[Reviewing and applying suggestions](reviewing-and-applying-suggestions.md).
 
 ## Working on two files at once
 
-You can split the editor area into two columns and open a different file in
-each. Use the editor's split control, next to the row of open-file tabs, to
-create a second column; drag a tab from one column to the other to move files
-between them, or open a file from the tree while the second column is focused.
-
-To go back to a single column, close the tabs in one column or close the column
-entirely.
+You can split the editor into two columns and open a different file in each. Use
+the split control next to the row of open-file tabs to make a second column;
+drag a tab from one column to the other to move a file between them, or open a
+file from the tree while the second column is focused. Close the split to go back
+to a single column.
 
 ## Changing the theme and text size
 
-The default theme is dark. If you prefer something else, open the settings tab
-and find the **Appearance** section. The theme picker offers a range of dark
-themes (including the default, plus Dracula, Nord, Tokyo Night, Gruvbox,
-Solarized Dark, and Synthwave '84) and several light ones (a plain light theme,
-Alucard, Solarized Light). There is also a **Match system** option that follows
-whether your operating system is set to light or dark.
+Canv opens in a dark theme. In the settings tab, under appearance, you can pick
+from a catalogue of dark and light themes — among them Dracula, Nord, Solarized
+(dark and light), Tokyo Night, and Gruvbox — or have Canv follow your system's
+light/dark setting and switch with it.
 
-The same Appearance section lets you set the editor's text size and the chat's
-text size independently. A separate **Editor** section sets how wide a line of
-text runs — narrow, normal, or wide — which is useful for keeping long
-paragraphs to a comfortable reading measure.
-
-## Exporting a finished file
-
-Canv's files are already plain markdown on your disk, so "exporting" is mostly a
-matter of getting a copy out. There are two exports for the current file,
-reachable from the command list described in
-[Finding and organising your work](finding-and-organising-your-work.md):
-
-- **Export as .md** — saves the file's markdown to a location you pick.
-- **Export as .txt** — saves the file as plain text without the markdown marks.
-
-Both produce a fresh copy; the file in your workspace is unaffected.
+The same place has a slider for the editor's text size, and a separate one for
+the chat text, so you can size each to taste.
 
 ## Up next
 
-To find a file you can't remember the name of, or to keep a reference document
-in front of the AI on every turn, see
-[Finding and organising your work](finding-and-organising-your-work.md).
+Hear your draft read back to you in
+[Listening to your writing](listening-to-your-writing.md).
