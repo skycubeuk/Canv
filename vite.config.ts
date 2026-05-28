@@ -33,9 +33,14 @@ const PROD_CSP =
   "base-uri 'self'; " +
   "frame-ancestors 'none';"
 
+// Dev CSP also allows http://localhost:8097, where the standalone React
+// DevTools (`npx react-devtools`) serves its connector script. Renderer
+// dynamically injects <script src="http://localhost:8097"> in DEV mode (see
+// src/main.tsx); without the script-src + connect-src whitelist Chromium
+// would block it.
 const DEV_CSP =
   "default-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' canv-extension:; " +
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:8097 canv-extension:; " +
   "style-src 'self' 'unsafe-inline'; " +
   "font-src 'self' data:; " +
   "img-src 'self' data: blob:; " +
