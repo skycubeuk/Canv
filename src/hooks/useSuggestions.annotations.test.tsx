@@ -116,6 +116,52 @@ describe('useSuggestions — annotation persistence', () => {
     expect(doc.slice(ann.from, ann.to)).toBe('cat')
     view.destroy()
   })
+
+  it('reloads annotations when the same file is closed and reopened', async () => {
+    const doc = 'the cat sat on the mat'
+    loadResult = [{ id: 'annot-loaded-0', anchor: makeAnchor(doc, 4, 7), note: 'loaded note', author: 'AI' }]
+
+    // First open: view A.
+    const viewA = mountView(doc)
+    type HookProps = { rel: string | null; view: EditorView | null }
+    const { rerender } = renderHook<ReturnType<typeof useSuggestions>, HookProps>(
+      (props) => useSuggestions({
+        getActiveEditor: () => props.view,
+        activeMarkdownRel: props.rel,
+        historyClient: null,
+        flushAll: async () => {},
+        saveActive: () => {},
+      }),
+      { initialProps: { rel: 'loaded.md', view: viewA } as HookProps },
+    )
+    await waitFor(
+      () => expect(viewA.state.field(annotationField).length).toBeGreaterThan(0),
+      { timeout: 2000 },
+    )
+    const loadMock = (window as unknown as { canvAnnotations: { load: ReturnType<typeof vi.fn> } }).canvAnnotations.load
+    expect(loadMock).toHaveBeenCalledTimes(1)
+
+    // Close the tab: rel goes to null, the OLD view is destroyed (mirrors
+    // Canvas.tsx's view.destroy() in its unmount cleanup).
+    viewA.destroy()
+    rerender({ rel: null, view: null })
+
+    // Reopen the same file with a fresh view: rel returns to 'loaded.md', and
+    // the new EditorView starts with an empty annotationField. The hook must
+    // re-run the sidecar load so annotations reappear in the new view.
+    const viewB = mountView(doc)
+    rerender({ rel: 'loaded.md', view: viewB })
+
+    await waitFor(
+      () => expect(viewB.state.field(annotationField).length).toBeGreaterThan(0),
+      { timeout: 2000 },
+    )
+    expect(loadMock).toHaveBeenCalledTimes(2)
+    const reloaded = viewB.state.field(annotationField)[0]
+    expect(reloaded.note).toBe('loaded note')
+    expect(doc.slice(reloaded.from, reloaded.to)).toBe('cat')
+    viewB.destroy()
+  })
 })
 
 describe('useSuggestions — discuss', () => {
