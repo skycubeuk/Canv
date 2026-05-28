@@ -13,6 +13,7 @@ import { useLocalStorage } from './useLocalStorage'
 import type { useSettings } from './useSettings'
 import type { useWorkspace } from './useWorkspace'
 import { getFs, readFileContent } from '../lib/fs'
+import { makeStreamBuffer } from '../lib/streamCoalesce'
 import type { BottomTab } from './useIdeLayout'
 
 type SettingsApi = ReturnType<typeof useSettings>
@@ -173,14 +174,22 @@ export function useSelectionAgent(args: UseSelectionAgentArgs): UseSelectionAgen
       const controller = new AbortController()
       runAbort.current.set(id, controller)
 
+      // Streaming used to call setRuns per token; the Runs panel then re-ran
+      // regex-based parsers over the entire growing response on every token
+      // (O(tokens × length) — a 50 %+ CPU spike on long grammar runs). Coalesce
+      // tokens to one setRuns per animation frame instead. The final setRuns
+      // below replaces `response` with the adapter's complete `final`, so any
+      // unflushed tail is harmless on success; we flush in `finally` so the
+      // error/abort path still reflects the most recent streamed chunks.
+      const streamBuffer = settings.streaming
+        ? makeStreamBuffer((combined) => {
+            setRuns((prev) =>
+              prev.map((r) => (r.id === id ? { ...r, response: r.response + combined } : r)),
+            )
+          })
+        : null
       try {
-        const onToken = settings.streaming
-          ? (chunk: string) => {
-              setRuns((prev) =>
-                prev.map((r) => (r.id === id ? { ...r, response: r.response + chunk } : r)),
-              )
-            }
-          : undefined
+        const onToken = streamBuffer ? (chunk: string) => streamBuffer.push(chunk) : undefined
 
         const { text: final, truncated, rawMessages, tokenUsage } = await runAgent({
           agent,
@@ -273,9 +282,14 @@ export function useSelectionAgent(args: UseSelectionAgentArgs): UseSelectionAgen
         )
         if (range != null) showBottomTab('runs')
       } finally {
+        // Flush any pending coalesced chunks so the final on-screen response
+        // reflects the most recent stream tail (matters on abort/error where
+        // the success-path setRuns doesn't run).
+        streamBuffer?.flush()
         runAbort.current.delete(id)
       }
     },
+    // streamBuffer is created fresh per invocation inside the callback; no need to depend on it here.
     [activeProfileId, settings, modelForAgent, ensurePinnedReady, getActiveEditor, setRuns, showToast, openSettingsTab, showBottomTab, emitDiffSuggestion, emitAnnotation],
   )
 
@@ -413,14 +427,23 @@ export function useSelectionAgent(args: UseSelectionAgentArgs): UseSelectionAgen
       const controller = new AbortController()
       runAbort.current.set(run.id, controller)
 
+      // Same per-token CPU blow-up as the initial-run path — coalesce to one
+      // setRuns per animation frame. `buffer` still accumulates every raw
+      // chunk because adapter.complete may return `text: ''` on abort and we
+      // need the partial reply to surface in `assistantText` below.
+      let buffer = ''
+      const streamBuffer = settings.streaming
+        ? makeStreamBuffer((combined) => {
+            setRuns((prev) =>
+              prev.map((r) => (r.id === run.id ? { ...r, response: r.response + combined } : r)),
+            )
+          })
+        : null
       try {
-        let buffer = ''
-        const onToken = settings.streaming
+        const onToken = streamBuffer
           ? (chunk: string) => {
               buffer += chunk
-              setRuns((prev) =>
-                prev.map((r) => (r.id === run.id ? { ...r, response: r.response + chunk } : r)),
-              )
+              streamBuffer.push(chunk)
             }
           : undefined
 
@@ -471,6 +494,7 @@ export function useSelectionAgent(args: UseSelectionAgentArgs): UseSelectionAgen
           ),
         )
       } finally {
+        streamBuffer?.flush()
         runAbort.current.delete(run.id)
       }
     },
