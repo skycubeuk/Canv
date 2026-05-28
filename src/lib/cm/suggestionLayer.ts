@@ -326,25 +326,35 @@ class AnnotationCardWidget extends WidgetType {
    *  to be in the right ballpark so the first paint doesn't push later lines
    *  to wrong Y positions; CM remeasures once the DOM is attached. */
   get estimatedHeight(): number {
-    return this.ann.collapsed ? 28 : 80
+    return this.ann.collapsed ? 34 : 92
   }
   toDOM(view: EditorView) {
+    // Wrapper holds the vertical gap as padding so the measured DOM height
+    // CM reads back includes the spacing around the card. Putting the gap on
+    // `.cm-annot-card` itself (via margin) makes `getBoundingClientRect`
+    // under-report the widget's painted height by exactly the margin amount,
+    // and clicks below the widget then snap to the line below.
+    const wrap = document.createElement('div')
+    wrap.className = 'cm-annot-card-wrap'
+    if (this.ann.collapsed) wrap.classList.add('cm-annot-card-wrap--collapsed')
+    wrap.contentEditable = 'false'
+
     const card = document.createElement('div')
     card.className = 'cm-annot-card'
     if (this.ann.collapsed) card.classList.add('cm-annot-card--collapsed')
-    card.contentEditable = 'false'
+    wrap.appendChild(card)
 
     // CM stores a block widget's height after its first measure pass and uses
     // that height for `posAtCoords`. When the card's rendered size changes
     // *after* measurement — webfont load, content wrap, collapse/expand —
     // CM's stored height goes stale and clicks below the card resolve to the
-    // wrong document line. Observing the card's box and calling
+    // wrong document line. Observing the wrapper's box and calling
     // `requestMeasure()` on every change forces CM to re-read the geometry.
     // Cleaned up in destroy().
     if (typeof ResizeObserver !== 'undefined') {
       const ro = new ResizeObserver(() => view.requestMeasure())
-      ro.observe(card)
-      ;(card as unknown as { __canvRO?: ResizeObserver }).__canvRO = ro
+      ro.observe(wrap)
+      ;(wrap as unknown as { __canvRO?: ResizeObserver }).__canvRO = ro
     }
 
     const mkBtn = (label: string, cls: string, run: (cb: SuggestionCallbacks) => void) => {
@@ -382,7 +392,7 @@ class AnnotationCardWidget extends WidgetType {
     card.appendChild(head)
 
     // Collapsed: author + number only.
-    if (this.ann.collapsed) return card
+    if (this.ann.collapsed) return wrap
 
     // 2. Quote snippet
     const snippet = this.ann.to > this.ann.from
@@ -428,7 +438,7 @@ class AnnotationCardWidget extends WidgetType {
         else cb.saveAnnotationNote?.(this.ann.id, this.ann.note, view)
       }))
       card.appendChild(actions)
-      return card
+      return wrap
     }
 
     // 3b. Expanded (normal): note body + actions.
@@ -444,7 +454,7 @@ class AnnotationCardWidget extends WidgetType {
     actions.appendChild(mkBtn('Collapse', 'cm-annot-collapse', (cb) => cb.toggleAnnotationCollapsed?.(this.ann.id, view)))
     actions.appendChild(mkBtn('Dismiss', 'cm-annot-dismiss', (cb) => cb.dismissAnnotation?.(this.ann.id, view)))
     card.appendChild(actions)
-    return card
+    return wrap
   }
   ignoreEvent() {
     // Interactive widget: let the textarea/buttons handle their own events so
@@ -635,9 +645,18 @@ const suggestionTheme = EditorView.baseTheme({
     backgroundColor: 'color-mix(in oklab, rgb(var(--accent)) 12%, transparent)',
     borderBottom: '2px dotted rgb(var(--accent))',
   },
+  // Wrapper holds the visual gap as PADDING so the block widget's measured
+  // height matches what's painted. The card inside keeps the border/background
+  // and just inherits the visual offset from the wrapper's padding.
+  '.cm-annot-card-wrap': {
+    display: 'block',
+    padding: '4px 0 8px 1.5em',
+  },
+  '.cm-annot-card-wrap--collapsed': {
+    padding: '2px 0 4px 1.5em',
+  },
   '.cm-annot-card': {
     display: 'block',
-    margin: '4px 0 8px 1.5em',
     maxWidth: '42em',
     padding: '8px 11px',
     borderRadius: '6px',
@@ -696,7 +715,7 @@ const suggestionTheme = EditorView.baseTheme({
   '.cm-annot-save': { color: 'rgb(var(--success-fg))', fontWeight: '600' },
   '.cm-annot-cancel': { color: 'rgb(var(--text-subtle))' },
   // Collapsed: tighten the card to a single author + number row.
-  '.cm-annot-card--collapsed': { padding: '3px 9px', margin: '2px 0 4px 1.5em' },
+  '.cm-annot-card--collapsed': { padding: '3px 9px' },
   '.cm-annot-card--collapsed .cm-annot-author': { marginBottom: '0' },
   '.cm-annot-num-toggle': { cursor: 'pointer' },
   '.cm-annot-edit-input': {
