@@ -1,4 +1,4 @@
-import { useMemo, useRef, type ReactNode } from 'react'
+import { useLayoutEffect, useMemo, useRef, type ReactNode } from 'react'
 import { useDialogs } from '../lib/dialogs'
 import { useNotifications } from '../hooks/useNotifications'
 import { useSettings } from '../hooks/useSettings'
@@ -23,7 +23,8 @@ import { useWorkspaceSetup } from '../hooks/useWorkspaceSetup'
 import { getCanvHistory } from '../lib/history'
 import { type AiEditHistoryClient } from '../lib/history/withAiEditSnapshot'
 import { getFs } from '../lib/fs'
-import { ServicesContext } from './useService'
+import { ServicesStoreContext } from './useService'
+import { createServicesStore, type ServicesStore } from './servicesStore'
 import type { ICanvServices } from './index'
 
 export interface ServicesProviderConfig {
@@ -211,7 +212,24 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
     emitAnnotation: suggestions.addAnnotation,
   })
 
-  const services = useMemo<ICanvServices>(() => ({
+  // Memoise the merged service objects separately. Inlining `{...modes, ...}`
+  // and `{...chatSessions, ...}` inside the services useMemo created a fresh
+  // reference for both keys on every services recomputation — so a churn on
+  // e.g. editorStats also notified every modes / chatSessions subscriber via
+  // the store, causing WorkspaceShell, FloatingToolbar, AppInner et al. to
+  // re-render during a selection drag (confirmed in React DevTools Profiler:
+  // 6 components in "What caused this update?" instead of 1).
+  const modesService = useMemo(
+    () => ({ ...modes, profile, setProfile }),
+    [modes, profile, setProfile],
+  )
+  const chatSessionsService = useMemo(
+    () => ({ ...chatSessions, inlinePreviewedCallId: chatEditPreview.previewedCallId }),
+    [chatSessions, chatEditPreview.previewedCallId],
+  )
+
+  const services = useMemo<ICanvServices>(() => {
+    return ({
     workspace,
     settings: settingsApi,
     editorRegistry,
@@ -220,8 +238,8 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
     dialogs,
     notifications,
     ideLayout,
-    modes: { ...modes, profile, setProfile },
-    chatSessions: { ...chatSessions, inlinePreviewedCallId: chatEditPreview.previewedCallId },
+    modes: modesService,
+    chatSessions: chatSessionsService,
     selectionAgent,
     suggestions: suggestionsWithEditPreview,
     recordings,
@@ -230,7 +248,8 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
     editorStats,
     profilePicker,
     setup,
-  }), [
+  })
+  }, [
     workspace,
     settingsApi,
     editorRegistry,
@@ -239,11 +258,8 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
     dialogs,
     notifications,
     ideLayout,
-    modes,
-    profile,
-    setProfile,
-    chatSessions,
-    chatEditPreview.previewedCallId,
+    modesService,
+    chatSessionsService,
     selectionAgent,
     suggestionsWithEditPreview,
     recordings,
@@ -254,5 +270,18 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
     setup,
   ])
 
-  return <ServicesContext.Provider value={services}>{children}</ServicesContext.Provider>
+  // The store is the React-external source of truth that backs every
+  // `useService(key)`. Created lazily on first render with the initial
+  // `services`, then synced after each commit so subscribers fire after the
+  // updated value is observable via `store.get()`.
+  const storeRef = useRef<ServicesStore | null>(null)
+  if (storeRef.current === null) storeRef.current = createServicesStore(services)
+  // useLayoutEffect (not useEffect) so the update lands BEFORE the browser
+  // paints subsequent reactions — without it, a fast-following render could
+  // observe a stale snapshot.
+  useLayoutEffect(() => {
+    storeRef.current!.update(services)
+  }, [services])
+
+  return <ServicesStoreContext.Provider value={storeRef.current}>{children}</ServicesStoreContext.Provider>
 }

@@ -33,9 +33,14 @@ const PROD_CSP =
   "base-uri 'self'; " +
   "frame-ancestors 'none';"
 
+// Dev CSP also allows http://localhost:8097, where the standalone React
+// DevTools (`npx react-devtools`) serves its connector script. Renderer
+// dynamically injects <script src="http://localhost:8097"> in DEV mode (see
+// src/main.tsx); without the script-src + connect-src whitelist Chromium
+// would block it.
 const DEV_CSP =
   "default-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval' canv-extension:; " +
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:8097 canv-extension:; " +
   "style-src 'self' 'unsafe-inline'; " +
   "font-src 'self' data:; " +
   "img-src 'self' data: blob:; " +
@@ -59,11 +64,36 @@ function cspByMode(): Plugin {
   }
 }
 
+// Inject the standalone React DevTools connector AS THE FIRST <head> script
+// in dev. The DevTools hook (`__REACT_DEVTOOLS_GLOBAL_HOOK__`) must be on
+// window BEFORE React's module code runs — otherwise React initialises
+// without the hook and the DevTools window hangs at "Loading React element
+// tree…". Injecting from src/main.tsx is too late: ES imports above the
+// injection already pulled in React.
+//
+// `onerror` swallows the connection failure when `npx react-devtools` isn't
+// running, so the app still boots normally.
+function reactDevtoolsConnector(): Plugin {
+  return {
+    name: 'react-devtools-connector',
+    transformIndexHtml: {
+      order: 'pre',
+      handler(html, ctx) {
+        if (!ctx.server) return html
+        const tag =
+          '<script src="http://localhost:8097" ' +
+          'onerror="console.warn(\'[canv] React DevTools standalone not running — start it with \\\'npx react-devtools\\\'\')"></script>'
+        return html.replace(/<head>/i, `<head>\n    ${tag}`)
+      },
+    },
+  }
+}
+
 export default defineConfig({
   base: './',
   define: {
     __APP_VERSION__: JSON.stringify(pkg.version),
   },
-  plugins: [react(), cspByMode()],
+  plugins: [react(), cspByMode(), reactDevtoolsConnector()],
   server: { host: '0.0.0.0', port: 5173, strictPort: true },
 })
