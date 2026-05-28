@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Puzzle } from 'lucide-react'
 import { BottomPanel, type BottomPanelTabDef } from './BottomPanel'
 import { DockPlacementMenu } from './DockPlacementMenu'
@@ -25,6 +25,18 @@ export function DockPopoutBoot() {
   const modesState = useModesState()
   const bridge = useDockBridge({ mode: 'popout' })
   const [state, setState] = useState<DockState | null>(null)
+  // Per-session drafts, popout-local. The main window persists drafts on the
+  // session itself so they survive remounts; the popout doesn't share that
+  // session state and the popout's chat panel doesn't get remounted by sidebar
+  // toggles (it lives in its own window), so a per-session map here gives the
+  // same "switch sessions → switch drafts" behavior without round-tripping
+  // every keystroke through IPC.
+  const [drafts, setDrafts] = useState<Record<string, string>>({})
+  const activeSessionIdForDraft = state?.activeSessionId ?? ''
+  const chatDraft = drafts[activeSessionIdForDraft] ?? ''
+  const setChatDraft = useCallback((next: string) => {
+    setDrafts((prev) => ({ ...prev, [activeSessionIdForDraft]: next }))
+  }, [activeSessionIdForDraft])
 
   useEffect(() => {
     bridge.setStateHandler((s) => setState(s))
@@ -83,7 +95,15 @@ export function DockPopoutBoot() {
       chatBusy: state.chatBusy,
       chatProvider: state.chatProvider,
       chatModel: state.chatModel,
-      sendChat: (text: string) => dispatch({ type: 'send-chat', text }),
+      chatDraft,
+      setChatDraft,
+      sendChat: (text: string) => {
+        dispatch({ type: 'send-chat', text })
+        // Clear our local draft to match main-window behavior: send wipes the
+        // input box, send-failure keeps it (but we can't see failures from
+        // here, so we optimistically clear — same as the pre-Fix-B baseline).
+        setChatDraft('')
+      },
       clearChat: () => dispatch({ type: 'clear-chat' }),
       stopChat: () => dispatch({ type: 'stop-chat' }),
       retryChat: (anchorId: string) => dispatch({ type: 'retry-chat', anchorId }),
@@ -124,7 +144,7 @@ export function DockPopoutBoot() {
       onFileHistoryOpenDiff: (r) => dispatch({ type: 'file-history-open-diff', req: r }),
       onFileHistoryRestore: (r) => dispatch({ type: 'file-history-restore', snapshotId: r.snapshotId, relPath: r.relPath }),
     }
-  }, [state, bridge, pendingApprovalsMap])
+  }, [state, bridge, pendingApprovalsMap, chatDraft, setChatDraft])
 
   const tabs = useMemo<BottomPanelTabDef[]>(() => {
     if (!adapter) return []

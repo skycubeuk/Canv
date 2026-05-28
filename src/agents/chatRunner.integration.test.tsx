@@ -18,6 +18,8 @@ const stubSessionProps = {
   onCloseSession: () => {},
   onChangeProviderModel: (_p: ChatProvider, _m: string) => {},
   availableModels: { anthropic: ['claude-sonnet-4-6'], openai: ['gpt-4o'], ollama: [] } as Record<ChatProvider, string[]>,
+  draft: '',
+  onDraftChange: () => {},
 }
 
 beforeAll(() => {

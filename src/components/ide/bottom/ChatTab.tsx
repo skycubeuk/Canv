@@ -7,6 +7,8 @@ interface Props {
   busy: boolean
   provider: string
   model: string
+  draft: string
+  onDraftChange: (next: string) => void
   onSend: (text: string) => void
   onClear: () => void
   onStop: () => void
@@ -36,6 +38,8 @@ export function ChatTab(props: Props) {
       busy={props.busy}
       provider={props.provider}
       model={props.model}
+      draft={props.draft}
+      onDraftChange={props.onDraftChange}
       onSend={props.onSend}
       onClear={props.onClear}
       onStop={props.onStop}

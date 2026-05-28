@@ -32,6 +32,10 @@ export interface ChatSession {
   provider: ChatProvider
   model: string
   messages: ChatMessage[]
+  /** The unsent input the user is currently composing for this session.
+   *  Persisted alongside messages so drafts survive remounts and reloads;
+   *  cleared only on send or when the user empties the input themselves. */
+  draft?: string
 }
 
 interface PersistedState {
@@ -77,6 +81,10 @@ export interface UseChatSessionsApi {
   selectSession: (id: ChatSessionId) => void
   closeSession: (id: ChatSessionId) => void
   setActiveSessionProviderModel: (provider: ChatProvider, model: string) => void
+  /** The active session's draft input (the unsent text in the chat input box). */
+  chatDraft: string
+  /** Replace the active session's draft. Send and explicit-clear use '' here. */
+  setChatDraft: (next: string) => void
   /** Test seam — appends a user message to the active session. */
   __test_pushUserMessage: (text: string) => void
   apiKeyMissing: boolean
@@ -297,6 +305,18 @@ export function useChatSessions(args: UseChatSessionsArgs): UseChatSessionsApi {
     })
   }, [settings])
 
+  const setChatDraft = useCallback((next: string) => {
+    setState((prev) => {
+      const idx = prev.sessions.findIndex((s) => s.id === prev.activeId)
+      if (idx < 0) return prev
+      const cur = prev.sessions[idx]
+      if ((cur.draft ?? '') === next) return prev
+      const sessions = [...prev.sessions]
+      sessions[idx] = { ...cur, draft: next }
+      return { ...prev, sessions }
+    })
+  }, [])
+
   const setActiveSessionProviderModel = useCallback((provider: ChatProvider, model: string) => {
     setState((prev) => {
       const idx = prev.sessions.findIndex((s) => s.id === prev.activeId)
@@ -474,7 +494,7 @@ export function useChatSessions(args: UseChatSessionsArgs): UseChatSessionsApi {
       ...(active.messages.length === 0 ? { provider: lockedProvider } : {}),
     }
     const next = [...active.messages, userMsg]
-    patchSession(sessionId, (s) => ({ ...s, messages: next }))
+    patchSession(sessionId, (s) => ({ ...s, messages: next, draft: '' }))
     await runTurn(sessionId, next)
   }, [active, activeSessionApiKeyMissing, args, runTurn, getRuntime, patchSession, missingProviderToast])
 
@@ -601,6 +621,8 @@ export function useChatSessions(args: UseChatSessionsArgs): UseChatSessionsApi {
       selectSession,
       closeSession,
       setActiveSessionProviderModel,
+      chatDraft: active.draft ?? '',
+      setChatDraft,
       __test_pushUserMessage,
       apiKeyMissing,
       meterTotals,
@@ -617,7 +639,7 @@ export function useChatSessions(args: UseChatSessionsArgs): UseChatSessionsApi {
       stopChat,
       clearChat,
     }),
-    [active, sessions, state.sessions, getSession, createSession, selectSession, closeSession, setActiveSessionProviderModel, __test_pushUserMessage, apiKeyMissing, meterTotals, pendingApprovals, followLatest, sendChat, startSeededChat, chatBusy, onApprovalDecide, retryFromAnchor, editAndRetry, undoRetry, stopChat, clearChat],
+    [active, sessions, state.sessions, getSession, createSession, selectSession, closeSession, setActiveSessionProviderModel, setChatDraft, __test_pushUserMessage, apiKeyMissing, meterTotals, pendingApprovals, followLatest, sendChat, startSeededChat, chatBusy, onApprovalDecide, retryFromAnchor, editAndRetry, undoRetry, stopChat, clearChat],
   )
 }
 

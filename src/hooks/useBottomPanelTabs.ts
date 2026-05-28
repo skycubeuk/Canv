@@ -133,6 +133,8 @@ export function useBottomPanelTabs(args: UseBottomPanelTabsArgs) {
     chatBusy: chatSessions.chatBusy,
     chatProvider: chatSessions.chatProvider,
     chatModel: chatSessions.chatModel,
+    chatDraft: chatSessions.chatDraft,
+    setChatDraft: chatSessions.setChatDraft,
     sendChat: chatSessions.sendChat,
     clearChat: chatSessions.clearChat,
     stopChat: chatSessions.stopChat,

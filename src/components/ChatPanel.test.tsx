@@ -35,6 +35,8 @@ const baseProps = {
   onSetFollowLatest: vi.fn(),
   contextFileName: null,
   chatFontSize: 14,
+  draft: '',
+  onDraftChange: vi.fn(),
   // Multi-session props:
   sessions: [{ id: 's1', title: 'New chat', busy: false, pendingApprovalCount: 0 }],
   activeId: 's1',
@@ -53,6 +55,8 @@ const sessionProps = {
   onCloseSession: vi.fn(),
   onChangeProviderModel: vi.fn(),
   availableModels: { anthropic: ['claude-sonnet-4-6'], openai: ['gpt-4o'], ollama: [] } as Record<ChatProvider, string[]>,
+  draft: '',
+  onDraftChange: vi.fn(),
 }
 
 describe('ChatPanel — tool rendering', () => {
@@ -435,6 +439,14 @@ describe('ChatPanel — provider/model picker lock', () => {
   })
 })
 
+// Draft is now controlled by the parent (see Fix B: lift chat draft into
+// session state). For tests that simulate typing and then inspect the
+// textarea's value, we need a host that actually owns the draft state.
+function StatefulDraftHost(props: Omit<ComponentProps<typeof ChatPanel>, 'draft' | 'onDraftChange'>) {
+  const [draft, setDraft] = useState('')
+  return <ChatPanel {...props} draft={draft} onDraftChange={setDraft} />
+}
+
 describe('ChatPanel @-mention', () => {
   it('opens the popover when @ is typed and files are available', async () => {
     const user = userEvent.setup()
@@ -488,7 +500,7 @@ describe('ChatPanel @-mention', () => {
     const user = userEvent.setup()
     const onSend = vi.fn()
     render(
-      <ChatPanel
+      <StatefulDraftHost
         {...baseProps}
         onSend={onSend}
         messages={[]}
@@ -511,7 +523,7 @@ describe('ChatPanel @-mention', () => {
   it('Escape closes the popover without changing the input', async () => {
     const user = userEvent.setup()
     render(
-      <ChatPanel
+      <StatefulDraftHost
         {...baseProps}
         messages={[]}
         workspaceFiles={['a.md']}
@@ -530,7 +542,7 @@ describe('ChatPanel @-mention', () => {
   it('clicking a row inserts that path', async () => {
     const user = userEvent.setup()
     render(
-      <ChatPanel
+      <StatefulDraftHost
         {...baseProps}
         messages={[]}
         workspaceFiles={['a.md', 'b.md', 'c.md']}

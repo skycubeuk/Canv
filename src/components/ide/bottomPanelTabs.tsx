@@ -36,6 +36,8 @@ export interface BottomPanelTabsAdapter {
   chatBusy: boolean
   chatProvider: string
   chatModel: string
+  chatDraft: string
+  setChatDraft: (next: string) => void
   sendChat: (text: string) => void
   clearChat: () => void
   stopChat: () => void
@@ -113,6 +115,8 @@ export function buildBottomPanelTabs(adapter: BottomPanelTabsAdapter): BottomPan
           busy={adapter.chatBusy}
           provider={adapter.chatProvider}
           model={adapter.chatModel}
+          draft={adapter.chatDraft}
+          onDraftChange={adapter.setChatDraft}
           onSend={adapter.sendChat}
           onClear={adapter.clearChat}
           onStop={adapter.stopChat}

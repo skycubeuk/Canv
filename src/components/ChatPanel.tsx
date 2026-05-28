@@ -105,6 +105,10 @@ interface Props {
   /** Base px size for chat text. Bubbles render at 1em; chrome scales
    *  proportionally via em-relative classes. */
   chatFontSize: number
+  /** Controlled input value (the unsent draft). The parent owns this so the
+   *  draft survives ChatPanel remounts and persists per-session. */
+  draft: string
+  onDraftChange: (next: string) => void
   sessions: SidebarSession[]
   activeId: string
   onCreateSession: () => void
@@ -117,8 +121,12 @@ interface Props {
   workspaceFiles?: string[]
 }
 
-export function ChatPanel({ messages, busy, provider, model, onSend, onClear, onStop, onRetry, onEditAndRetry, pendingApprovals, onApprovalDecide, pricingOverrides, followLatest, onSetFollowLatest, contextFileName, chatFontSize, sessions, activeId, onCreateSession, onSelectSession, onCloseSession, onChangeProviderModel, availableModels, workspaceFiles }: Props) {
-  const [input, setInput] = useState('')
+export function ChatPanel({ messages, busy, provider, model, onSend, onClear, onStop, onRetry, onEditAndRetry, pendingApprovals, onApprovalDecide, pricingOverrides, followLatest, onSetFollowLatest, contextFileName, chatFontSize, draft, onDraftChange, sessions, activeId, onCreateSession, onSelectSession, onCloseSession, onChangeProviderModel, availableModels, workspaceFiles }: Props) {
+  // Draft is controlled by the parent (useChatSessions) so it survives any
+  // remount of this component — e.g. toggling the files sidebar used to
+  // unmount the entire main column and drop a local useState here.
+  const input = draft
+  const setInput = onDraftChange
   const mention = useAtMention(workspaceFiles ?? EMPTY_FILES)
   const [editingUserId, setEditingUserId] = useState<string | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -154,7 +162,7 @@ export function ChatPanel({ messages, busy, provider, model, onSend, onClear, on
     const handler = (e: Event) => {
       const prompt = (e as CustomEvent<string>).detail
       if (typeof prompt !== 'string') return
-      setInput(prompt)
+      onDraftChange(prompt)
       const el = inputRef.current
       if (el) {
         el.focus()
@@ -163,7 +171,7 @@ export function ChatPanel({ messages, busy, provider, model, onSend, onClear, on
     }
     window.addEventListener('canv:setChatDraft', handler)
     return () => window.removeEventListener('canv:setChatDraft', handler)
-  }, [])
+  }, [onDraftChange])
 
   // When messages change and we're following, scroll to bottom — and tag the
   // resulting scroll event so our handler doesn't misread it as user intent.
@@ -206,8 +214,10 @@ export function ChatPanel({ messages, busy, provider, model, onSend, onClear, on
   const handleSubmit = () => {
     const text = input.trim()
     if (!text || busy) return
+    // Parent (useChatSessions.sendChat) clears the draft when the send
+    // actually proceeds. If it bails early (missing API key, no workspace),
+    // the draft is intentionally preserved so the user doesn't lose work.
     onSend(text)
-    setInput('')
   }
 
   const onScrollKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {

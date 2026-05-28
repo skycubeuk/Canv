@@ -554,3 +554,67 @@ describe('useChatSessions — startSeededChat', () => {
     expect(originalSession!.messages[0].content).toBe('original message')
   })
 })
+
+describe('useChatSessions — chat draft', () => {
+  beforeEach(() => { localStorage.clear(); vi.clearAllMocks() })
+
+  it('chatDraft is empty for a fresh session', () => {
+    const { result } = renderHook(() => useChatSessions(makeArgs()))
+    expect(result.current.chatDraft).toBe('')
+  })
+
+  it('setChatDraft updates the active session draft only', () => {
+    const { result } = renderHook(() => useChatSessions(makeArgs()))
+    const a = result.current.activeId
+    act(() => { result.current.createSession() })
+    const b = result.current.activeId
+    act(() => { result.current.setChatDraft('hello from b') })
+
+    // Active (b) sees its own draft; the other session was never touched.
+    expect(result.current.chatDraft).toBe('hello from b')
+    expect(result.current.getSession(a)?.draft ?? '').toBe('')
+    expect(result.current.getSession(b)?.draft).toBe('hello from b')
+  })
+
+  it('switching sessions restores each session\'s own draft', () => {
+    const { result } = renderHook(() => useChatSessions(makeArgs()))
+    const a = result.current.activeId
+    act(() => { result.current.setChatDraft('text for A') })
+    act(() => { result.current.createSession() })
+    const b = result.current.activeId
+    act(() => { result.current.setChatDraft('text for B') })
+
+    act(() => { result.current.selectSession(a) })
+    expect(result.current.chatDraft).toBe('text for A')
+    act(() => { result.current.selectSession(b) })
+    expect(result.current.chatDraft).toBe('text for B')
+  })
+
+  it('drafts persist to localStorage and reload on remount', () => {
+    const { result, unmount } = renderHook(() => useChatSessions(makeArgs()))
+    act(() => { result.current.setChatDraft('survives reload') })
+    unmount()
+
+    const { result: result2 } = renderHook(() => useChatSessions(makeArgs()))
+    expect(result2.current.chatDraft).toBe('survives reload')
+  })
+
+  it('sendChat clears the active session draft when the send proceeds', async () => {
+    const args = makeArgs()
+    args.workspace.tree = { kind: 'dir', relPath: '', name: 'root', children: [], truncated: false }
+    const { result } = renderHook(() => useChatSessions(args))
+    act(() => { result.current.setChatDraft('about to send') })
+    expect(result.current.chatDraft).toBe('about to send')
+
+    await act(async () => { await result.current.sendChat('about to send') })
+    expect(result.current.chatDraft).toBe('')
+  })
+
+  it('sendChat preserves the draft when it bails early (e.g. no workspace)', async () => {
+    // No workspace.tree — sendChat should bail before clearing the draft.
+    const { result } = renderHook(() => useChatSessions(makeArgs()))
+    act(() => { result.current.setChatDraft('keep me') })
+    await act(async () => { await result.current.sendChat('keep me') })
+    expect(result.current.chatDraft).toBe('keep me')
+  })
+})

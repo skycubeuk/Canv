@@ -125,25 +125,32 @@ function HorizontalShell(props: {
     </Group>
   )
 
-  if (!sidebarVisible) {
-    return main
-  }
-
-  const horizontalDefaultLayout: Layout = { sidebar: sidebarSize, main: 100 - sidebarSize }
-
+  // Same reasoning as the editor/dock structure above: the outer <Group> and
+  // <Panel id="main"> are rendered unconditionally so React reconciliation keeps
+  // the main column (editor, dock, ChatPanel, etc.) mounted across sidebar
+  // toggles. Only the leading sidebar <Panel> + <Separator> are conditional.
+  // Without this, hiding/showing the sidebar changes main's parent type and
+  // remounts everything inside it, throwing away component-local state like
+  // the chat input draft.
   return (
     <Group
       orientation="horizontal"
       className="h-full w-full"
-      defaultLayout={horizontalDefaultLayout}
+      defaultLayout={sidebarVisible
+        ? { sidebar: sidebarSize, main: 100 - sidebarSize }
+        : { main: 100 }}
       onLayoutChanged={(layout: Layout) => {
         if (layout['sidebar'] !== undefined) onSidebarSizeChange?.(layout['sidebar'])
       }}
     >
-      <Panel id="sidebar" minSize="12%" maxSize="40%" className="h-full">
-        {sidebar}
-      </Panel>
-      <Separator className="w-px bg-border-default hover:bg-border-strong transition-colors cursor-col-resize" />
+      {sidebarVisible && (
+        <Panel id="sidebar" minSize="12%" maxSize="40%" className="h-full">
+          {sidebar}
+        </Panel>
+      )}
+      {sidebarVisible && (
+        <Separator className="w-px bg-border-default hover:bg-border-strong transition-colors cursor-col-resize" />
+      )}
       <Panel id="main" minSize="40%" className="h-full min-w-0">
         {main}
       </Panel>
