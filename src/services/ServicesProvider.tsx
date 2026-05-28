@@ -212,7 +212,24 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
     emitAnnotation: suggestions.addAnnotation,
   })
 
-  const services = useMemo<ICanvServices>(() => ({
+  // Memoise the merged service objects separately. Inlining `{...modes, ...}`
+  // and `{...chatSessions, ...}` inside the services useMemo created a fresh
+  // reference for both keys on every services recomputation — so a churn on
+  // e.g. editorStats also notified every modes / chatSessions subscriber via
+  // the store, causing WorkspaceShell, FloatingToolbar, AppInner et al. to
+  // re-render during a selection drag (confirmed in React DevTools Profiler:
+  // 6 components in "What caused this update?" instead of 1).
+  const modesService = useMemo(
+    () => ({ ...modes, profile, setProfile }),
+    [modes, profile, setProfile],
+  )
+  const chatSessionsService = useMemo(
+    () => ({ ...chatSessions, inlinePreviewedCallId: chatEditPreview.previewedCallId }),
+    [chatSessions, chatEditPreview.previewedCallId],
+  )
+
+  const services = useMemo<ICanvServices>(() => {
+    return ({
     workspace,
     settings: settingsApi,
     editorRegistry,
@@ -221,8 +238,8 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
     dialogs,
     notifications,
     ideLayout,
-    modes: { ...modes, profile, setProfile },
-    chatSessions: { ...chatSessions, inlinePreviewedCallId: chatEditPreview.previewedCallId },
+    modes: modesService,
+    chatSessions: chatSessionsService,
     selectionAgent,
     suggestions: suggestionsWithEditPreview,
     recordings,
@@ -231,7 +248,8 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
     editorStats,
     profilePicker,
     setup,
-  }), [
+  })
+  }, [
     workspace,
     settingsApi,
     editorRegistry,
@@ -240,11 +258,8 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
     dialogs,
     notifications,
     ideLayout,
-    modes,
-    profile,
-    setProfile,
-    chatSessions,
-    chatEditPreview.previewedCallId,
+    modesService,
+    chatSessionsService,
     selectionAgent,
     suggestionsWithEditPreview,
     recordings,
