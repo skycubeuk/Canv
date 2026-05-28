@@ -38,9 +38,11 @@ jobs:
         # On failure, wipe the partial electron install and retry once.
         run: npm ci || (echo "first npm ci failed; cleaning + retrying" && rm -rf node_modules/electron && npm ci)
 
-      - name: Lint (non-blocking)
+      - name: Lint
         run: npm run lint
-        continue-on-error: true
+
+      - name: Typecheck
+        run: npm run typecheck
 
       - name: Test
         run: npm test
