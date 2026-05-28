@@ -37,7 +37,7 @@ function anthropicMessages(messages: Message[]): Array<{ role: 'user' | 'assista
 export const anthropicAdapter: LLMAdapter = {
   id: 'anthropic',
   name: 'Anthropic',
-  models: ['claude-opus-4-7', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001'],
+  models: ['claude-opus-4-8', 'claude-opus-4-7', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001'],
 
   async complete(params: CompleteParams): Promise<CompleteResult> {
     const { messages, system, model, maxTokens = 2048, signal, onToken, apiKey } = params
