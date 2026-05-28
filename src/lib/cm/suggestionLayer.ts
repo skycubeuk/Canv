@@ -6,7 +6,7 @@ import {
   type Extension,
   type Text,
 } from '@codemirror/state'
-import { Decoration, type DecorationSet, EditorView, WidgetType } from '@codemirror/view'
+import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate, WidgetType } from '@codemirror/view'
 import type { Hunk, Annotation } from '../suggestions/types'
 
 // ---- callbacks facet: the editor calls back into the React store ----------
@@ -322,11 +322,30 @@ class AnnotationCardWidget extends WidgetType {
       other.num === this.num
     )
   }
+  /** Initial guess CM uses before it has measured the rendered DOM. Just needs
+   *  to be in the right ballpark so the first paint doesn't push later lines
+   *  to wrong Y positions; CM remeasures once the DOM is attached. */
+  get estimatedHeight(): number {
+    return this.ann.collapsed ? 28 : 80
+  }
   toDOM(view: EditorView) {
     const card = document.createElement('div')
     card.className = 'cm-annot-card'
     if (this.ann.collapsed) card.classList.add('cm-annot-card--collapsed')
     card.contentEditable = 'false'
+
+    // CM stores a block widget's height after its first measure pass and uses
+    // that height for `posAtCoords`. When the card's rendered size changes
+    // *after* measurement — webfont load, content wrap, collapse/expand —
+    // CM's stored height goes stale and clicks below the card resolve to the
+    // wrong document line. Observing the card's box and calling
+    // `requestMeasure()` on every change forces CM to re-read the geometry.
+    // Cleaned up in destroy().
+    if (typeof ResizeObserver !== 'undefined') {
+      const ro = new ResizeObserver(() => view.requestMeasure())
+      ro.observe(card)
+      ;(card as unknown as { __canvRO?: ResizeObserver }).__canvRO = ro
+    }
 
     const mkBtn = (label: string, cls: string, run: (cb: SuggestionCallbacks) => void) => {
       const b = document.createElement('button')
@@ -431,6 +450,10 @@ class AnnotationCardWidget extends WidgetType {
     // Interactive widget: let the textarea/buttons handle their own events so
     // the editor doesn't hijack typing or selection inside the card.
     return true
+  }
+  destroy(dom: HTMLElement) {
+    const ro = (dom as unknown as { __canvRO?: ResizeObserver }).__canvRO
+    ro?.disconnect()
   }
 }
 
@@ -693,7 +716,21 @@ const suggestionTheme = EditorView.baseTheme({
   },
 })
 
+// Belt-and-braces: any annotation state change (collapse/expand, add, edit,
+// patch) triggers a measure pass on the next frame. Catches the moment
+// between "old card removed / new card mounted" and the ResizeObserver's
+// async tick, so clicks stay accurate even on the very next mousedown.
+const annotationMeasurePlugin = ViewPlugin.fromClass(
+  class {
+    update(update: ViewUpdate) {
+      const prev = update.startState.field(annotationField, false)
+      const next = update.state.field(annotationField, false)
+      if (prev !== next) update.view.requestMeasure()
+    }
+  },
+)
+
 /** The full extension to add to an editor. */
 export function suggestionExtension(): Extension {
-  return [suggestionField, annotationField, editPreviewField, suggestionTheme]
+  return [suggestionField, annotationField, editPreviewField, suggestionTheme, annotationMeasurePlugin]
 }
