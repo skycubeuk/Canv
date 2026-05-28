@@ -1,80 +1,49 @@
 # Finding and organising your work
 
-A writing project is rarely a single file. This page covers moving around your
-workspace — listing files, creating folders, jumping to a file by name,
-searching for a phrase, reaching commands you don't see on screen, and pinning a
-reference file so the AI always has it.
+A writing project is rarely one file. This page covers moving around your
+workspace — browsing and managing files, jumping to one by name, searching the
+whole folder for a phrase, and pinning a file so the AI always keeps it in view.
 
-## Browsing the files in your workspace
+## Browsing and managing files
 
-The left side of the window lists every file and folder in your workspace. Click
-a file to open it in the editor; click a folder to expand or collapse it. The
-tree updates live when files change on disk, so creating a file outside Canv (in
-another editor, with a script) makes it appear in the tree within a moment.
+The file tree down the left lists everything in your workspace folder. Click a
+file to open it; click a folder to expand it.
 
-The header of the tree has two **+** buttons — one to create a new file in the
-current folder, one to create a new folder. Right-click anywhere in the tree for
-a menu with the rest of the operations:
+Right-click a file or folder for the things you'd expect — create a new file or
+folder, rename, or delete. Deleting moves the item to your system's trash and
+asks you to confirm first, so a misclick isn't permanent. You can also copy a
+file's path from the same menu when you need to refer to it somewhere.
 
-- **New file** and **New folder** create children of the folder you clicked on
-  (or the workspace root, if you clicked into empty space).
-- **Rename** changes a file's or folder's name in place.
-- **Delete** sends the file to the system trash. There is no in-app undo for a
-  delete; the system trash is the way back. If revision history is on, you can
-  also restore the file's last-known content from a snapshot — see
-  [Tracking changes and keeping things tidy](tracking-changes-and-keeping-things-tidy.md).
-- **Pin to context** is offered on markdown files. A pinned file is included in
-  every AI request from this workspace until you unpin it.
-- **View history** is offered on markdown files when revision history is on. It
-  opens the file's version list in a panel beneath the editor.
-- **Serve as website** turns a folder into a small browsable site at a local
-  address; see
-  [Building visual views of your project](building-visual-views-of-your-project.md).
+## Finding a file by name
 
-## Finding a file fast
+When you can't remember where you put something, you don't have to dig through
+the tree. A quick-find pops up over the editor when you start it: type part of a
+file's name and it narrows the list as you go, with your recent files there to
+begin with. The same quick-find reaches commands you don't see on screen — start
+typing what you want to do and it offers matching actions.
 
-When you know the file's name but not where it lives, there is a quick-find that
-floats over the editor when you start typing a name. Canv ranks every file in
-your workspace by how well it matches what you've typed; pick a result to open
-it. The same overlay offers your recently-opened files at the top, so flipping
-between two or three files you've been editing is quick.
+## Searching the whole workspace
 
-## Searching the workspace
+To find a phrase rather than a filename, use the search panel. It looks across
+every file in the workspace and lists the matches, each one a click away from the
+line it's on. You can treat your search as a regular expression for pattern
+matching, make it case-sensitive, and scope it to a single folder when you only
+care about part of the project.
 
-For finding a phrase rather than a filename, open the search tab in the left
-sidebar. Type a query and Canv returns every match across the workspace, grouped
-by file, up to a thousand matches in total. You can treat the query as a regular
-expression (a pattern that matches by rule rather than literally),
-make it case-sensitive, or scope it to a subfolder. Click a match to jump the
-editor to that line.
+## Pinning a reference file for the AI
 
-Search skips binary files and very large files. For projects with thousands of
-files the first search may take a moment as Canv reads them; after that the
-results stream in as it finishes each file.
+Some files you want the AI to have in mind all the time — a character sheet, a
+style guide, the outline you're writing to. Right-click a markdown file and
+**pin** it. A pinned file is always included in what the AI sees, in both the
+passage actions and the chat, without you having to mention it each time.
+Right-click again to unpin when you no longer need it in view.
 
-## Reaching commands you don't see
-
-Canv has a command list that names every action — open settings, change
-workspace, toggle the sidebar, run a particular profile action on the current
-document, move the bottom panel to the right, and so on. Start typing to filter
-it. It is the quickest way to reach something whose location you don't remember,
-and it can also switch into a file-finding mode so the same overlay finds files
-by name.
-
-## Pinning a reference file
-
-If you have a notes file or a series bible you want the AI to look at on every
-turn, right-click the markdown file in the tree and choose **Pin to context**.
-The pinned file rides along with whatever you ask the AI to do — selection
-rewrites, document actions, chat replies — until you unpin it from the same
-menu. The file shows a pin marker in the tree.
-
-You can pin more than one file; they all attach to every AI turn. Pinning is
-per-workspace, so each project keeps its own reference material attached. The
-pin is only offered on markdown files.
+This is different from pointing the assistant at a file once in a single message
+by typing `@`; that's covered in
+[Working with an AI assistant](working-with-an-ai-assistant.md). Pinning is the
+standing version — it stays until you remove it.
 
 ## Up next
 
-Once you can find your files and have one open, the next thing is connecting an
-AI to work on them — see [Connecting an AI](connecting-an-ai-provider.md) — or,
-if you've already done that, [Getting the AI to help](getting-the-ai-to-help.md).
+With your files in order, connect the AI that will work on them in
+[Connecting an AI](connecting-an-ai-provider.md).

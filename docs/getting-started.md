@@ -1,109 +1,77 @@
 # Getting started
 
-This page walks you from a fresh install through opening your writing,
-choosing a profile, connecting an AI, and running your first action on a
-paragraph. After this page you have a working setup; the other pages cover
-individual parts of the app in more depth.
+This page takes you from a fresh install to your first AI-assisted edit:
+installing the app, picking a writing profile, opening a folder to write in,
+connecting an AI, and the basic rhythm of writing something and then asking the
+AI to do something with it.
 
 ## Installing Canv
 
-Pre-built installers are on the project's
-[Releases page](https://github.com/skycubeuk/Canv/releases). Pick the one that
-matches your machine:
+Download the build for your system from the project's releases page and install
+it the way you'd install any app. There's a build for macOS (Apple Silicon and
+Intel), Windows (an installer and a portable version), and Linux (AppImage,
+Debian/Ubuntu, and Fedora/RHEL packages).
 
-- **macOS** — a disk image for Intel or Apple Silicon. The build is not yet
-  signed, so the first time you launch it macOS refuses with a "cannot verify
-  the developer" message. Right-click the app icon and choose **Open** to
-  bypass that once; the system remembers the choice afterwards.
-- **Windows** — an installer or a portable version. SmartScreen warns
-  "publisher unknown" on first launch; click **More info → Run anyway**.
-- **Linux** — an AppImage, or a `.deb` or `.rpm` package. Mark the AppImage
-  executable before running it, or install the package with your package
-  manager.
+On macOS the build is unsigned, so the first time you open it the system may
+warn you it can't be checked. Right-click the app and choose **Open** to get
+past that once; after that it opens normally. See
+[Troubleshooting](troubleshooting.md) if the warning blocks you.
 
-If a first-launch warning blocks you, [Troubleshooting](troubleshooting.md) has
-the details for each system.
+## Choosing a profile
 
-## Picking a workspace
+The first time you start Canv, it asks you to pick a **profile**. A profile is a
+set of AI behaviours tuned for a kind of writing — the buttons you get for
+working on a passage, and the personality of the assistant you chat with, all
+change with it. Three come built in:
 
-The first time you launch Canv it asks you to pick a folder. This becomes your
-**workspace**. Everything Canv shows you — the file tree, the editor, the AI's
-view of "your work" — is rooted at that folder. Pick somewhere that already
-holds the markdown files you want to write, or an empty folder you intend to
-fill.
+- **Fiction** — stories, novels, scenes, character work.
+- **Factual** — essays, journalism, blog posts, reports.
+- **Technical** — documentation, specs, how-tos, references.
 
-Canv only reads and writes inside the workspace you pick. You can change
-workspace later, and Canv remembers each workspace's settings separately.
+Each one shows a short description and a few examples so you can tell them apart.
+Pick whichever fits what you're writing; you can switch at any time, and you can
+write your own profile later. See [Getting the AI to help](getting-the-ai-to-help.md).
 
-## First-time setup
+## Opening a folder to work in
 
-When you open a workspace Canv hasn't seen before, a setup card appears. It
-asks two things.
+Canv works on a **folder** of files on your machine — your workspace. Point it
+at an existing folder of writing, or make a new empty one for a fresh project.
+Everything you write is saved as plain files inside that folder, so you can back
+it up, sync it, or open it in any other editor whenever you like.
 
-**Choose a default profile.** A profile is a flavour of writing — Fiction,
-Factual, or Technical. Each profile carries its own set of one-click actions
-(Grammar & Spelling, Make Shorter, Polish, and so on) and its own chat tone.
-You can switch profile per document later, so this is just the starting profile
-for new files in this workspace. The examples in this guide use Fiction.
-
-**Turn on revision history.** If you tick this, Canv keeps a private, versioned
-history of the whole workspace in the background. It is stored inside the
-workspace folder and never touches your normal git work. Snapshots happen
-automatically around AI edits and after idle periods, and you can make named
-checkpoints by hand. See
-[Tracking changes and keeping things tidy](tracking-changes-and-keeping-things-tidy.md)
-for what the history can do for you.
-
-Click **Set up workspace** and Canv writes the configuration and is ready.
+The folder's files show in a tree down the left. Click one to open it, or start
+a new one from the tree. Working with files is covered in
+[Finding and organising your work](finding-and-organising-your-work.md).
 
 ## Connecting an AI
 
-Canv does not ship with an AI account. To let the AI help, you either bring a
-key from a cloud service — Canv supports Anthropic and OpenAI — or you run a
-model locally on your own machine with Ollama, which needs no key.
+You can write in Canv without any AI at all. To turn on the AI help, you give
+Canv a key for a provider. Open the settings tab and paste in a key for
+Anthropic or OpenAI, or point Canv at a local model running on your own machine
+with Ollama. Your key is stored on your machine, and requests go straight from
+Canv to the provider.
 
-The short version: open the settings tab, find the **API keys & endpoints**
-section, and either paste a key for Anthropic or OpenAI, or point Canv at your
-local Ollama server. The full walk-through, including how to pick which model
-does the work, is on [Connecting an AI](connecting-an-ai-provider.md).
+Which provider, where keys live, how to pick a model, and how to watch the cost
+are all in [Connecting an AI](connecting-an-ai-provider.md).
 
-If you do not connect anything, the rest of the app still works — you can
-write, organise, and read your files. The AI features show a "key missing"
-warning until you connect a service.
+## Writing something, then asking for help
 
-## Writing something
+The core loop is short:
 
-Open a file from the file tree on the left, or create one with the **+**
-buttons at the top of the tree. The main panel becomes a markdown editor: type
-normally and your changes save to disk automatically. There is no separate
-"save" step in routine writing.
+1. **Write.** Type into the editor. It's plain markdown — a `#` makes a heading,
+   `*` makes a list — but you don't have to remember any of that; selecting text
+   gives you formatting buttons, and your work saves itself as you go.
+2. **Ask the AI about a passage.** Select a run of text and a small toolbar
+   appears beside it. Alongside the formatting buttons it carries your profile's
+   AI actions — in Fiction, things like **Polish** or **Story Reviewer**. Click
+   one and the AI works on just that passage. What comes back appears right in
+   the document for you to accept or reject; see
+   [Reviewing and applying suggestions](reviewing-and-applying-suggestions.md).
+3. **Or talk it through.** Open the chat to discuss your draft, ask questions, or
+   have the assistant make changes across several files. See
+   [Working with an AI assistant](working-with-an-ai-assistant.md).
 
-The editor renders bold, italics, headings, and links as you type, so the file
-you see and the file on disk match. When you want to read what you have written
-without the markdown marks in view, the toolbar above the editor has an
-**Edit / Preview** switch.
+## Up next
 
-[More about the editor](writing-and-editing-text.md).
-
-## Asking the AI for help
-
-Once an AI is connected, select a paragraph in the editor. A small toolbar
-floats next to the selection with the profile's actions — Grammar & Spelling,
-Polish, Make Shorter, Free Edit, and so on. Click one. Canv sends just the
-selected text (plus a little context about the rest of the document) to the AI
-and streams the answer back. The response opens in a panel below your editor
-with an inline diff between the original and the rewrite, and an **Apply**
-button that drops the rewrite back into the document.
-
-To run an action on the whole document instead of a selection, use the
-**Run on document** menu in the same toolbar.
-
-[More about asking the AI for help](getting-the-ai-to-help.md).
-
-## Where to go next
-
-- For a longer conversation rather than a one-off rewrite, see
-  [Working with an AI assistant](working-with-an-ai-assistant.md).
-- To know exactly when Canv saves things and what's tracked, see
-  [Tracking changes and keeping things tidy](tracking-changes-and-keeping-things-tidy.md).
-- If something feels stuck, check [Troubleshooting](troubleshooting.md).
+Get comfortable in the editor — formatting, preview, and moving around a long
+document — in [Writing and editing text](writing-and-editing-text.md).
