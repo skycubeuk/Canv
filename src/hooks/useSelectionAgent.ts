@@ -232,6 +232,7 @@ export function useSelectionAgent(args: UseSelectionAgentArgs): UseSelectionAgen
                   elapsedMs: Date.now() - startedAt,
                   inlineEmitted: routing.emitDiff,
                   showDiffInPanel: settings.aiChangesDisplay !== 'inline',
+                  annotationsInlined: routing.emitAnnotation,
                 }
               : r,
           ),

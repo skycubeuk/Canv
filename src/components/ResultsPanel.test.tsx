@@ -148,6 +148,34 @@ describe('RunView', () => {
     expect(screen.queryByText(/\[\{/)).toBeNull()
   })
 
+  it('shows "Marked in the document" caption when annotations were inlined', () => {
+    const json = JSON.stringify([{ quote: 'the opening line', comment: 'Nice.' }])
+    const run = baseRun({
+      agentId: 'story', agentLabel: 'Story Reviewer',
+      response: json, originalResponse: json,
+      annotationsInlined: true,
+    })
+    render(
+      <ContextMenuProvider><RunView run={run} onApply={vi.fn()} onRerun={vi.fn()} onRefine={vi.fn()} /></ContextMenuProvider>,
+    )
+    expect(screen.getByText(/marked in the document/i)).toBeInTheDocument()
+  })
+
+  it('hides the "Marked in the document" caption in panel mode (annotations not inlined)', () => {
+    const json = JSON.stringify([{ quote: 'the opening line', comment: 'Nice.' }])
+    const run = baseRun({
+      agentId: 'story', agentLabel: 'Story Reviewer',
+      response: json, originalResponse: json,
+      annotationsInlined: false,
+    })
+    render(
+      <ContextMenuProvider><RunView run={run} onApply={vi.fn()} onRerun={vi.fn()} onRefine={vi.fn()} /></ContextMenuProvider>,
+    )
+    expect(screen.queryByText(/marked in the document/i)).toBeNull()
+    // The notes themselves are still listed.
+    expect(screen.getByText('Nice.')).toBeInTheDocument()
+  })
+
   it('while structured JSON is still streaming, shows a Reading state not raw JSON', () => {
     const partial = '[\n  {\n    "quote": "the opening line",\n    "comment": "This gri'
     const run = baseRun({

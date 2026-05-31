@@ -66,6 +66,11 @@ export interface RunRecord {
    *  mode). Absent on legacy runs → treated as true so older runs still show
    *  their diff. */
   showDiffInPanel?: boolean
+  /** True when this run's review notes were rendered as inline annotations in
+   *  the document. Undefined on legacy runs → treated as true so the existing
+   *  "Marked in the document" caption still shows. False in 'panel' display
+   *  mode, where notes appear only as the panel list. */
+  annotationsInlined?: boolean
 }
 
 export function RunView({
@@ -228,18 +233,20 @@ export function RunView({
             <div className="space-y-3">
               {reviewNotes.map((n, i) => (
                 <div key={i} className="text-sm">
-                  <div className="text-xs text-subtle italic mb-0.5">“{n.quote}”</div>
+                  <div className="text-xs text-subtle italic mb-0.5">"{n.quote}"</div>
                   <div className="leading-relaxed">{n.comment}</div>
                 </div>
               ))}
             </div>
             <div className="flex items-center gap-2 mt-3">
-              <span className="text-xs text-subtle italic flex-1">Marked in the document ↑</span>
+              {(run.annotationsInlined ?? true) && (
+                <span className="text-xs text-subtle italic flex-1">Marked in the document ↑</span>
+              )}
               <button
                 type="button"
-                className="btn-secondary"
+                className="btn-secondary ml-auto"
                 onClick={() =>
-                  navigator.clipboard.writeText(reviewNotes.map((n) => `“${n.quote}”\n${n.comment}`).join('\n\n'))
+                  navigator.clipboard.writeText(reviewNotes.map((n) => `"${n.quote}"\n${n.comment}`).join('\n\n'))
                 }
               >
                 Copy
