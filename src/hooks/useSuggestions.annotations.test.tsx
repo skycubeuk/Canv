@@ -163,6 +163,47 @@ describe('useSuggestions — annotation persistence', () => {
     viewB.destroy()
   })
 
+  it('does not duplicate annotations when switching away and back without destroying the view', async () => {
+    // Real-world path the close/reopen test above misses: switching tabs does NOT
+    // destroy the EditorView (Canvas only destroys it on tab close/unmount), so the
+    // annotationField survives. The load effect's cleanup resets its "loaded" guard
+    // on every activeMarkdownRel change, so returning to the file re-runs the load
+    // against the SAME live view that already holds the annotations. The load must
+    // be idempotent and not add a second copy.
+    const doc = 'the cat sat on the mat'
+    loadResult = [{ id: 'annot-loaded-0', anchor: makeAnchor(doc, 4, 7), note: 'loaded note', author: 'AI' }]
+
+    const view = mountView(doc)
+    const loadMock = (window as unknown as { canvAnnotations: { load: ReturnType<typeof vi.fn> } }).canvAnnotations.load
+    type HookProps = { rel: string | null; view: EditorView | null }
+    const { rerender } = renderHook<ReturnType<typeof useSuggestions>, HookProps>(
+      (props) => useSuggestions({
+        getActiveEditor: () => props.view,
+        activeMarkdownRel: props.rel,
+        historyClient: null,
+        flushAll: async () => {},
+        saveActive: () => {},
+      }),
+      { initialProps: { rel: 'loaded.md', view } as HookProps },
+    )
+    await waitFor(() => expect(view.state.field(annotationField).length).toBe(1), { timeout: 2000 })
+    expect(loadMock).toHaveBeenCalledTimes(1)
+
+    // Switch to a non-markdown tab (rel → null), letting React commit and run the
+    // effect cleanup, then switch back — all WITHOUT destroying `view`. The same
+    // EditorView (still holding the loaded annotation) becomes active again, so the
+    // re-run load sees a populated field.
+    rerender({ rel: null, view })
+    await act(async () => { await new Promise((r) => setTimeout(r, 50)) })
+    rerender({ rel: 'loaded.md', view })
+
+    // Wait for the load to re-run, then assert it added no duplicate.
+    await waitFor(() => expect(loadMock).toHaveBeenCalledTimes(2), { timeout: 2000 })
+    await act(async () => { await new Promise((r) => setTimeout(r, 50)) })
+    expect(view.state.field(annotationField)).toHaveLength(1)
+    view.destroy()
+  })
+
   it('loads annotations on first open even when the EditorView registers after the effect first runs', async () => {
     // First-open race: the workspace sets activeMarkdownRel before Canvas mounts
     // the editor and calls handleEditorReady, so getActiveEditor() returns null
