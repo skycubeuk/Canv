@@ -180,6 +180,7 @@ export function ServicesProvider({ children, config = {} }: ServicesProviderProp
     onApprovalDecide: chatSessions.onApprovalDecide,
     getActiveEditor: editorRegistry.getActiveEditor,
     activeMarkdownRel: workspace.activeMarkdownRel,
+    aiChangesDisplay: settingsApi.settings.aiChangesDisplay,
   })
 
   // Extend the suggestions callbacks with the chat-edit approval resolvers.
