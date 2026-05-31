@@ -324,6 +324,22 @@ function registerIpcHandlers(ipcMain, deps) {
       if (stat.isDirectory()) await fsp.rm(abs, { recursive: true, force: true })
       else await fsp.unlink(abs)
     }
+
+    // Drop the annotation sidecar(s) so a deleted file/folder doesn't leave
+    // orphaned notes under .canv/annotations. Best-effort — never fail the
+    // delete the user asked for.
+    try {
+      const sidecar = deps.safeResolve(
+        root,
+        path.join('.canv', 'annotations', stat.isDirectory() ? rel : rel + '.json'),
+      )
+      if (fs.existsSync(sidecar)) {
+        if (stat.isDirectory()) await fsp.rm(sidecar, { recursive: true, force: true })
+        else await fsp.unlink(sidecar)
+      }
+    } catch (err) {
+      console.error('[canvFS:delete] annotation sidecar cleanup failed:', err)
+    }
   })
 
   // Search across workspace markdown files. Single-invoke; main process walks

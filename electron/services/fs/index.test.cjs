@@ -530,6 +530,43 @@ describe('fs service IPC handlers', () => {
       await expect(ipcMain.invoke('canvFS:delete', 'never-existed.md'))
         .resolves.toBeUndefined()
     })
+
+    it('removes the annotation sidecar when a file is deleted', async () => {
+      const target = path.join(root, 'note.md')
+      await fsp.writeFile(target, 'x')
+      const annotDir = path.join(root, '.canv', 'annotations')
+      await fsp.mkdir(annotDir, { recursive: true })
+      const sidecar = path.join(annotDir, 'note.md.json')
+      await fsp.writeFile(sidecar, '[{"id":"a"}]')
+      vi.spyOn(electron.shell, 'trashItem').mockImplementation(async (abs) => { await fsp.unlink(abs) })
+
+      await ipcMain.invoke('canvFS:delete', 'note.md')
+
+      expect(fs.existsSync(target)).toBe(false)
+      expect(fs.existsSync(sidecar)).toBe(false)
+    })
+
+    it('removes the annotation sidecar subtree when a folder is deleted', async () => {
+      await fsp.mkdir(path.join(root, 'notes'), { recursive: true })
+      await fsp.writeFile(path.join(root, 'notes', 'todo.md'), 'x')
+      const annotDir = path.join(root, '.canv', 'annotations')
+      await fsp.mkdir(path.join(annotDir, 'notes'), { recursive: true })
+      await fsp.writeFile(path.join(annotDir, 'notes', 'todo.md.json'), '[{"id":"b"}]')
+      vi.spyOn(electron.shell, 'trashItem').mockImplementation(async (abs) => { await fsp.rm(abs, { recursive: true, force: true }) })
+
+      await ipcMain.invoke('canvFS:delete', 'notes')
+
+      expect(fs.existsSync(path.join(root, 'notes'))).toBe(false)
+      expect(fs.existsSync(path.join(annotDir, 'notes'))).toBe(false)
+    })
+
+    it('deletes a file with no sidecar without error', async () => {
+      const target = path.join(root, 'plain.md')
+      await fsp.writeFile(target, 'x')
+      vi.spyOn(electron.shell, 'trashItem').mockImplementation(async (abs) => { await fsp.unlink(abs) })
+      await ipcMain.invoke('canvFS:delete', 'plain.md')
+      expect(fs.existsSync(target)).toBe(false)
+    })
   })
 
   describe('canvFS:search', () => {
