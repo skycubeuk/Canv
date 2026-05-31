@@ -162,6 +162,38 @@ describe('useSuggestions — annotation persistence', () => {
     expect(doc.slice(reloaded.from, reloaded.to)).toBe('cat')
     viewB.destroy()
   })
+
+  it('loads annotations on first open even when the EditorView registers after the effect first runs', async () => {
+    // First-open race: the workspace sets activeMarkdownRel before Canvas mounts
+    // the editor and calls handleEditorReady, so getActiveEditor() returns null
+    // when the load effect first runs. The view registers a tick later WITHOUT
+    // activeMarkdownRel changing — the hook must still load the sidecar (it must
+    // not give up after a single null-view check).
+    const doc = 'the cat sat on the mat'
+    loadResult = [{ id: 'annot-loaded-0', anchor: makeAnchor(doc, 4, 7), note: 'loaded note', author: 'AI' }]
+    const view = mountView(doc)
+    type HookProps = { view: EditorView | null }
+    const { rerender } = renderHook<ReturnType<typeof useSuggestions>, HookProps>(
+      (props) => useSuggestions({
+        getActiveEditor: () => props.view,
+        activeMarkdownRel: 'loaded.md',
+        historyClient: null,
+        flushAll: async () => {},
+        saveActive: () => {},
+      }),
+      { initialProps: { view: null } as HookProps },
+    )
+    // The EditorView registers shortly after first open; activeMarkdownRel is unchanged.
+    rerender({ view })
+    await waitFor(
+      () => expect(view.state.field(annotationField).length).toBeGreaterThan(0),
+      { timeout: 2000 },
+    )
+    const ann = view.state.field(annotationField)[0]
+    expect(ann.note).toBe('loaded note')
+    expect(doc.slice(ann.from, ann.to)).toBe('cat')
+    view.destroy()
+  })
 })
 
 describe('useSuggestions — discuss', () => {

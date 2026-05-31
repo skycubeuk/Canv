@@ -457,6 +457,49 @@ describe('fs service IPC handlers', () => {
       await expect(ipc.invoke('canvFS:rename', 'a.md', 'a.bin'))
         .rejects.toThrow(/unsupported file type/)
     })
+
+    it('migrates the annotation sidecar when a file is renamed', async () => {
+      await fsp.writeFile(path.join(root, 'old.md'), 'x')
+      const annotDir = path.join(root, '.canv', 'annotations')
+      await fsp.mkdir(annotDir, { recursive: true })
+      await fsp.writeFile(path.join(annotDir, 'old.md.json'), '[{"id":"a"}]')
+
+      await ipcMain.invoke('canvFS:rename', 'old.md', 'new.md')
+
+      expect(fs.existsSync(path.join(annotDir, 'old.md.json'))).toBe(false)
+      expect(await fsp.readFile(path.join(annotDir, 'new.md.json'), 'utf-8')).toBe('[{"id":"a"}]')
+    })
+
+    it('migrates a sidecar into a subfolder when a file moves into one', async () => {
+      await fsp.writeFile(path.join(root, 'a.md'), 'x')
+      const annotDir = path.join(root, '.canv', 'annotations')
+      await fsp.mkdir(annotDir, { recursive: true })
+      await fsp.writeFile(path.join(annotDir, 'a.md.json'), '[{"id":"c"}]')
+
+      await ipcMain.invoke('canvFS:rename', 'a.md', 'sub/b.md')
+
+      expect(fs.existsSync(path.join(annotDir, 'a.md.json'))).toBe(false)
+      expect(await fsp.readFile(path.join(annotDir, 'sub', 'b.md.json'), 'utf-8')).toBe('[{"id":"c"}]')
+    })
+
+    it('migrates the annotation sidecar subtree when a folder is renamed', async () => {
+      await fsp.mkdir(path.join(root, 'notes'), { recursive: true })
+      await fsp.writeFile(path.join(root, 'notes', 'todo.md'), 'x')
+      const annotDir = path.join(root, '.canv', 'annotations')
+      await fsp.mkdir(path.join(annotDir, 'notes'), { recursive: true })
+      await fsp.writeFile(path.join(annotDir, 'notes', 'todo.md.json'), '[{"id":"b"}]')
+
+      await ipcMain.invoke('canvFS:rename', 'notes', 'archive')
+
+      expect(fs.existsSync(path.join(annotDir, 'notes'))).toBe(false)
+      expect(await fsp.readFile(path.join(annotDir, 'archive', 'todo.md.json'), 'utf-8')).toBe('[{"id":"b"}]')
+    })
+
+    it('renames a file with no sidecar without error', async () => {
+      await fsp.writeFile(path.join(root, 'plain.md'), 'x')
+      await ipcMain.invoke('canvFS:rename', 'plain.md', 'plain2.md')
+      expect(fs.existsSync(path.join(root, 'plain2.md'))).toBe(true)
+    })
   })
 
   describe('canvFS:delete', () => {
@@ -486,6 +529,43 @@ describe('fs service IPC handlers', () => {
     it('happy: ENOENT is swallowed (silent no-op)', async () => {
       await expect(ipcMain.invoke('canvFS:delete', 'never-existed.md'))
         .resolves.toBeUndefined()
+    })
+
+    it('removes the annotation sidecar when a file is deleted', async () => {
+      const target = path.join(root, 'note.md')
+      await fsp.writeFile(target, 'x')
+      const annotDir = path.join(root, '.canv', 'annotations')
+      await fsp.mkdir(annotDir, { recursive: true })
+      const sidecar = path.join(annotDir, 'note.md.json')
+      await fsp.writeFile(sidecar, '[{"id":"a"}]')
+      vi.spyOn(electron.shell, 'trashItem').mockImplementation(async (abs) => { await fsp.unlink(abs) })
+
+      await ipcMain.invoke('canvFS:delete', 'note.md')
+
+      expect(fs.existsSync(target)).toBe(false)
+      expect(fs.existsSync(sidecar)).toBe(false)
+    })
+
+    it('removes the annotation sidecar subtree when a folder is deleted', async () => {
+      await fsp.mkdir(path.join(root, 'notes'), { recursive: true })
+      await fsp.writeFile(path.join(root, 'notes', 'todo.md'), 'x')
+      const annotDir = path.join(root, '.canv', 'annotations')
+      await fsp.mkdir(path.join(annotDir, 'notes'), { recursive: true })
+      await fsp.writeFile(path.join(annotDir, 'notes', 'todo.md.json'), '[{"id":"b"}]')
+      vi.spyOn(electron.shell, 'trashItem').mockImplementation(async (abs) => { await fsp.rm(abs, { recursive: true, force: true }) })
+
+      await ipcMain.invoke('canvFS:delete', 'notes')
+
+      expect(fs.existsSync(path.join(root, 'notes'))).toBe(false)
+      expect(fs.existsSync(path.join(annotDir, 'notes'))).toBe(false)
+    })
+
+    it('deletes a file with no sidecar without error', async () => {
+      const target = path.join(root, 'plain.md')
+      await fsp.writeFile(target, 'x')
+      vi.spyOn(electron.shell, 'trashItem').mockImplementation(async (abs) => { await fsp.unlink(abs) })
+      await ipcMain.invoke('canvFS:delete', 'plain.md')
+      expect(fs.existsSync(target)).toBe(false)
     })
   })
 
