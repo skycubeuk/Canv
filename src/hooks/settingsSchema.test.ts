@@ -139,6 +139,23 @@ describe('SettingsSchema', () => {
     expect(parsed.tts).toEqual({ provider: 'elevenlabs', apiKey: '', defaultVoiceId: '', defaultVoiceName: '', defaultModelId: 'eleven_multilingual_v2' })
   })
 
+  it('defaults aiChangesDisplay to "both"', () => {
+    const r = SettingsSchema.safeParse({})
+    expect(r.success).toBe(true)
+    if (!r.success) return
+    expect(r.data.aiChangesDisplay).toBe('both')
+  })
+
+  it('accepts each valid aiChangesDisplay value', () => {
+    for (const v of ['inline', 'panel', 'both'] as const) {
+      expect(SettingsSchema.safeParse({ aiChangesDisplay: v }).success).toBe(true)
+    }
+  })
+
+  it('rejects an unknown aiChangesDisplay value', () => {
+    expect(SettingsSchema.safeParse({ aiChangesDisplay: 'sidebar' }).success).toBe(false)
+  })
+
   it('Settings type matches the inferred type (compile-time check)', () => {
     // This test is here to anchor the type alias in the test surface.
     // The schema is intentionally permissive on perAgentModel / pricingOverrides

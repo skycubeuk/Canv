@@ -4,12 +4,15 @@ import { setEditPreview, clearEditPreview } from '../lib/cm/suggestionLayer'
 import { locateChatEdit } from '../lib/suggestions/chatEditPreview'
 import type { PendingApproval } from '../components/ChatPanel'
 import type { ApprovalDecision } from '../agents/chatRunner'
+import type { AiChangesDisplay } from './settingsSchema'
 
 export interface UseChatEditPreviewDeps {
   pendingApprovals: Map<string, PendingApproval>
   onApprovalDecide: (callId: string, decision: ApprovalDecision) => void
   getActiveEditor: () => EditorView | null
   activeMarkdownRel: string | null
+  /** 'panel' suppresses the inline preview so the chat approval card handles the edit. */
+  aiChangesDisplay: AiChangesDisplay
 }
 
 /**
@@ -46,26 +49,28 @@ export function useChatEditPreview(deps: UseChatEditPreviewDeps): {
 
   // Core effect: scan pendingApprovals every time they (or the active file) change.
   useEffect(() => {
-    const { pendingApprovals, activeMarkdownRel, getActiveEditor } = deps
+    const { pendingApprovals, activeMarkdownRel, getActiveEditor, aiChangesDisplay } = deps
 
     const view = getActiveEditor()
 
     // Find the first pending approval that resolves to an inline preview on the active file.
     let found: { callId: string; hunks: Array<{ from: number; to: number; rewrite: string }> } | null = null
-    for (const [, approval] of pendingApprovals) {
-      if (approval.state !== 'pending') continue
-      const result = locateChatEdit(
-        view ? view.state.doc.toString() : '',
-        activeMarkdownRel,
-        approval.callId,
-        approval.preview,
-      )
-      if (result && result.hunks.length > 0) {
-        found = {
-          callId: result.callId,
-          hunks: result.hunks.map(({ from, to, rewrite }) => ({ from, to, rewrite })),
+    if (aiChangesDisplay !== 'panel') {
+      for (const [, approval] of pendingApprovals) {
+        if (approval.state !== 'pending') continue
+        const result = locateChatEdit(
+          view ? view.state.doc.toString() : '',
+          activeMarkdownRel,
+          approval.callId,
+          approval.preview,
+        )
+        if (result && result.hunks.length > 0) {
+          found = {
+            callId: result.callId,
+            hunks: result.hunks.map(({ from, to, rewrite }) => ({ from, to, rewrite })),
+          }
+          break
         }
-        break
       }
     }
 
@@ -89,8 +94,8 @@ export function useChatEditPreview(deps: UseChatEditPreviewDeps): {
         previewedCallIdRef.current = null
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: run when pendingApprovals or activeMarkdownRel change
-  }, [deps.pendingApprovals, deps.activeMarkdownRel])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: run when pendingApprovals, activeMarkdownRel, or aiChangesDisplay change
+  }, [deps.pendingApprovals, deps.activeMarkdownRel, deps.aiChangesDisplay])
 
   const approveEdit = useCallback((callId: string, view: EditorView) => {
     // Resolve the approval (chat tool does the write).

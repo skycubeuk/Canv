@@ -36,6 +36,7 @@ export type Provider = z.infer<typeof Provider>
 
 const Theme = z.enum(['system', ...THEMES.map((t) => t.id)] as [string, ...string[]])
 const LineWidth = z.enum(['narrow', 'normal', 'wide'])
+const AiChangesDisplay = z.enum(['inline', 'panel', 'both'])
 const StreamDelay = z.union([z.literal(0), z.literal(50), z.literal(100), z.literal(200)])
 
 const _AgentModelRefSchema = z.object({ provider: Provider, model: z.string() })
@@ -128,6 +129,10 @@ export const SettingsSchema = z.object({
   theme: Theme.default('system').meta({
     ui: 'auto', section: 'appearance', label: 'Theme', scope: 'workspace',
   }),
+  aiChangesDisplay: AiChangesDisplay.default('both').meta({
+    ui: 'auto', section: 'appearance', label: 'Show AI changes', scope: 'workspace',
+    help: 'Where AI-proposed edits and notes appear: inline in the document, in the Runs panel, or both.',
+  }),
   streaming: z.boolean().default(true).meta({
     ui: 'auto', section: 'chat', label: 'Stream responses',
   }),
@@ -173,6 +178,7 @@ export type AgentModelRef = z.infer<typeof _AgentModelRefSchema>
 export type ModelPricing = z.infer<typeof _ModelPricingSchema>
 export type Theme = z.infer<typeof Theme>
 export type LineWidth = z.infer<typeof LineWidth>
+export type AiChangesDisplay = z.infer<typeof AiChangesDisplay>
 export type StreamChunkDelayMs = z.infer<typeof StreamDelay>
 
 /** Inferred settings type, with the three permissive fields tightened back to

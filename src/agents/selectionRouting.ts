@@ -1,3 +1,5 @@
+import type { AiChangesDisplay } from '../hooks/settingsSchema'
+
 export interface SelectionRouting {
   emitDiff: boolean
   emitAnnotation: boolean
@@ -14,7 +16,10 @@ export interface SelectionRoutingInput {
 }
 
 /** Decide what a finished selection-agent run renders in the document. */
-export function routeSelectionAgentResult(input: SelectionRoutingInput): SelectionRouting {
+export function routeSelectionAgentResult(
+  input: SelectionRoutingInput,
+  displayMode: AiChangesDisplay = 'both',
+): SelectionRouting {
   const canDiff =
     input.hasRange && !!input.rewrite && input.rewrite.trim().length > 0 && input.rewrite !== input.original
   // Annotations anchor by quote-matching anywhere in the supplied text, so unlike a
@@ -28,6 +33,12 @@ export function routeSelectionAgentResult(input: SelectionRoutingInput): Selecti
   else if (input.outputMode === 'feedback-and-rewrite') {
     emitDiff = canDiff
     emitAnnotation = canAnnotate
+  }
+  // 'panel' mode: render nothing inline; the Runs panel keeps its diff preview
+  // and (because inlineEmitted follows emitDiff) its legacy Apply button.
+  if (displayMode === 'panel') {
+    emitDiff = false
+    emitAnnotation = false
   }
   return { emitDiff, emitAnnotation, suppressPanel: emitDiff || emitAnnotation }
 }

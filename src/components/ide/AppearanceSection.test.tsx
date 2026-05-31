@@ -6,6 +6,7 @@ const baseSettings = {
   theme: 'canv-dark' as const,
   fontSize: 16,
   chatFontSize: 14,
+  aiChangesDisplay: 'both' as const,
 }
 
 describe('AppearanceSection', () => {
@@ -44,5 +45,20 @@ describe('AppearanceSection', () => {
     const slider = screen.getByLabelText(/chat font size/i)
     fireEvent.change(slider, { target: { value: '18' } })
     expect(onUpdate).toHaveBeenCalledWith({ chatFontSize: 18 })
+  })
+
+  it('renders the AI changes dropdown with the current value selected', () => {
+    const onUpdate = vi.fn()
+    render(<AppearanceSection settings={{ ...baseSettings, aiChangesDisplay: 'panel' }} onUpdate={onUpdate} />)
+    const select = screen.getByLabelText(/show ai changes/i) as HTMLSelectElement
+    expect(select.value).toBe('panel')
+  })
+
+  it('changing the AI changes dropdown fires onUpdate with the new value', () => {
+    const onUpdate = vi.fn()
+    render(<AppearanceSection settings={baseSettings} onUpdate={onUpdate} />)
+    const select = screen.getByLabelText(/show ai changes/i) as HTMLSelectElement
+    fireEvent.change(select, { target: { value: 'inline' } })
+    expect(onUpdate).toHaveBeenCalledWith({ aiChangesDisplay: 'inline' })
   })
 })

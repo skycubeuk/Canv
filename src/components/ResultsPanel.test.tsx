@@ -148,6 +148,34 @@ describe('RunView', () => {
     expect(screen.queryByText(/\[\{/)).toBeNull()
   })
 
+  it('shows "Marked in the document" caption when annotations were inlined', () => {
+    const json = JSON.stringify([{ quote: 'the opening line', comment: 'Nice.' }])
+    const run = baseRun({
+      agentId: 'story', agentLabel: 'Story Reviewer',
+      response: json, originalResponse: json,
+      annotationsInlined: true,
+    })
+    render(
+      <ContextMenuProvider><RunView run={run} onApply={vi.fn()} onRerun={vi.fn()} onRefine={vi.fn()} /></ContextMenuProvider>,
+    )
+    expect(screen.getByText(/marked in the document/i)).toBeInTheDocument()
+  })
+
+  it('hides the "Marked in the document" caption in panel mode (annotations not inlined)', () => {
+    const json = JSON.stringify([{ quote: 'the opening line', comment: 'Nice.' }])
+    const run = baseRun({
+      agentId: 'story', agentLabel: 'Story Reviewer',
+      response: json, originalResponse: json,
+      annotationsInlined: false,
+    })
+    render(
+      <ContextMenuProvider><RunView run={run} onApply={vi.fn()} onRerun={vi.fn()} onRefine={vi.fn()} /></ContextMenuProvider>,
+    )
+    expect(screen.queryByText(/marked in the document/i)).toBeNull()
+    // The notes themselves are still listed.
+    expect(screen.getByText('Nice.')).toBeInTheDocument()
+  })
+
   it('while structured JSON is still streaming, shows a Reading state not raw JSON', () => {
     const partial = '[\n  {\n    "quote": "the opening line",\n    "comment": "This gri'
     const run = baseRun({
@@ -163,6 +191,31 @@ describe('RunView', () => {
     expect(screen.getByText(/reading your text/i)).toBeInTheDocument()
     // The partial JSON keys must not be shown to the user.
     expect(screen.queryByText(/"quote"/)).toBeNull()
+  })
+
+  it('hides the diff preview when showDiffInPanel is false', () => {
+    const run = baseRun({
+      range: null,
+      response: 'ISSUES:\n- a typo\n\nCORRECTED:\nThe corrected document.',
+      sourceText: 'The original document.',
+      showDiffInPanel: false,
+    })
+    render(
+      <ContextMenuProvider><RunView run={run} onApply={vi.fn()} onRerun={vi.fn()} onRefine={vi.fn()} /></ContextMenuProvider>,
+    )
+    expect(screen.queryByText(/show diff/i)).toBeNull()
+  })
+
+  it('shows the diff preview when showDiffInPanel is undefined (legacy run)', () => {
+    const run = baseRun({
+      range: null,
+      response: 'ISSUES:\n- a typo\n\nCORRECTED:\nThe corrected document.',
+      sourceText: 'The original document.',
+    })
+    render(
+      <ContextMenuProvider><RunView run={run} onApply={vi.fn()} onRerun={vi.fn()} onRefine={vi.fn()} /></ContextMenuProvider>,
+    )
+    expect(screen.getByText(/show diff/i)).toBeInTheDocument()
   })
 
   it('refinements render as plain panel-scale text, not chat bubbles', () => {

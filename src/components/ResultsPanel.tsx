@@ -62,6 +62,15 @@ export interface RunRecord {
   /** True when this run's rewrite was rendered as an inline diff in the
    *  document; the Runs panel then shows a hint instead of an Apply button. */
   inlineEmitted?: boolean
+  /** Set false to suppress the diff preview in the Runs panel (inline display
+   *  mode). Absent on legacy runs → treated as true so older runs still show
+   *  their diff. */
+  showDiffInPanel?: boolean
+  /** True when this run's review notes were rendered as inline annotations in
+   *  the document. Undefined on legacy runs → treated as true so the existing
+   *  "Marked in the document" caption still shows. False in 'panel' display
+   *  mode, where notes appear only as the panel list. */
+  annotationsInlined?: boolean
 }
 
 export function RunView({
@@ -230,10 +239,12 @@ export function RunView({
               ))}
             </div>
             <div className="flex items-center gap-2 mt-3">
-              <span className="text-xs text-subtle italic flex-1">Marked in the document ↑</span>
+              {(run.annotationsInlined ?? true) && (
+                <span className="text-xs text-subtle italic flex-1">Marked in the document ↑</span>
+              )}
               <button
                 type="button"
-                className="btn-secondary"
+                className="btn-secondary ml-auto"
                 onClick={() =>
                   navigator.clipboard.writeText(reviewNotes.map((n) => `“${n.quote}”\n${n.comment}`).join('\n\n'))
                 }
@@ -271,7 +282,7 @@ export function RunView({
             {parsed.rewrite}
           </div>
 
-          {run.sourceText && parsed.rewrite && !busy && (
+          {run.sourceText && parsed.rewrite && !busy && (run.showDiffInPanel ?? true) && (
             <DiffView original={run.sourceText} updated={parsed.rewrite} />
           )}
 

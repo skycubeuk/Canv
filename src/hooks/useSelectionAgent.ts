@@ -216,7 +216,7 @@ export function useSelectionAgent(args: UseSelectionAgentArgs): UseSelectionAgen
           original: text,
           rewrite,
           feedback: parsed.feedback,
-        })
+        }, settings.aiChangesDisplay)
 
         setRuns((prev) =>
           prev.map((r) =>
@@ -231,6 +231,8 @@ export function useSelectionAgent(args: UseSelectionAgentArgs): UseSelectionAgen
                   tokenUsage,
                   elapsedMs: Date.now() - startedAt,
                   inlineEmitted: routing.emitDiff,
+                  showDiffInPanel: settings.aiChangesDisplay !== 'inline' || !routing.emitDiff,
+                  annotationsInlined: routing.emitAnnotation,
                 }
               : r,
           ),

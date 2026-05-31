@@ -42,4 +42,25 @@ describe('routeSelectionAgentResult', () => {
     expect(routeSelectionAgentResult({ outputMode: 'whatever', hasRange: true, original: 'a', rewrite: 'b', feedback: 'n' }))
       .toEqual({ emitDiff: false, emitAnnotation: false, suppressPanel: false })
   })
+
+  it("'panel' mode forces both inline flags off (replacement)", () => {
+    expect(routeSelectionAgentResult({ outputMode: 'replacement', hasRange: true, original: 'a', rewrite: 'b' }, 'panel'))
+      .toEqual({ emitDiff: false, emitAnnotation: false, suppressPanel: false })
+  })
+  it("'panel' mode forces both inline flags off (feedback-and-rewrite)", () => {
+    expect(routeSelectionAgentResult({ outputMode: 'feedback-and-rewrite', hasRange: true, original: 'a', rewrite: 'b', feedback: 'note' }, 'panel'))
+      .toEqual({ emitDiff: false, emitAnnotation: false, suppressPanel: false })
+  })
+  it("'inline' mode keeps the current emit flags", () => {
+    expect(routeSelectionAgentResult({ outputMode: 'feedback-and-rewrite', hasRange: true, original: 'a', rewrite: 'b', feedback: 'note' }, 'inline'))
+      .toEqual({ emitDiff: true, emitAnnotation: true, suppressPanel: true })
+  })
+  it("'both' mode keeps the current emit flags", () => {
+    expect(routeSelectionAgentResult({ outputMode: 'feedback-and-rewrite', hasRange: true, original: 'a', rewrite: 'b', feedback: 'note' }, 'both'))
+      .toEqual({ emitDiff: true, emitAnnotation: true, suppressPanel: true })
+  })
+  it('defaults to current behaviour when displayMode is omitted', () => {
+    expect(routeSelectionAgentResult({ outputMode: 'replacement', hasRange: true, original: 'a', rewrite: 'b' }))
+      .toEqual({ emitDiff: true, emitAnnotation: false, suppressPanel: true })
+  })
 })
