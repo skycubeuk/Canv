@@ -13,7 +13,8 @@ Declare every capability your code actually uses. The runtime enforces this — 
 | `activeDoc.write` | `canv.activeDoc.insertAtCursor`, `.replaceSelection`, `.setText`, `.setBytes` |
 | `workspace.list` | `canv.workspace.getRoot`, `.list` |
 | `workspace.read` | `canv.workspace.readText` |
-| `workspace.write` | *(reserved — not yet exposed)* |
+| `workspace.write` | `canv.workspace.writeText` (paths must be under `manifest.writePaths`) |
+| `process` | `canv.process.exec` (binary must be in `manifest.executables`) |
 | `selection.read` | *(use `activeDoc.read` for `getSelection`)* |
 | `events.docChanged` | `canv.events.on('activeDocChanged', ...)` or `canv.events.on('activeFile.changed', ...)` |
 | `events.selectionChanged` | `canv.events.on('selectionChanged', ...)` |
@@ -27,7 +28,7 @@ Declare every capability your code actually uses. The runtime enforces this — 
 | `net` | `canv.net.fetch` |
 
 **Don't declare capabilities you don't use.** Users see the full list at install time.
-For elevated capabilities (`ai`, `net`, `workspace.write`, `activeDoc.write`), explain why in `description`.
+For elevated capabilities (`ai`, `net`, `process`, `workspace.write`, `activeDoc.write`), explain why in `description`.
 
 ---
 
@@ -50,17 +51,45 @@ await canv.activeDoc.setBytes(uint8Array)             // saves file bytes; requi
 
 ---
 
-## `canv.workspace` — requires `workspace.list` / `workspace.read`
+## `canv.workspace` — requires `workspace.list` / `workspace.read` / `workspace.write`
 
 ```js
 const root  = await canv.workspace.getRoot()          // absolute dir path of the open workspace
 const files = await canv.workspace.list(glob)         // string[] of relative paths matching glob
 const text  = await canv.workspace.readText(rel)      // file contents as UTF-8 string
+await canv.workspace.writeText(rel, text)             // write UTF-8 file; requires workspace.write
 ```
 
 - `glob` follows standard glob syntax: `'**/*.md'`, `'notes/*.txt'`.
-- `readText` reads any file in the workspace. Paths are relative to workspace root.
-- `workspace.write` is reserved and not yet exposed; do not declare it.
+- `readText` reads any file in the workspace (including dot-dirs like `.canv/annotations/…`). Paths
+  are relative to workspace root.
+- `writeText` requires the **elevated** `workspace.write` capability AND that `rel` falls under one of
+  the prefixes in `manifest.writePaths` (e.g. `"Feedback/"`). It creates parent directories as needed.
+  Paths that escape the workspace (`..`, absolute) are rejected.
+
+---
+
+## `canv.process` — requires `process` (elevated)
+
+Run an allowlisted external binary on the user's machine. **This is the most powerful capability** —
+the install consent modal lists every binary the extension may run. Declare it only when essential
+and explain why in `description`.
+
+```js
+const r = await canv.process.exec('pandoc', ['in.md', '-o', 'out.pdf', '--pdf-engine=xelatex'])
+// r = { exitCode: number, stdout: string, stderr: string, error?: string }
+if (r.exitCode !== 0) canv.ui.notify(`pandoc failed: ${r.stderr || r.error}`, 'error')
+```
+
+- The binary **must** be listed in `manifest.executables` (bare name resolved from `PATH` — no
+  slashes or absolute paths). A binary not in the allowlist throws.
+- Runs via `execFile` (no shell): `args` is an array of strings passed verbatim — there is no shell
+  interpolation, globbing, or piping. Build pipelines by writing intermediate files with
+  `canv.workspace.writeText` and chaining `exec` calls.
+- The working directory is the workspace root, so relative paths in `args` resolve there.
+- A non-zero exit **resolves** (it does not throw) with `exitCode`/`stdout`/`stderr` so you can show
+  the tool's own diagnostics. A spawn failure (e.g. binary missing) resolves with `exitCode: 1` and
+  an `error` message.
 
 ---
 

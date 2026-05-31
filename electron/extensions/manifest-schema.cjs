@@ -89,6 +89,16 @@ const NetworkOrigin = z.string().refine((h) => HOSTNAME_RE.test(h) && !h.include
   message: 'network entries must be bare hostnames (no scheme, no path)',
 })
 
+// Bare binary name resolved from PATH — no slashes, no absolute paths, lowercase.
+const EXECUTABLE_RE = /^[a-z][a-z0-9._-]*$/
+const Executable = z.string().refine((e) => EXECUTABLE_RE.test(e), {
+  message: 'executable entries must be bare binary names (lowercase, no path separators)',
+})
+
+// Workspace-relative path prefix the extension may write to (reuses the
+// no-escape / no-absolute validation that guards contribution entries).
+const WritePath = safeRelPath
+
 const SETTING_KEY_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/
 
 const SettingBase = {
@@ -156,6 +166,8 @@ const ManifestSchema = z.object({
   createdAt: z.string().datetime().optional(),
   capabilities: z.array(Capability).default([]),
   network: z.array(NetworkOrigin).default([]),
+  executables: z.array(Executable).default([]),
+  writePaths: z.array(WritePath).default([]),
   settings: z.array(SettingDef).default([]).superRefine((arr, ctx) => {
     const seen = new Set()
     for (const s of arr) {

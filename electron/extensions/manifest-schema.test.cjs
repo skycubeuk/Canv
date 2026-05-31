@@ -38,6 +38,35 @@ describe('validateManifest', () => {
     expect(r.ok).toBe(false)
     expect(r.errors.join(' ')).toMatch(/made-up/)
   })
+  it('accepts an executables allowlist of bare binary names', () => {
+    const r = validateManifest(valid({ capabilities: ['process'], executables: ['pandoc', 'xelatex'] }))
+    expect(r.ok).toBe(true)
+    expect(r.manifest.executables).toEqual(['pandoc', 'xelatex'])
+  })
+  it('defaults executables and writePaths to empty arrays', () => {
+    const r = validateManifest(valid())
+    expect(r.ok).toBe(true)
+    expect(r.manifest.executables).toEqual([])
+    expect(r.manifest.writePaths).toEqual([])
+  })
+  it('rejects an executable name containing a path slash', () => {
+    const r = validateManifest(valid({ capabilities: ['process'], executables: ['/usr/bin/pandoc'] }))
+    expect(r.ok).toBe(false)
+    expect(r.errors.join(' ')).toMatch(/executable/i)
+  })
+  it('rejects an executable name with uppercase or spaces', () => {
+    expect(validateManifest(valid({ executables: ['Pandoc'] })).ok).toBe(false)
+    expect(validateManifest(valid({ executables: ['pan doc'] })).ok).toBe(false)
+  })
+  it('accepts workspace-relative writePaths', () => {
+    const r = validateManifest(valid({ capabilities: ['workspace.write'], writePaths: ['Feedback/', 'out/notes'] }))
+    expect(r.ok).toBe(true)
+    expect(r.manifest.writePaths).toEqual(['Feedback/', 'out/notes'])
+  })
+  it('rejects a writePath that escapes the workspace', () => {
+    expect(validateManifest(valid({ writePaths: ['../escape'] })).ok).toBe(false)
+    expect(validateManifest(valid({ writePaths: ['/abs/path'] })).ok).toBe(false)
+  })
   it('now accepts command contribution type (Phase 5a)', () => {
     const r = validateManifest(valid({
       contributions: [{ type: 'command', id: 'foo.bar', title: 'Foo', entry: 'x.html' }],

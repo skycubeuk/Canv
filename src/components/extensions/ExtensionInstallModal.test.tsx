@@ -92,6 +92,28 @@ describe('ExtensionInstallModal', () => {
     expect(screen.getByText(/No network access requested/i)).toBeTruthy()
   })
 
+  it('lists executables the extension may run, and the write paths', () => {
+    const m = {
+      ...MANIFEST,
+      capabilities: ['workspace.read', 'workspace.write', 'process'],
+      executables: ['pandoc'],
+      writePaths: ['Feedback/'],
+    }
+    render(<ExtensionInstallModal sourceFolder="/x" manifest={m} onCancel={() => {}} onConfirm={() => {}} />)
+    expect(screen.getByText(/Runs these programs on your computer/i)).toBeTruthy()
+    expect(screen.getByText('pandoc')).toBeTruthy()
+    expect(screen.getByText(/Writes files under/i)).toBeTruthy()
+    expect(screen.getByText('Feedback/')).toBeTruthy()
+    // 'process' is rendered as an elevated capability chip too.
+    expect(screen.getByText('process')).toBeTruthy()
+  })
+
+  it('omits the executables/write-path sections when none are requested', () => {
+    render(<ExtensionInstallModal sourceFolder="/x" manifest={MANIFEST} onCancel={() => {}} onConfirm={() => {}} />)
+    expect(screen.queryByText(/Runs these programs on your computer/i)).toBeNull()
+    expect(screen.queryByText(/Writes files under/i)).toBeNull()
+  })
+
   it('shows the red language banner when a language contribution is present', () => {
     const m = { ...MANIFEST, contributions: [{ type: 'language', extensions: ['.tex'], entry: 'l.js' }] }
     render(<ExtensionInstallModal sourceFolder="/x" manifest={m} onCancel={() => {}} onConfirm={() => {}} />)

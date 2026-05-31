@@ -6,6 +6,7 @@ const path = require('node:path')
 const fs = require('node:fs')
 const fsp = require('node:fs/promises')
 const os = require('node:os')
+const { execFile } = require('node:child_process')
 const AdmZip = require('adm-zip')
 
 const MAX_CANVEXT_BYTES = 50 * 1024 * 1024
@@ -50,6 +51,7 @@ const { createNetHandlers } = require('../../extensions/handlers/net.cjs')
 const { createUiPromptHandlers } = require('../../extensions/handlers/ui-prompt.cjs')
 const { createStatusBarHandlers } = require('../../extensions/handlers/statusBar.cjs')
 const { createMcpHandlers } = require('../../extensions/handlers/mcp.cjs')
+const { createProcessHandlers } = require('../../extensions/handlers/process.cjs')
 const activity = require('../../extensions/activity.cjs')
 const { buildAllContributions, EMPTY: EMPTY_CONTRIBS } = require('../../extensions/contributions.cjs')
 const { readDefaults: readFileHandlerDefaults, writeDefault: writeFileHandlerDefault } = require('../../extensions/file-handler-defaults.cjs')
@@ -163,6 +165,38 @@ function registerIpcHandlers(ipcMain, deps) {
       if (stat.size > MAX_OPEN_BYTES) throw new Error('file too large')
       return fsp.readFile(abs, 'utf-8')
     },
+    writeWorkspaceText: async (rel, text) => {
+      const root = workspaceRootOrLocalThrow()
+      const abs = safeResolve(root, rel)  // same sandbox boundary as reads (no escape, no absolute)
+      if (typeof text !== 'string') throw new TypeError('text must be a string')
+      await fsp.mkdir(path.dirname(abs), { recursive: true })
+      await fsp.writeFile(abs, text, 'utf-8')
+    },
+
+    // process — run an allowlisted binary (the handler has already verified the
+    // `process` capability + that `binary` is in manifest.executables). Uses
+    // execFile (no shell), pins cwd to the workspace root, and never rejects on a
+    // non-zero exit so the extension can read stderr.
+    execAllowed: (binary, args) => new Promise((resolve) => {
+      const root = workspaceRootOrLocalThrow()
+      execFile(binary, args, {
+        cwd: root,
+        timeout: 120_000,
+        maxBuffer: 32 * 1024 * 1024,
+        windowsHide: true,
+      }, (err, stdout, stderr) => {
+        if (err) {
+          resolve({
+            exitCode: typeof err.code === 'number' ? err.code : 1,
+            stdout: stdout || '',
+            stderr: stderr || '',
+            error: err.message,
+          })
+        } else {
+          resolve({ exitCode: 0, stdout: stdout || '', stderr: stderr || '' })
+        }
+      })
+    }),
 
     // ui
     notifyToMainWindow: (msg, kind, extensionId) => {
@@ -447,6 +481,7 @@ function registerIpcHandlers(ipcMain, deps) {
     ...createUiPromptHandlers({ runtime: extensionRuntime, host }),
     ...createStatusBarHandlers({ runtime: extensionRuntime, host }),
     ...createMcpHandlers({ runtime: extensionRuntime, getMcpService: () => (typeof deps.getMcpService === 'function' ? deps.getMcpService() : null) }),
+    ...createProcessHandlers({ runtime: extensionRuntime, host }),
   }
   for (const [channel, fn] of Object.entries(allHandlers)) {
     ipcMain.handle(channel, fn)
@@ -576,6 +611,8 @@ function registerIpcHandlers(ipcMain, deps) {
           author: v.manifest.author,
           capabilities: v.manifest.capabilities,
           network: v.manifest.network ?? [],
+          executables: v.manifest.executables ?? [],
+          writePaths: v.manifest.writePaths ?? [],
           settings: v.manifest.settings ?? [],
           contributions: v.manifest.contributions,
         },
