@@ -286,6 +286,28 @@ function registerIpcHandlers(ipcMain, deps) {
     if (stat.isFile() && !deps.isAllowedExt(newRel, newAbs)) throw new Error('unsupported file type')
     await fsp.mkdir(path.dirname(newAbs), { recursive: true })
     await fsp.rename(oldAbs, newAbs)
+
+    // Migrate the annotation sidecar(s) so notes survive the rename/move. A file
+    // has a single `<rel>.json` sidecar; a folder has a `<rel>/` subtree — both
+    // live under .canv/annotations. Best-effort: a sidecar hiccup must never
+    // fail the rename the user actually asked for. (stat predates the rename, so
+    // it still tells us file vs folder.)
+    try {
+      const oldSidecar = deps.safeResolve(
+        root,
+        path.join('.canv', 'annotations', stat.isFile() ? oldRel + '.json' : oldRel),
+      )
+      const newSidecar = deps.safeResolve(
+        root,
+        path.join('.canv', 'annotations', stat.isFile() ? newRel + '.json' : newRel),
+      )
+      if (fs.existsSync(oldSidecar)) {
+        await fsp.mkdir(path.dirname(newSidecar), { recursive: true })
+        await fsp.rename(oldSidecar, newSidecar)
+      }
+    } catch (err) {
+      console.error('[canvFS:rename] annotation sidecar migration failed:', err)
+    }
   })
 
   ipcMain.handle('canvFS:delete', async (_e, rel) => {

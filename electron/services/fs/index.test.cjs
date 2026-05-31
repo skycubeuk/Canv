@@ -457,6 +457,49 @@ describe('fs service IPC handlers', () => {
       await expect(ipc.invoke('canvFS:rename', 'a.md', 'a.bin'))
         .rejects.toThrow(/unsupported file type/)
     })
+
+    it('migrates the annotation sidecar when a file is renamed', async () => {
+      await fsp.writeFile(path.join(root, 'old.md'), 'x')
+      const annotDir = path.join(root, '.canv', 'annotations')
+      await fsp.mkdir(annotDir, { recursive: true })
+      await fsp.writeFile(path.join(annotDir, 'old.md.json'), '[{"id":"a"}]')
+
+      await ipcMain.invoke('canvFS:rename', 'old.md', 'new.md')
+
+      expect(fs.existsSync(path.join(annotDir, 'old.md.json'))).toBe(false)
+      expect(await fsp.readFile(path.join(annotDir, 'new.md.json'), 'utf-8')).toBe('[{"id":"a"}]')
+    })
+
+    it('migrates a sidecar into a subfolder when a file moves into one', async () => {
+      await fsp.writeFile(path.join(root, 'a.md'), 'x')
+      const annotDir = path.join(root, '.canv', 'annotations')
+      await fsp.mkdir(annotDir, { recursive: true })
+      await fsp.writeFile(path.join(annotDir, 'a.md.json'), '[{"id":"c"}]')
+
+      await ipcMain.invoke('canvFS:rename', 'a.md', 'sub/b.md')
+
+      expect(fs.existsSync(path.join(annotDir, 'a.md.json'))).toBe(false)
+      expect(await fsp.readFile(path.join(annotDir, 'sub', 'b.md.json'), 'utf-8')).toBe('[{"id":"c"}]')
+    })
+
+    it('migrates the annotation sidecar subtree when a folder is renamed', async () => {
+      await fsp.mkdir(path.join(root, 'notes'), { recursive: true })
+      await fsp.writeFile(path.join(root, 'notes', 'todo.md'), 'x')
+      const annotDir = path.join(root, '.canv', 'annotations')
+      await fsp.mkdir(path.join(annotDir, 'notes'), { recursive: true })
+      await fsp.writeFile(path.join(annotDir, 'notes', 'todo.md.json'), '[{"id":"b"}]')
+
+      await ipcMain.invoke('canvFS:rename', 'notes', 'archive')
+
+      expect(fs.existsSync(path.join(annotDir, 'notes'))).toBe(false)
+      expect(await fsp.readFile(path.join(annotDir, 'archive', 'todo.md.json'), 'utf-8')).toBe('[{"id":"b"}]')
+    })
+
+    it('renames a file with no sidecar without error', async () => {
+      await fsp.writeFile(path.join(root, 'plain.md'), 'x')
+      await ipcMain.invoke('canvFS:rename', 'plain.md', 'plain2.md')
+      expect(fs.existsSync(path.join(root, 'plain2.md'))).toBe(true)
+    })
   })
 
   describe('canvFS:delete', () => {
