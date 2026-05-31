@@ -52,6 +52,7 @@ const { createUiPromptHandlers } = require('../../extensions/handlers/ui-prompt.
 const { createStatusBarHandlers } = require('../../extensions/handlers/statusBar.cjs')
 const { createMcpHandlers } = require('../../extensions/handlers/mcp.cjs')
 const { createProcessHandlers } = require('../../extensions/handlers/process.cjs')
+const { createExecWrite } = require('./exec-write.cjs')
 const activity = require('../../extensions/activity.cjs')
 const { buildAllContributions, EMPTY: EMPTY_CONTRIBS } = require('../../extensions/contributions.cjs')
 const { readDefaults: readFileHandlerDefaults, writeDefault: writeFileHandlerDefault } = require('../../extensions/file-handler-defaults.cjs')
@@ -165,38 +166,9 @@ function registerIpcHandlers(ipcMain, deps) {
       if (stat.size > MAX_OPEN_BYTES) throw new Error('file too large')
       return fsp.readFile(abs, 'utf-8')
     },
-    writeWorkspaceText: async (rel, text) => {
-      const root = workspaceRootOrLocalThrow()
-      const abs = safeResolve(root, rel)  // same sandbox boundary as reads (no escape, no absolute)
-      if (typeof text !== 'string') throw new TypeError('text must be a string')
-      await fsp.mkdir(path.dirname(abs), { recursive: true })
-      await fsp.writeFile(abs, text, 'utf-8')
-    },
-
-    // process — run an allowlisted binary (the handler has already verified the
-    // `process` capability + that `binary` is in manifest.executables). Uses
-    // execFile (no shell), pins cwd to the workspace root, and never rejects on a
-    // non-zero exit so the extension can read stderr.
-    execAllowed: (binary, args) => new Promise((resolve) => {
-      const root = workspaceRootOrLocalThrow()
-      execFile(binary, args, {
-        cwd: root,
-        timeout: 120_000,
-        maxBuffer: 32 * 1024 * 1024,
-        windowsHide: true,
-      }, (err, stdout, stderr) => {
-        if (err) {
-          resolve({
-            exitCode: typeof err.code === 'number' ? err.code : 1,
-            stdout: stdout || '',
-            stderr: stderr || '',
-            error: err.message,
-          })
-        } else {
-          resolve({ exitCode: 0, stdout: stdout || '', stderr: stderr || '' })
-        }
-      })
-    }),
+    // writeWorkspaceText (workspace.write) + execAllowed (process) live in a
+    // testable factory; see exec-write.cjs / exec-write.test.cjs.
+    ...createExecWrite({ getRoot: workspaceRootOrLocalThrow, safeResolve, fsp, execFile }),
 
     // ui
     notifyToMainWindow: (msg, kind, extensionId) => {
