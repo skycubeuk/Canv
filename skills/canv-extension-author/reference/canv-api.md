@@ -54,15 +54,22 @@ await canv.activeDoc.setBytes(uint8Array)             // saves file bytes; requi
 ## `canv.workspace` — requires `workspace.list` / `workspace.read` / `workspace.write`
 
 ```js
-const root  = await canv.workspace.getRoot()          // absolute dir path of the open workspace
-const files = await canv.workspace.list(glob)         // string[] of relative paths matching glob
-const text  = await canv.workspace.readText(rel)      // file contents as UTF-8 string
+const root = await canv.workspace.getRoot()           // absolute dir path of the open workspace
+const tree = await canv.workspace.list(relDir)        // directory tree (see shape below)
+const text = await canv.workspace.readText(rel)       // file contents as UTF-8 string
 await canv.workspace.writeText(rel, text)             // write UTF-8 file; requires workspace.write
 ```
 
-- `glob` follows standard glob syntax: `'**/*.md'`, `'notes/*.txt'`.
-- `readText` reads any file in the workspace (including dot-dirs like `.canv/annotations/…`). Paths
-  are relative to workspace root.
+- `list(relDir)` takes a workspace-relative **directory** (omit/`''` for the root) and returns a
+  recursive tree node — NOT a flat glob list:
+  ```js
+  { name, relPath, kind: 'dir', children: [ { name, relPath, kind: 'file' | 'dir', ... } ], truncated }
+  ```
+  Walk `children` and filter on `kind === 'file'` + the extension you want. Dot-directories (e.g.
+  `.canv/`) are omitted from the tree.
+- `readText` reads any file in the workspace, **including** dot-dirs the tree hides — e.g.
+  `readText('.canv/annotations/<chapter>.md.json')` returns a chapter's annotation sidecar. Paths
+  are relative to the workspace root.
 - `writeText` requires the **elevated** `workspace.write` capability AND that `rel` falls under one of
   the prefixes in `manifest.writePaths` (e.g. `"Feedback/"`). It creates parent directories as needed.
   Paths that escape the workspace (`..`, absolute) are rejected.
