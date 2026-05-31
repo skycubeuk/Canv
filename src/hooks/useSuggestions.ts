@@ -283,34 +283,50 @@ export function useSuggestions(deps: UseSuggestionsDeps): UseSuggestionsApi {
     const rel = deps.activeMarkdownRel
     if (!rel) return
     if (loadedRelRef.current === rel) return
-    const view = deps.getActiveEditor()
-    if (!view) return
-    loadedRelRef.current = rel
-
     let cancelled = false
-    void (async () => {
-      const records = await loadAnnotations(rel)
+
+    // On first open the workspace sets activeMarkdownRel before Canvas mounts
+    // the EditorView and calls handleEditorReady, so getActiveEditor() can be
+    // null when this effect first runs. The effect's only dependency is `rel`,
+    // so it won't re-run when the view registers a moment later — poll a few
+    // frames until it appears, mirroring the focus/jump retry loops in
+    // useEditorRegistry. Without this, annotations silently fail to load on the
+    // first open of a document and only reappear after an unrelated re-render
+    // (switching tabs, opening settings) happens to re-trigger the effect.
+    let attempts = 0
+    const load = () => {
       if (cancelled) return
-      const current = depsRef.current.getActiveEditor()
-      if (!current || depsRef.current.activeMarkdownRel !== rel) return
-      const docText = current.state.doc.toString()
-      for (const rec of records) {
-        const span = resolveAnchor(docText, rec.anchor)
-        if (!span) continue
-        current.dispatch({
-          effects: addAnnotationEffect.of({
-            id: rec.id,
-            from: span.from,
-            to: span.to,
-            note: rec.note,
-            author: rec.author,
-            suggestedReplacement: rec.suggestedReplacement,
-            status: 'open',
-          }),
-        })
+      const view = depsRef.current.getActiveEditor()
+      if (!view) {
+        if (attempts++ < 30) setTimeout(load, 16)
+        return
       }
-      syncCount(current)
-    })()
+      loadedRelRef.current = rel
+      void (async () => {
+        const records = await loadAnnotations(rel)
+        if (cancelled) return
+        const current = depsRef.current.getActiveEditor()
+        if (!current || depsRef.current.activeMarkdownRel !== rel) return
+        const docText = current.state.doc.toString()
+        for (const rec of records) {
+          const span = resolveAnchor(docText, rec.anchor)
+          if (!span) continue
+          current.dispatch({
+            effects: addAnnotationEffect.of({
+              id: rec.id,
+              from: span.from,
+              to: span.to,
+              note: rec.note,
+              author: rec.author,
+              suggestedReplacement: rec.suggestedReplacement,
+              status: 'open',
+            }),
+          })
+        }
+        syncCount(current)
+      })()
+    }
+    load()
     return () => {
       cancelled = true
       loadedRelRef.current = null
