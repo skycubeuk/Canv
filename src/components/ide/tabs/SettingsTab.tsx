@@ -664,6 +664,7 @@ export function SettingsTab(props: Props) {
               theme: settings.theme as import('../../../lib/themes').ThemeId,
               fontSize: settings.fontSize,
               chatFontSize: settings.chatFontSize,
+              aiChangesDisplay: settings.aiChangesDisplay,
             }}
             onUpdate={onUpdate}
           />

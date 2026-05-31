@@ -1,10 +1,12 @@
 import { THEMES } from '../../lib/themes'
 import type { ThemeId } from '../../lib/themes'
+import type { AiChangesDisplay } from '../../hooks/settingsSchema'
 
 interface AppearanceSettings {
   theme: ThemeId
   fontSize: number
   chatFontSize: number
+  aiChangesDisplay: AiChangesDisplay
 }
 
 interface Props {
@@ -72,6 +74,21 @@ export function AppearanceSection({ settings, onUpdate }: Props) {
           onChange={(e) => onUpdate({ chatFontSize: Number(e.target.value) })}
           className="w-full"
         />
+      </div>
+
+      <div>
+        <label htmlFor="appearance-ai-changes" className="block text-sm font-medium mb-2">Show AI changes</label>
+        <select
+          id="appearance-ai-changes"
+          className="input"
+          value={settings.aiChangesDisplay}
+          onChange={(e) => onUpdate({ aiChangesDisplay: e.target.value as AiChangesDisplay })}
+        >
+          <option value="both">Both (inline + panel)</option>
+          <option value="inline">Inline only (in the document)</option>
+          <option value="panel">Panel only (Runs panel)</option>
+        </select>
+        <p className="text-xs text-subtle mt-1">Where AI-proposed edits and notes appear.</p>
       </div>
     </section>
   )
