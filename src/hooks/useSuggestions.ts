@@ -309,6 +309,11 @@ export function useSuggestions(deps: UseSuggestionsDeps): UseSuggestionsApi {
         if (!current || depsRef.current.activeMarkdownRel !== rel) return
         const docText = current.state.doc.toString()
         for (const rec of records) {
+          // Idempotent load: a tab switch resets loadedRelRef in the cleanup but
+          // does NOT destroy the EditorView, so returning to a file re-runs this
+          // load against the same live view that already holds these annotations.
+          // Skip any record already present to avoid persisting a duplicate set.
+          if (findAnnotation(current, rec.id)) continue
           const span = resolveAnchor(docText, rec.anchor)
           if (!span) continue
           current.dispatch({
