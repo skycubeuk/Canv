@@ -165,6 +165,31 @@ describe('RunView', () => {
     expect(screen.queryByText(/"quote"/)).toBeNull()
   })
 
+  it('hides the diff preview when showDiffInPanel is false', () => {
+    const run = baseRun({
+      range: null,
+      response: 'ISSUES:\n- a typo\n\nCORRECTED:\nThe corrected document.',
+      sourceText: 'The original document.',
+      showDiffInPanel: false,
+    })
+    render(
+      <ContextMenuProvider><RunView run={run} onApply={vi.fn()} onRerun={vi.fn()} onRefine={vi.fn()} /></ContextMenuProvider>,
+    )
+    expect(screen.queryByText(/show diff/i)).toBeNull()
+  })
+
+  it('shows the diff preview when showDiffInPanel is undefined (legacy run)', () => {
+    const run = baseRun({
+      range: null,
+      response: 'ISSUES:\n- a typo\n\nCORRECTED:\nThe corrected document.',
+      sourceText: 'The original document.',
+    })
+    render(
+      <ContextMenuProvider><RunView run={run} onApply={vi.fn()} onRerun={vi.fn()} onRefine={vi.fn()} /></ContextMenuProvider>,
+    )
+    expect(screen.getByText(/show diff/i)).toBeInTheDocument()
+  })
+
   it('refinements render as plain panel-scale text, not chat bubbles', () => {
     const run = baseRun({
       followups: [

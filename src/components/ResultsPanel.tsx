@@ -62,6 +62,10 @@ export interface RunRecord {
   /** True when this run's rewrite was rendered as an inline diff in the
    *  document; the Runs panel then shows a hint instead of an Apply button. */
   inlineEmitted?: boolean
+  /** Set false to suppress the diff preview in the Runs panel (inline display
+   *  mode). Absent on legacy runs → treated as true so older runs still show
+   *  their diff. */
+  showDiffInPanel?: boolean
 }
 
 export function RunView({
@@ -271,7 +275,7 @@ export function RunView({
             {parsed.rewrite}
           </div>
 
-          {run.sourceText && parsed.rewrite && !busy && (
+          {run.sourceText && parsed.rewrite && !busy && (run.showDiffInPanel ?? true) && (
             <DiffView original={run.sourceText} updated={parsed.rewrite} />
           )}
 
