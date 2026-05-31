@@ -233,7 +233,7 @@ export function RunView({
             <div className="space-y-3">
               {reviewNotes.map((n, i) => (
                 <div key={i} className="text-sm">
-                  <div className="text-xs text-subtle italic mb-0.5">"{n.quote}"</div>
+                  <div className="text-xs text-subtle italic mb-0.5">“{n.quote}”</div>
                   <div className="leading-relaxed">{n.comment}</div>
                 </div>
               ))}
@@ -246,7 +246,7 @@ export function RunView({
                 type="button"
                 className="btn-secondary ml-auto"
                 onClick={() =>
-                  navigator.clipboard.writeText(reviewNotes.map((n) => `"${n.quote}"\n${n.comment}`).join('\n\n'))
+                  navigator.clipboard.writeText(reviewNotes.map((n) => `“${n.quote}”\n${n.comment}`).join('\n\n'))
                 }
               >
                 Copy
