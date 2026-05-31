@@ -179,7 +179,7 @@ const text = await res.text()
 ## `canv.ui` — requires `notify` for notify, `ui` for the rest
 
 ```js
-await canv.ui.notify(message, kind)                         // kind: 'info'|'success'|'warning'|'error'
+await canv.ui.notify(message, kind)                         // kind: 'info'|'warn'|'error' (default 'info')
 const yes   = await canv.ui.confirm(msg)                    // → boolean
 await canv.ui.copyToClipboard(text)
 const pick  = await canv.ui.quickPick(items, opts)          // opts: { placeholder?, canPickMany? }

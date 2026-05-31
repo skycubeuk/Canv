@@ -110,7 +110,7 @@ canv.commands.onInvoke(async (_id, args) => {
 
   r = await canv.process.exec('mutool', ['run', `${BUILD_DIR}/annotate.js`])
   if (r.exitCode !== 0) return canv.ui.notify(`mutool failed: ${r.stderr || r.error}`, 'error')
-  await canv.ui.notify(`Exported "${outPdf}" - ${annots.length} notes`, 'success')
+  await canv.ui.notify(`Exported "${outPdf}" - ${annots.length} notes`, 'info')
 })
 ```
 
