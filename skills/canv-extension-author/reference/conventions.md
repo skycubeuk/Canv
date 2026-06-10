@@ -28,6 +28,8 @@ For all id fields: lowercase ASCII letters/digits only, must start with a letter
 | `description` | string | no | ≤2000 chars. Required when elevated caps are declared. |
 | `capabilities` | string[] | YES | Every capability your code uses — omitting one throws `CapabilityError`. |
 | `network` | string[] | no | Bare hostnames only (`"api.openai.com"`). Default `[]`. |
+| `executables` | string[] | no | Allowlist of bare binary names the extension may run via `canv.process.exec` (e.g. `"pandoc"`). Requires the **elevated** `process` capability. Default `[]`. |
+| `writePaths` | string[] | no | Workspace-relative path prefixes the extension may write to via `canv.workspace.writeText` (e.g. `"Feedback/"`). Requires `workspace.write`. Default `[]`. |
 | `contributions` | object[] | YES | One entry per panel/fileHandler/command/menu/statusBar/language. |
 | `settings` | object[] | no | User-facing settings — see `learn_manifest_full`. |
 | `activationEvents` | string[] | no | Omit unless you need `"onStartup"`. Inferred from contributions otherwise. |
@@ -59,6 +61,20 @@ Deep schema details can be found in `reference/manifest-schema.md`.
 
 HTTPS only. List bare hostnames — no scheme, no path, no port. Most extensions need no network access.
 
+## Running binaries + writing files (elevated)
+
+Two elevated capabilities let an extension reach outside the sandbox. Both are surfaced prominently
+in the install consent modal, so declare the minimum and explain why in `description`.
+
+- **`process`** + `manifest.executables`: run an allowlisted binary on the user's machine via
+  `canv.process.exec(binary, args)`. The host runs it with `execFile` (no shell — args are passed as
+  an array, never interpolated), pins the working directory to the workspace root, and only allows
+  binaries listed in `executables` (bare names resolved from `PATH` — no slashes/absolute paths). A
+  non-zero exit resolves with `{ exitCode, stdout, stderr }` rather than throwing.
+- **`workspace.write`** + `manifest.writePaths`: write a UTF-8 file via
+  `canv.workspace.writeText(rel, text)`. The path must fall under one of the declared `writePaths`
+  prefixes and inside the workspace (no `..`, no absolute).
+
 ## Pre-emit checklist
 
 - [ ] `activeDoc.read` declared if any `canv.activeDoc.getText/getPath/getSelection` call exists
@@ -67,6 +83,8 @@ HTTPS only. List bare hostnames — no scheme, no path, no port. Most extensions
 - [ ] `notify` declared if `canv.ui.notify` is called
 - [ ] `ui` declared if `canv.ui.confirm`, `quickPick`, `copyToClipboard`, or `input` is called
 - [ ] `net` declared AND hostnames in `manifest.network` if `canv.net.fetch` is called
+- [ ] `process` declared AND binary names in `manifest.executables` if `canv.process.exec` is called
+- [ ] `workspace.write` declared AND path prefixes in `manifest.writePaths` if `canv.workspace.writeText` is called
 - [ ] All CSS colours/fonts use `--canv-*` vars — no hex, no `rgb()`, no system fonts
 - [ ] Every `contribution.entry` path is a key in `files`
 - [ ] HTML is self-contained — no `<link>` to canv-ui.css, no external CDN scripts

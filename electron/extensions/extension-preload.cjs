@@ -34,9 +34,13 @@ contextBridge.exposeInMainWorld('canv', {
     setBytes:          (bytes) => ipcRenderer.invoke('canvExt:activeDoc.setBytes', bytes),
   },
   workspace: {
-    getRoot:  () => ipcRenderer.invoke('canvExt:workspace.getRoot'),
-    list:     (globOrDir) => ipcRenderer.invoke('canvExt:workspace.list', globOrDir ?? null),
-    readText: (relPath) => ipcRenderer.invoke('canvExt:workspace.readText', relPath),
+    getRoot:   () => ipcRenderer.invoke('canvExt:workspace.getRoot'),
+    list:      (globOrDir) => ipcRenderer.invoke('canvExt:workspace.list', globOrDir ?? null),
+    readText:  (relPath) => ipcRenderer.invoke('canvExt:workspace.readText', relPath),
+    writeText: (relPath, text) => ipcRenderer.invoke('canvExt:workspace.writeText', relPath, text),
+  },
+  process: {
+    exec: (binary, args) => ipcRenderer.invoke('canvExt:process.exec', binary, args ?? []),
   },
   events: makeEventBus('canvExt:event'),
   storage: {

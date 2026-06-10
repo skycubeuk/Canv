@@ -23,6 +23,22 @@ function createWorkspaceHandlers({ runtime, host }) {
       assertString(relPath, 'relPath')
       return host.readWorkspaceText(relPath)
     },
+    'canvExt:workspace.writeText': async (event, relPath, text) => {
+      const { manifest } = requireCaller(runtime, event)
+      requireCapability(manifest, 'workspace.write')
+      assertString(relPath, 'relPath')
+      assertString(text, 'text')
+      const allow = Array.isArray(manifest.writePaths) ? manifest.writePaths : []
+      const norm = relPath.replace(/\\/g, '/').replace(/^\.\/+/, '')
+      const allowed = allow.some((p) => {
+        const pre = p.endsWith('/') ? p : `${p}/`
+        return norm === p || norm.startsWith(pre)
+      })
+      if (!allowed) {
+        throw new Error(`write path not whitelisted: ${relPath} (manifest.writePaths: ${allow.join(', ') || '(none)'})`)
+      }
+      return host.writeWorkspaceText(relPath, text)
+    },
   }
 }
 

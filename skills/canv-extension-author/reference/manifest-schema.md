@@ -90,6 +90,27 @@ Most extensions do not need it.
 The `"onStartup"` here ensures the sync entry script runs before any document opens,
 even if the status bar hasn't rendered yet.
 
+## Running binaries + writing files — `manifest.executables` / `manifest.writePaths`
+
+Two elevated allowlists, declared alongside `network`. Both default to `[]` and both show up in the
+install consent modal so the user can see exactly what the extension may do before trusting it.
+
+```json
+{
+  "capabilities": ["workspace.read", "workspace.write", "process", "notify"],
+  "executables": ["pandoc"],
+  "writePaths": ["Feedback/"]
+}
+```
+
+- **`executables`** — bare binary names (regex `^[a-z][a-z0-9._-]*$` — lowercase, no slashes, no
+  absolute paths) that `canv.process.exec` may run. Requires the `process` capability. The binary is
+  resolved from the OS `PATH`; the host runs it with `execFile` (no shell) from the workspace root.
+- **`writePaths`** — workspace-relative path prefixes (same no-escape rules as a contribution
+  `entry`: no `..`, no absolute) that `canv.workspace.writeText` may write under. A trailing slash
+  denotes a directory prefix (`"Feedback/"` allows `Feedback/notes.pdf`); an entry without a slash
+  matches that exact path or anything beneath it. Requires the `workspace.write` capability.
+
 ## Complete manifest example (all optional fields)
 
 ```json

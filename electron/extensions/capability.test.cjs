@@ -19,6 +19,10 @@ describe('isKnownCapability', () => {
   it('recognises mcp.call as a known capability', () => {
     expect(isKnownCapability('mcp.call')).toBe(true)
   })
+  it('includes "process" (run whitelisted binaries)', () => {
+    expect(isKnownCapability('process')).toBe(true)
+    expect(ALL_CAPABILITIES).toContain('process')
+  })
 })
 
 describe('requireCapability', () => {

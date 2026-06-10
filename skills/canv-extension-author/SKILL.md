@@ -43,6 +43,8 @@ Do **not** activate for unrelated Canv tasks (writing markdown, configuring prof
 | CSS tokens | Use `--canv-*` design tokens from the auto-injected `canv-ui.css`. Never hard-code hex / rgb / system fonts. |
 | Icons | `<canv-icon name="...">` only. Never `<img>` or emoji in UI chrome. |
 | fileHandler read | `activeDoc.read` is required even for `mode: "viewer"`. |
+| Running binaries | `canv.process.exec(binary, args)` needs the **elevated** `process` capability AND the binary in `manifest.executables` (bare names, PATH-resolved, `execFile` — no shell). See `recipes/run-external-binary.md`. |
+| Writing files | `canv.workspace.writeText(rel, text)` needs `workspace.write` AND `rel` under a `manifest.writePaths` prefix (no `..`/absolute). |
 | Vendor libs | Must live in `vendor/<name>.js`, bundled self-contained. No CDN imports. |
 
 ## Testing loop

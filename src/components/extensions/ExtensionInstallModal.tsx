@@ -10,6 +10,8 @@ export interface PreviewManifest {
   author?: string
   capabilities: string[]
   network: string[]
+  executables?: string[]
+  writePaths?: string[]
   settings?: unknown[]
   contributions: unknown[]
 }
@@ -21,7 +23,7 @@ interface Props {
   onConfirm: () => void
 }
 
-const ELEVATED_CAPS = new Set(['workspace.write', 'activeDoc.write', 'ai', 'net'])
+const ELEVATED_CAPS = new Set(['workspace.write', 'activeDoc.write', 'ai', 'net', 'process'])
 
 export function ExtensionInstallModal({ sourceFolder, manifest, onCancel, onConfirm }: Props) {
   const languageContribs = (manifest.contributions as Array<{ type?: string; extensions?: string[] }>).filter((c) => c?.type === 'language')
@@ -64,6 +66,26 @@ export function ExtensionInstallModal({ sourceFolder, manifest, onCancel, onConf
                 {manifest.network.map((o) => <li key={o} className="text-[11px] px-2 py-0.5 rounded-sm text-default bg-elev font-mono">{o}</li>)}
               </ul>}
         </Section>
+
+        {manifest.executables && manifest.executables.length > 0 && (
+          <Section title="Runs these programs on your computer">
+            <ul className="list-none m-0 p-0 flex flex-wrap gap-1">
+              {manifest.executables.map((exe) => (
+                <li key={exe} className="text-[11px] px-2 py-0.5 rounded-sm text-default bg-warning-soft font-mono">{exe}</li>
+              ))}
+            </ul>
+          </Section>
+        )}
+
+        {manifest.writePaths && manifest.writePaths.length > 0 && (
+          <Section title="Writes files under">
+            <ul className="list-none m-0 p-0 flex flex-wrap gap-1">
+              {manifest.writePaths.map((p) => (
+                <li key={p} className="text-[11px] px-2 py-0.5 rounded-sm text-default bg-warning-soft font-mono">{p}</li>
+              ))}
+            </ul>
+          </Section>
+        )}
 
         <Section title="Adds to Canv">
           <div className="text-[11px] text-muted">

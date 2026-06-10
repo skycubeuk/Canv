@@ -50,7 +50,7 @@ await canv.storage.set('key', value)
 const val = await canv.storage.get('key')
 
 // User notifications — requires notify
-await canv.ui.notify('Done!', 'success')  // kind: 'info'|'success'|'warning'|'error'
+await canv.ui.notify('Done!', 'info')  // kind: 'info'|'warn'|'error' (default 'info')
 ```
 
 `canv-ui.css` auto-injects. Use `.canv-button`, `.canv-card`, `.canv-list`, `.canv-input`, `.canv-muted` classes.

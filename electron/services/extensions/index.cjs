@@ -6,6 +6,7 @@ const path = require('node:path')
 const fs = require('node:fs')
 const fsp = require('node:fs/promises')
 const os = require('node:os')
+const { execFile } = require('node:child_process')
 const AdmZip = require('adm-zip')
 
 const MAX_CANVEXT_BYTES = 50 * 1024 * 1024
@@ -50,6 +51,8 @@ const { createNetHandlers } = require('../../extensions/handlers/net.cjs')
 const { createUiPromptHandlers } = require('../../extensions/handlers/ui-prompt.cjs')
 const { createStatusBarHandlers } = require('../../extensions/handlers/statusBar.cjs')
 const { createMcpHandlers } = require('../../extensions/handlers/mcp.cjs')
+const { createProcessHandlers } = require('../../extensions/handlers/process.cjs')
+const { createExecWrite } = require('./exec-write.cjs')
 const activity = require('../../extensions/activity.cjs')
 const { buildAllContributions, EMPTY: EMPTY_CONTRIBS } = require('../../extensions/contributions.cjs')
 const { readDefaults: readFileHandlerDefaults, writeDefault: writeFileHandlerDefault } = require('../../extensions/file-handler-defaults.cjs')
@@ -163,6 +166,9 @@ function registerIpcHandlers(ipcMain, deps) {
       if (stat.size > MAX_OPEN_BYTES) throw new Error('file too large')
       return fsp.readFile(abs, 'utf-8')
     },
+    // writeWorkspaceText (workspace.write) + execAllowed (process) live in a
+    // testable factory; see exec-write.cjs / exec-write.test.cjs.
+    ...createExecWrite({ getRoot: workspaceRootOrLocalThrow, safeResolve, fsp, execFile }),
 
     // ui
     notifyToMainWindow: (msg, kind, extensionId) => {
@@ -447,6 +453,7 @@ function registerIpcHandlers(ipcMain, deps) {
     ...createUiPromptHandlers({ runtime: extensionRuntime, host }),
     ...createStatusBarHandlers({ runtime: extensionRuntime, host }),
     ...createMcpHandlers({ runtime: extensionRuntime, getMcpService: () => (typeof deps.getMcpService === 'function' ? deps.getMcpService() : null) }),
+    ...createProcessHandlers({ runtime: extensionRuntime, host }),
   }
   for (const [channel, fn] of Object.entries(allHandlers)) {
     ipcMain.handle(channel, fn)
@@ -576,6 +583,8 @@ function registerIpcHandlers(ipcMain, deps) {
           author: v.manifest.author,
           capabilities: v.manifest.capabilities,
           network: v.manifest.network ?? [],
+          executables: v.manifest.executables ?? [],
+          writePaths: v.manifest.writePaths ?? [],
           settings: v.manifest.settings ?? [],
           contributions: v.manifest.contributions,
         },
