@@ -11,6 +11,7 @@ import type { Action as AgentDef } from './config/types'
 import { isElectron } from './lib/fs'
 import { TopBar } from './components/ide/TopBar'
 import { ServicesProvider, useService } from './services'
+import { installPrimaryPasteGuard } from './lib/primaryPasteGuard'
 import { Contributions } from './contributions'
 
 // Side-effect imports: each contribution self-registers via
@@ -75,6 +76,10 @@ function AppInner({ migrationOpen, setMigrationOpen }: AppInnerProps) {
       window.removeEventListener('canv:docAgent:pending', onDocAgentPending)
     }
   }, [])
+
+  // Swallow the spurious X11 PRIMARY-selection paste that Chromium fires when a
+  // tab is closed with a middle-click on Linux. See lib/primaryPasteGuard.
+  useEffect(() => installPrimaryPasteGuard(), [])
 
   // Mirror the sidebar toggle: clicking the active placement collapses the
   // dock; clicking an inactive placement switches and ensures it's visible.

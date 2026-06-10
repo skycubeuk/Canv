@@ -1,6 +1,7 @@
 import { tabKey, isMarkdownTab, isDiffTab, isExtensionTab } from '../lib/tabKey'
 import type { OpenTab, EditorGroupId } from '../types/workspace'
 import { setTabDragPayload, readTabDragPayload, hasTabDragPayload } from './ide/dnd'
+import { markTabMiddleClose } from '../lib/primaryPasteGuard'
 import React, { useState } from 'react'
 import { GitBranch, Settings as SettingsIcon, X } from 'lucide-react'
 import { useDialogs } from '../lib/dialogs'
@@ -115,16 +116,17 @@ export function EditorTabs({
               onDragStart={(e) => setTabDragPayload(e, { sourceGroupId: groupId, key })}
               onClick={() => onSelect(key)}
               onMouseDown={(e) => {
-                // Suppress Chromium's middle-button autoscroll cursor. The
-                // close itself is deferred to onAuxClick so that the mouseup
-                // lands on the tab (non-editable) instead of the editor that
-                // would otherwise surface under the cursor — which on Linux
-                // would trigger a primary-selection / clipboard paste.
+                // Suppress Chromium's middle-button autoscroll cursor.
                 if (e.button === 1) e.preventDefault()
               }}
               onAuxClick={(e) => {
                 if (e.button === 1) {
                   e.preventDefault()
+                  // On Linux, Chromium fires an X11 PRIMARY-selection paste off
+                  // this middle-click that preventDefault here cannot cancel —
+                  // it lands in whichever editor focuses after the tab closes.
+                  // Arm the capture-phase guard to swallow that one paste.
+                  markTabMiddleClose()
                   void requestClose(key, dirty)
                 }
               }}
