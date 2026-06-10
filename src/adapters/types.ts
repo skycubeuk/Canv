@@ -20,7 +20,7 @@ export interface ToolResult {
 
 export type Message =
   | { role: 'user' | 'system'; content: string }
-  | { role: 'assistant'; content: string; toolCalls?: ToolCall[] }
+  | { role: 'assistant'; content: string; toolCalls?: ToolCall[]; thinkingBlocks?: unknown[] }
   | { role: 'tool'; toolResults: ToolResult[] }
 
 export interface ToolSchema {
@@ -57,7 +57,7 @@ export interface TokenUsage {
   output: number
 }
 
-export type StopReason = 'end_turn' | 'tool_use' | 'max_tokens' | 'stop_sequence' | 'cancelled'
+export type StopReason = 'end_turn' | 'tool_use' | 'max_tokens' | 'stop_sequence' | 'cancelled' | 'refusal'
 
 export interface CompleteResult {
   text: string
@@ -65,6 +65,13 @@ export interface CompleteResult {
   tokenUsage?: TokenUsage
   toolCalls?: ToolCall[]
   stopReason: StopReason
+  /** Provider-opaque thinking blocks (signature included) from this turn.
+   *  Claude Fable 5 requires them to be passed back verbatim on the next
+   *  request when the turn contains tool calls. Never render their content. */
+  thinkingBlocks?: unknown[]
+  /** Populated when stopReason === 'refusal' (Claude Fable 5 safety
+   *  classifiers). Both fields can be null — that's a normal terminal value. */
+  refusal?: { category: string | null; explanation: string | null }
 }
 
 export interface LLMAdapter {

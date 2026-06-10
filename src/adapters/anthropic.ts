@@ -10,6 +10,14 @@ function parseAnthropicUsage(raw: unknown): { input: number; output: number } | 
   return { input: u.input_tokens, output: u.output_tokens }
 }
 
+function parseStopDetails(raw: unknown): { category: string | null; explanation: string | null } {
+  const d = (raw && typeof raw === 'object' ? raw : {}) as { category?: unknown; explanation?: unknown }
+  return {
+    category: typeof d.category === 'string' ? d.category : null,
+    explanation: typeof d.explanation === 'string' ? d.explanation : null,
+  }
+}
+
 function anthropicMessages(messages: Message[]): Array<{ role: 'user' | 'assistant'; content: unknown }> {
   return messages.map((m) => {
     if (m.role === 'system') return { role: 'user', content: m.content }
@@ -24,10 +32,14 @@ function anthropicMessages(messages: Message[]): Array<{ role: 'user' | 'assista
         })),
       }
     }
-    if (m.role === 'assistant' && m.toolCalls && m.toolCalls.length) {
-      const blocks: Array<Record<string, unknown>> = []
+    if (m.role === 'assistant' && (m.toolCalls?.length || m.thinkingBlocks?.length)) {
+      const blocks: unknown[] = []
+      // Thinking blocks must be passed back exactly as received — the API
+      // verifies the signature and rejects modified blocks. They go first:
+      // a thinking block must precede the tool_use it reasoned about.
+      if (m.thinkingBlocks) blocks.push(...m.thinkingBlocks)
       if (m.content) blocks.push({ type: 'text', text: m.content })
-      for (const c of m.toolCalls) blocks.push({ type: 'tool_use', id: c.id, name: c.name, input: c.input })
+      for (const c of m.toolCalls ?? []) blocks.push({ type: 'tool_use', id: c.id, name: c.name, input: c.input })
       return { role: 'assistant', content: blocks }
     }
     return { role: m.role, content: m.content }
@@ -37,7 +49,7 @@ function anthropicMessages(messages: Message[]): Array<{ role: 'user' | 'assista
 export const anthropicAdapter: LLMAdapter = {
   id: 'anthropic',
   name: 'Anthropic',
-  models: ['claude-opus-4-8', 'claude-opus-4-7', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001'],
+  models: ['claude-fable-5', 'claude-opus-4-8', 'claude-opus-4-7', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001'],
 
   async complete(params: CompleteParams): Promise<CompleteResult> {
     const { messages, system, model, maxTokens = 2048, signal, onToken, apiKey } = params
@@ -92,10 +104,14 @@ export const anthropicAdapter: LLMAdapter = {
         const blocks: Array<Record<string, unknown>> = Array.isArray(data?.content) ? data.content : []
         let text = ''
         const toolCalls: Array<{ id: string; name: string; input: unknown }> = []
+        const thinkingBlocks: unknown[] = []
         for (const b of blocks) {
           if (b.type === 'text' && typeof b.text === 'string') text += b.text
           else if (b.type === 'tool_use' && typeof b.id === 'string' && typeof b.name === 'string') {
             toolCalls.push({ id: b.id, name: b.name, input: b.input ?? {} })
+          } else if (b.type === 'thinking' || b.type === 'redacted_thinking') {
+            // Kept verbatim — the signature must round-trip unmodified.
+            thinkingBlocks.push(b)
           }
         }
         const usage = parseAnthropicUsage(data?.usage)
@@ -104,12 +120,15 @@ export const anthropicAdapter: LLMAdapter = {
           stop === 'tool_use' ? 'tool_use'
           : stop === 'max_tokens' ? 'max_tokens'
           : stop === 'stop_sequence' ? 'stop_sequence'
+          : stop === 'refusal' ? 'refusal'
           : 'end_turn'
         return {
           text,
           truncated: stop === 'max_tokens',
           stopReason,
           ...(toolCalls.length ? { toolCalls } : {}),
+          ...(thinkingBlocks.length ? { thinkingBlocks } : {}),
+          ...(stopReason === 'refusal' ? { refusal: parseStopDetails(data?.stop_details) } : {}),
           ...(usage ? { tokenUsage: usage } : {}),
         }
       }
@@ -150,9 +169,14 @@ async function readSSE(
   let inputTokens: number | null = null
   let outputTokens: number | null = null
   let currentEvent = 'message'
-  let stopReason: 'end_turn' | 'tool_use' | 'max_tokens' | 'stop_sequence' = 'end_turn'
+  let stopReason: 'end_turn' | 'tool_use' | 'max_tokens' | 'stop_sequence' | 'refusal' = 'end_turn'
+  let refusal: { category: string | null; explanation: string | null } | null = null
   const blocksByIndex = new Map<number, PendingToolBlock>()
   const completedToolCalls: Array<{ id: string; name: string; input: unknown }> = []
+  // Thinking blocks are accumulated per index (thinking_delta + signature_delta)
+  // and pushed on content_block_stop so completed blocks round-trip verbatim.
+  const thinkingByIndex = new Map<number, Record<string, unknown>>()
+  const completedThinking: unknown[] = []
 
   // ----- wire reader coroutine: full speed, no pacing -----
   const wirePromise = (async () => {
@@ -184,16 +208,27 @@ async function readSSE(
               blocksByIndex.set(idx, { id: block.id, name: block.name, jsonBuf: '' })
               // Fire immediately — tool-call starts are not paced
               onToolCallStart?.({ id: block.id, name: block.name })
+            } else if (block?.type === 'thinking') {
+              thinkingByIndex.set(idx, { type: 'thinking', thinking: '', signature: '' })
+            } else if (block?.type === 'redacted_thinking') {
+              // Arrives complete in content_block_start — keep it verbatim.
+              thinkingByIndex.set(idx, { ...(block as Record<string, unknown>) })
             }
           } else if (currentEvent === 'content_block_delta') {
             const idx = p.index as number
-            const delta = p.delta as { type?: string; text?: string; partial_json?: string } | undefined
+            const delta = p.delta as { type?: string; text?: string; partial_json?: string; thinking?: string; signature?: string } | undefined
             if (delta?.type === 'text_delta' && typeof delta.text === 'string') {
               // full is updated at dispatch time so out.text matches what onToken received
               queue.push(delta.text)
             } else if (delta?.type === 'input_json_delta' && typeof delta.partial_json === 'string') {
               const blk = blocksByIndex.get(idx)
               if (blk) blk.jsonBuf += delta.partial_json
+            } else if (delta?.type === 'thinking_delta' && typeof delta.thinking === 'string') {
+              const blk = thinkingByIndex.get(idx)
+              if (blk) blk.thinking = String(blk.thinking ?? '') + delta.thinking
+            } else if (delta?.type === 'signature_delta' && typeof delta.signature === 'string') {
+              const blk = thinkingByIndex.get(idx)
+              if (blk) blk.signature = delta.signature
             }
           } else if (currentEvent === 'content_block_stop') {
             const idx = p.index as number
@@ -204,12 +239,22 @@ async function readSSE(
               completedToolCalls.push({ id: blk.id, name: blk.name, input })
               blocksByIndex.delete(idx)
             }
+            const think = thinkingByIndex.get(idx)
+            if (think) {
+              completedThinking.push(think)
+              thinkingByIndex.delete(idx)
+            }
           } else if (currentEvent === 'message_delta') {
-            const stop = (p.delta as { stop_reason?: string } | undefined)?.stop_reason
+            const d = p.delta as { stop_reason?: string; stop_details?: unknown } | undefined
+            const stop = d?.stop_reason
             if (stop === 'max_tokens') { truncated = true; stopReason = 'max_tokens' }
             else if (stop === 'tool_use') stopReason = 'tool_use'
             else if (stop === 'stop_sequence') stopReason = 'stop_sequence'
             else if (stop === 'end_turn') stopReason = 'end_turn'
+            else if (stop === 'refusal') {
+              stopReason = 'refusal'
+              refusal = parseStopDetails(d?.stop_details ?? (p as { stop_details?: unknown }).stop_details)
+            }
             const usage = (p.usage as { output_tokens?: number } | undefined)
             if (usage && typeof usage.output_tokens === 'number') outputTokens = usage.output_tokens
           }
@@ -254,6 +299,7 @@ async function readSSE(
         truncated: false,
         stopReason: 'cancelled',
         ...(completedToolCalls.length ? { toolCalls: completedToolCalls } : {}),
+        ...(completedThinking.length ? { thinkingBlocks: completedThinking } : {}),
         ...(inputTokens != null && outputTokens != null
           ? { tokenUsage: { input: inputTokens, output: outputTokens } }
           : {}),
@@ -270,6 +316,7 @@ async function readSSE(
       truncated: false,
       stopReason: 'cancelled',
       ...(completedToolCalls.length ? { toolCalls: completedToolCalls } : {}),
+      ...(completedThinking.length ? { thinkingBlocks: completedThinking } : {}),
       ...(inputTokens != null && outputTokens != null
         ? { tokenUsage: { input: inputTokens, output: outputTokens } }
         : {}),
@@ -283,6 +330,8 @@ async function readSSE(
     truncated,
     stopReason,
     ...(completedToolCalls.length ? { toolCalls: completedToolCalls } : {}),
+    ...(completedThinking.length ? { thinkingBlocks: completedThinking } : {}),
+    ...(refusal ? { refusal } : {}),
     ...(inputTokens != null && outputTokens != null
       ? { tokenUsage: { input: inputTokens, output: outputTokens } }
       : {}),

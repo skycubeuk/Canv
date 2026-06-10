@@ -31,7 +31,7 @@ const EMPTY_FILES: string[] = []
 
 export type ChatProvider = 'anthropic' | 'openai' | 'ollama'
 
-export type FailureReason = 'cancelled' | 'provider_error'
+export type FailureReason = 'cancelled' | 'provider_error' | 'refusal'
 
 export interface ErrorInfo {
   kind: 'network' | 'rate_limited' | 'server' | 'schema' | 'unknown'
@@ -71,6 +71,12 @@ export interface ChatMessage {
   failureReason?: FailureReason
   /** Populated when `failureReason === 'provider_error'`. */
   errorInfo?: ErrorInfo
+  /** Populated when `failureReason === 'refusal'` (Claude Fable 5 safety
+   *  classifiers). Both fields can be null. */
+  refusal?: { category: string | null; explanation: string | null }
+  /** Provider-opaque thinking blocks from this assistant turn. Passed back
+   *  verbatim to the provider on later requests; never rendered. */
+  thinkingBlocks?: unknown[]
   /** Token counts reported by the model for this assistant turn. */
   tokenUsage?: { input: number; output: number }
 }
@@ -629,6 +635,21 @@ export function Bubble({
         {message.failureReason === 'cancelled' && (
           <div className="mt-2 inline-flex items-center gap-1 rounded-full border border-default bg-elev px-2 py-0.5 text-[0.75em] uppercase tracking-wide text-muted">
             Stopped
+          </div>
+        )}
+
+        {message.failureReason === 'refusal' && (
+          <div className="mt-2 rounded-md border border-default bg-elev px-2 py-1.5 text-[0.92em] text-default">
+            <div className="flex items-center gap-1.5 text-[0.75em] uppercase tracking-wide text-muted">
+              <span>Declined by model</span>
+              {message.refusal?.category && (
+                <span className="font-mono text-subtle">{message.refusal.category}</span>
+              )}
+            </div>
+            <p className="mt-0.5 leading-snug whitespace-pre-wrap wrap-break-word">
+              {message.refusal?.explanation
+                ?? 'The model’s safety classifiers declined this request. Retry with a different model.'}
+            </p>
           </div>
         )}
 

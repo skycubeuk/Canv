@@ -141,6 +141,195 @@ describe('anthropic — tools', () => {
   })
 })
 
+describe('anthropic — claude-fable-5', () => {
+  afterEach(() => { vi.unstubAllGlobals() })
+
+  it('lists claude-fable-5 as an available model', () => {
+    expect(anthropicAdapter.models).toContain('claude-fable-5')
+  })
+
+  it('maps a non-streaming refusal to stopReason="refusal" with stop_details', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      content: [],
+      stop_reason: 'refusal',
+      stop_details: {
+        type: 'refusal',
+        category: 'cyber',
+        explanation: 'This request was declined because it could enable cyber harm.',
+      },
+      usage: { input_tokens: 412, output_tokens: 0 },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } })))
+
+    const result = await anthropicAdapter.complete({
+      apiKey: 'k',
+      model: 'claude-fable-5',
+      messages: [{ role: 'user', content: 'hi' }],
+    })
+
+    expect(result.stopReason).toBe('refusal')
+    expect(result.text).toBe('')
+    expect(result.refusal).toEqual({
+      category: 'cyber',
+      explanation: 'This request was declined because it could enable cyber harm.',
+    })
+  })
+
+  it('maps a streaming refusal from message_delta to stopReason="refusal"', async () => {
+    const events = [
+      { event: 'message_start', data: { message: { usage: { input_tokens: 9 } } } },
+      { event: 'content_block_delta', data: { index: 0, delta: { type: 'text_delta', text: 'partial' } } },
+      { event: 'message_delta', data: {
+        delta: { stop_reason: 'refusal', stop_details: { type: 'refusal', category: 'bio', explanation: 'Declined.' } },
+        usage: { output_tokens: 2 },
+      } },
+      { event: 'message_stop', data: {} },
+    ]
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(ssEncode(events), {
+      status: 200, headers: { 'content-type': 'text/event-stream' },
+    })))
+
+    const result = await anthropicAdapter.complete({
+      apiKey: 'k', model: 'claude-fable-5',
+      messages: [{ role: 'user', content: 'hi' }],
+      onToken: () => {},
+    })
+
+    expect(result.stopReason).toBe('refusal')
+    expect(result.refusal).toEqual({ category: 'bio', explanation: 'Declined.' })
+  })
+
+  it('captures thinking blocks verbatim from a non-streaming response', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      content: [
+        { type: 'thinking', thinking: '', signature: 'sig-1' },
+        { type: 'text', text: 'answer' },
+      ],
+      stop_reason: 'end_turn',
+      usage: { input_tokens: 5, output_tokens: 7 },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } })))
+
+    const result = await anthropicAdapter.complete({
+      apiKey: 'k', model: 'claude-fable-5',
+      messages: [{ role: 'user', content: 'hi' }],
+    })
+
+    expect(result.text).toBe('answer')
+    expect(result.thinkingBlocks).toEqual([{ type: 'thinking', thinking: '', signature: 'sig-1' }])
+  })
+
+  it('assembles streamed thinking blocks (thinking_delta + signature_delta) without leaking into text', async () => {
+    const events = [
+      { event: 'message_start', data: { message: { usage: { input_tokens: 3 } } } },
+      { event: 'content_block_start', data: { index: 0, content_block: { type: 'thinking', thinking: '', signature: '' } } },
+      { event: 'content_block_delta', data: { index: 0, delta: { type: 'thinking_delta', thinking: 'reasoning…' } } },
+      { event: 'content_block_delta', data: { index: 0, delta: { type: 'signature_delta', signature: 'sig-abc' } } },
+      { event: 'content_block_stop', data: { index: 0 } },
+      { event: 'content_block_start', data: { index: 1, content_block: { type: 'text', text: '' } } },
+      { event: 'content_block_delta', data: { index: 1, delta: { type: 'text_delta', text: 'answer' } } },
+      { event: 'content_block_stop', data: { index: 1 } },
+      { event: 'message_delta', data: { delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 11 } } },
+      { event: 'message_stop', data: {} },
+    ]
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(ssEncode(events), {
+      status: 200, headers: { 'content-type': 'text/event-stream' },
+    })))
+
+    const tokens: string[] = []
+    const result = await anthropicAdapter.complete({
+      apiKey: 'k', model: 'claude-fable-5',
+      messages: [{ role: 'user', content: 'hi' }],
+      onToken: (t) => tokens.push(t),
+    })
+
+    expect(tokens).toEqual(['answer'])
+    expect(result.text).toBe('answer')
+    expect(result.thinkingBlocks).toEqual([{ type: 'thinking', thinking: 'reasoning…', signature: 'sig-abc' }])
+  })
+
+  it('captures redacted_thinking blocks verbatim from the stream', async () => {
+    const events = [
+      { event: 'content_block_start', data: { index: 0, content_block: { type: 'redacted_thinking', data: 'opaque-bytes' } } },
+      { event: 'content_block_stop', data: { index: 0 } },
+      { event: 'content_block_start', data: { index: 1, content_block: { type: 'text', text: '' } } },
+      { event: 'content_block_delta', data: { index: 1, delta: { type: 'text_delta', text: 'ok' } } },
+      { event: 'content_block_stop', data: { index: 1 } },
+      { event: 'message_delta', data: { delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 2 } } },
+    ]
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(ssEncode(events), {
+      status: 200, headers: { 'content-type': 'text/event-stream' },
+    })))
+
+    const result = await anthropicAdapter.complete({
+      apiKey: 'k', model: 'claude-fable-5',
+      messages: [{ role: 'user', content: 'hi' }],
+      onToken: () => {},
+    })
+
+    expect(result.thinkingBlocks).toEqual([{ type: 'redacted_thinking', data: 'opaque-bytes' }])
+  })
+
+  it('round-trips stored thinking blocks before text and tool_use in assistant turns', async () => {
+    let captured: RequestInit | undefined
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+      captured = init
+      return new Response(JSON.stringify({
+        content: [{ type: 'text', text: 'done' }],
+        stop_reason: 'end_turn',
+        usage: { input_tokens: 1, output_tokens: 1 },
+      }), { status: 200 })
+    }))
+
+    await anthropicAdapter.complete({
+      apiKey: 'k', model: 'claude-fable-5',
+      messages: [
+        { role: 'user', content: 'hi' },
+        {
+          role: 'assistant', content: 'checking',
+          toolCalls: [{ id: 't1', name: 'read_file', input: { path: 'a.md' } }],
+          thinkingBlocks: [{ type: 'thinking', thinking: '', signature: 'sig-1' }],
+        },
+        { role: 'tool', toolResults: [{ id: 't1', content: 'hello' }] },
+      ],
+    })
+
+    const body = JSON.parse(String(captured?.body))
+    expect(body.messages[1].content).toEqual([
+      { type: 'thinking', thinking: '', signature: 'sig-1' },
+      { type: 'text', text: 'checking' },
+      { type: 'tool_use', id: 't1', name: 'read_file', input: { path: 'a.md' } },
+    ])
+  })
+
+  it('round-trips thinking blocks on assistant turns without tool calls', async () => {
+    let captured: RequestInit | undefined
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init: RequestInit) => {
+      captured = init
+      return new Response(JSON.stringify({
+        content: [{ type: 'text', text: 'done' }],
+        stop_reason: 'end_turn',
+      }), { status: 200 })
+    }))
+
+    await anthropicAdapter.complete({
+      apiKey: 'k', model: 'claude-fable-5',
+      messages: [
+        { role: 'user', content: 'hi' },
+        {
+          role: 'assistant', content: 'earlier answer',
+          thinkingBlocks: [{ type: 'thinking', thinking: '', signature: 'sig-2' }],
+        },
+        { role: 'user', content: 'follow-up' },
+      ],
+    })
+
+    const body = JSON.parse(String(captured?.body))
+    expect(body.messages[1].content).toEqual([
+      { type: 'thinking', thinking: '', signature: 'sig-2' },
+      { type: 'text', text: 'earlier answer' },
+    ])
+  })
+})
+
 describe('anthropicAdapter.complete (streaming, cancelled)', () => {
   afterEach(() => { vi.unstubAllGlobals() })
 

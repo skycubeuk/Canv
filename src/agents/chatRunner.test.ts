@@ -1073,3 +1073,90 @@ describe('chatRunner — MCP integration', () => {
     expect(asst.toolResults).toEqual([{ id: 't1', content: 'Cancelled by user', isError: true }])
   })
 })
+
+describe('chatRunner — Fable 5 refusals and thinking blocks', () => {
+  it('marks the assistant turn failed with reason "refusal" and stores stop details', async () => {
+    const adapter: LLMAdapter = {
+      id: 'mock', name: 'Mock', models: ['m'],
+      async complete(): Promise<CompleteResult> {
+        return {
+          text: '', truncated: false, stopReason: 'refusal',
+          refusal: { category: 'cyber', explanation: 'Declined: could enable cyber harm.' },
+        }
+      },
+    }
+    let final: ChatMessage[] = []
+    await runChatTurn({
+      ...baseCtx,
+      adapter,
+      provider: 'anthropic',
+      history: [{ id: 'u1', role: 'user', content: 'hi', provider: 'anthropic' }],
+      onUpdate: (m) => { final = [...m] },
+    })
+    const asst = final.filter((m) => m.role === 'assistant')[0]
+    expect(asst.failureReason).toBe('refusal')
+    expect(asst.refusal).toEqual({ category: 'cyber', explanation: 'Declined: could enable cyber harm.' })
+  })
+
+  it('refused turns are dropped from the adapter history on the next request', async () => {
+    const seen: Message[][] = []
+    let calls = 0
+    const adapter: LLMAdapter = {
+      id: 'mock', name: 'Mock', models: ['m'],
+      async complete(p: CompleteParams): Promise<CompleteResult> {
+        seen.push(p.messages)
+        calls++
+        if (calls === 1) {
+          return { text: '', truncated: false, stopReason: 'refusal', refusal: { category: null, explanation: null } }
+        }
+        return { text: 'ok', truncated: false, stopReason: 'end_turn' }
+      },
+    }
+    let final: ChatMessage[] = []
+    const history: ChatMessage[] = [{ id: 'u1', role: 'user', content: 'hi', provider: 'anthropic' }]
+    await runChatTurn({ ...baseCtx, adapter, provider: 'anthropic', history, onUpdate: (m) => { final = [...m] } })
+    // Second user turn re-uses the accumulated history including the refused turn.
+    await runChatTurn({
+      ...baseCtx, adapter, provider: 'anthropic',
+      history: [...final, { id: 'u2', role: 'user', content: 'again', provider: 'anthropic' }],
+      onUpdate: (m) => { final = [...m] },
+    })
+    expect(seen[1].filter((m) => m.role === 'assistant')).toHaveLength(0)
+  })
+
+  it('persists thinkingBlocks on the assistant message and passes them back on the next round', async () => {
+    const seen: Message[][] = []
+    let calls = 0
+    const adapter: LLMAdapter = {
+      id: 'mock', name: 'Mock', models: ['m'],
+      async complete(p: CompleteParams): Promise<CompleteResult> {
+        seen.push(p.messages)
+        calls++
+        if (calls === 1) {
+          return {
+            text: 'checking', truncated: false, stopReason: 'tool_use',
+            toolCalls: [{ id: 'c1', name: 'read_file', input: { path: 'a.md' } }],
+            thinkingBlocks: [{ type: 'thinking', thinking: '', signature: 'sig-1' }],
+          }
+        }
+        return { text: 'done', truncated: false, stopReason: 'end_turn' }
+      },
+    }
+    const fs = makeMockFs({ 'a.md': { content: 'hello', mtimeMs: 1, size: 5, binary: false } })
+    let final: ChatMessage[] = []
+    await runChatTurn({
+      ...baseCtx,
+      toolCtx: makeCtx({ fs }),
+      adapter,
+      provider: 'anthropic',
+      history: [{ id: 'u1', role: 'user', content: 'read a.md', provider: 'anthropic' }],
+      onUpdate: (m) => { final = [...m] },
+    })
+
+    const asst = final.filter((m) => m.role === 'assistant')[0]
+    expect(asst.thinkingBlocks).toEqual([{ type: 'thinking', thinking: '', signature: 'sig-1' }])
+
+    const round2Assistant = seen[1].find((m) => m.role === 'assistant') as Extract<Message, { role: 'assistant' }>
+    expect(round2Assistant.thinkingBlocks).toEqual([{ type: 'thinking', thinking: '', signature: 'sig-1' }])
+  })
+})

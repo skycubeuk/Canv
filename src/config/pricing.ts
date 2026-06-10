@@ -29,6 +29,7 @@ export const pricingKey = (provider: Provider, model: string): string =>
 export const PRICING: Record<string, ModelPricing> = {
   // Keys are `${provider}/${model}` — the model component MUST match the
   // strings declared in src/adapters/{anthropic,openai}.ts.
+  'anthropic/claude-fable-5':            { input: 10,   output: 50 },
   'anthropic/claude-sonnet-4-6':         { input: 3,    output: 15 },
   'anthropic/claude-opus-4-8':           { input: 5,    output: 25 },
   'anthropic/claude-opus-4-7':           { input: 5,    output: 25 },

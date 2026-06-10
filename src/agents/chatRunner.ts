@@ -291,6 +291,7 @@ async function runChatTurnInner(p: RunChatTurnParams, messages: ChatMessage[]): 
       ...assistantMsg,
       content: result.text,
       toolCalls: result.toolCalls?.length ? result.toolCalls : undefined,
+      ...(result.thinkingBlocks?.length ? { thinkingBlocks: result.thinkingBlocks } : {}),
       ...(result.tokenUsage ? { tokenUsage: result.tokenUsage } : {}),
     }
     messages[messages.length - 1] = assistantMsg
@@ -310,6 +311,20 @@ async function runChatTurnInner(p: RunChatTurnParams, messages: ChatMessage[]): 
         failureReason: 'cancelled',
         ...(result.toolCalls?.length ? { toolCalls: result.toolCalls } : {}),
         ...(cancelledResults.length ? { toolResults: cancelledResults } : {}),
+      }
+      messages[messages.length - 1] = assistantMsg
+      p.onUpdate(messages)
+      return
+    }
+
+    if (result.stopReason === 'refusal') {
+      // Claude Fable 5 safety classifiers declined the request (HTTP 200, not
+      // an error). Mark the turn failed so it is dropped from future adapter
+      // history (docs: discard refused output) and the retry affordance shows.
+      assistantMsg = {
+        ...assistantMsg,
+        failureReason: 'refusal',
+        ...(result.refusal ? { refusal: result.refusal } : {}),
       }
       messages[messages.length - 1] = assistantMsg
       p.onUpdate(messages)
@@ -504,6 +519,10 @@ async function runChatTurnInner(p: RunChatTurnParams, messages: ChatMessage[]): 
   finalMsg = {
     ...finalMsg,
     content: finalResult.text,
+    ...(finalResult.thinkingBlocks?.length ? { thinkingBlocks: finalResult.thinkingBlocks } : {}),
+    ...(finalResult.stopReason === 'refusal'
+      ? { failureReason: 'refusal' as const, ...(finalResult.refusal ? { refusal: finalResult.refusal } : {}) }
+      : {}),
     ...(finalResult.tokenUsage ? { tokenUsage: finalResult.tokenUsage } : {}),
   }
   messages[messages.length - 1] = finalMsg
@@ -527,6 +546,9 @@ function toAdapterMessages(history: ChatMessage[]): Message[] {
       const am: Message = m.toolCalls && m.toolCalls.length
         ? { role: 'assistant', content: m.content, toolCalls: m.toolCalls }
         : { role: 'assistant', content: m.content }
+      // Thinking blocks ride along opaquely — Claude Fable 5 requires them
+      // back verbatim on tool-use turns; other models silently ignore them.
+      if (m.thinkingBlocks?.length) am.thinkingBlocks = m.thinkingBlocks
       out.push(am)
       if (m.toolResults && m.toolResults.length) {
         out.push({ role: 'tool', toolResults: m.toolResults })
