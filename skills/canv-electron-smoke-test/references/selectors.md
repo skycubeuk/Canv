@@ -224,6 +224,16 @@ The `<key>` slot in `editor-tab-<key>` is `tabKey(t)`: for markdown tabs it is t
 
 When split, each group renders its own `EditorTabs` strip — disambiguate with `[data-testid="editor-tablist-<groupId>"]`.
 
+## Editor content (CodeMirror)
+
+Every open markdown tab mounts its own `.cm-content` instance; inactive tabs are hidden with `visibility: hidden` (zero-size box), **not** unmounted or `display:none`. A bare `#editor .cm-content` or `#editorMain .cm-content` click resolves to the first (often hidden) instance and times out. Use Playwright's `:visible`:
+
+```js
+await win.click('#editorMain .cm-content:visible')   // active tab's editor
+```
+
+**Verifying autosave**: the status-bar `Saved` text can reflect a previously-saved tab while another tab's 5s debounce is still pending — don't treat `text=Saved` as proof a specific file flushed. Poll the file on disk from the probe (`fs.readFileSync` in a retry loop, ~12s budget) instead.
+
 ## Floating selection toolbar
 
 | Affordance | Selector |
@@ -584,6 +594,8 @@ Status-bar extension items: see Status bar section above.
 | Confirm dialog | `div[role="dialog"][aria-label="<title or 'Confirm'>"]` |
 
 Dialog buttons (both Prompt and Confirm): `button:has-text("OK")` / `button:has-text("Cancel")` — or whatever `submitLabel` / `cancelLabel` was passed. Confirm dialog auto-focuses its primary button. Escape cancels both via a document listener.
+
+Known `submitLabel` overrides (from source, verified by probe): file-tree **New file** and **New folder** prompts use `button:has-text("Create")` (`useWorkspaceFileOps.ts`); Settings factory-reset confirmation uses `Erase`. Don't assume `OK`.
 
 ## Pop-out dock window (separate Electron window)
 
