@@ -87,6 +87,8 @@ export type WritePreview =
       newPath?: string
       size?: number
       contentPreview?: string
+      /** Set when the current file content could not be read (non-ENOENT) — the diff's "before" side may be misleading. */
+      warning?: string
     }
   | {
       kind: 'apply_edits'
@@ -563,7 +565,8 @@ function toAdapterMessages(history: ChatMessage[]): Message[] {
 // Re-export types used by callers (avoids App.tsx importing from adapters/types).
 export type { ToolResult, ToolCall }
 
-async function buildWritePreview(call: ToolCall, ctx: ToolCtx): Promise<WritePreview> {
+// Exported for tests.
+export async function buildWritePreview(call: ToolCall, ctx: ToolCtx): Promise<WritePreview> {
   const input = (call.input ?? {}) as Record<string, unknown>
   const path = typeof input.path === 'string' ? input.path : ''
   const newContent = typeof input.content === 'string' ? input.content : ''
@@ -576,15 +579,26 @@ async function buildWritePreview(call: ToolCall, ctx: ToolCtx): Promise<WritePre
         contentPreview: newContent.split('\n').slice(0, 20).join('\n'),
       }
     case 'edit_file': {
-      let before: string
+      let before = ''
+      let warning: string | undefined
       try {
         if (ctx.activeDocPath === path) {
           before = ctx.getEditorContent(path) ?? ''
         } else {
           before = await readFileContent(ctx.fs, path)
         }
-      } catch { before = '' }
-      return { kind: 'edit', path, diff: { before, after: newContent } }
+      } catch (e) {
+        // A missing file legitimately diffs against empty. Any other failure
+        // (unreadable, non-UTF-8, too large) would make the diff lie — the
+        // user would approve what looks like writing to an empty file. Flag it.
+        const msg = e instanceof Error ? e.message : String(e)
+        if (!/ENOENT|not found/i.test(msg)) {
+          warning = `Could not read the file's current content (${msg}). The "before" side of this diff may be wrong.`
+        }
+      }
+      return warning
+        ? { kind: 'edit', path, diff: { before, after: newContent }, warning }
+        : { kind: 'edit', path, diff: { before, after: newContent } }
     }
     case 'apply_edits': {
       const rawEdits = Array.isArray(input.edits) ? input.edits as Array<Record<string, unknown>> : []

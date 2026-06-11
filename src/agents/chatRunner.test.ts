@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { runChatTurn, pathIsAutoApproved, type ApprovalDecision } from './chatRunner'
+import { runChatTurn, pathIsAutoApproved, buildWritePreview, type ApprovalDecision } from './chatRunner'
 import type { LLMAdapter, CompleteParams, CompleteResult, Message } from '../adapters/types'
 import type { ChatMessage } from '../components/ChatPanel'
 import { makeMockFs, makeCtx } from '../test/fixtures'
@@ -1158,5 +1158,42 @@ describe('chatRunner — Fable 5 refusals and thinking blocks', () => {
 
     const round2Assistant = seen[1].find((m) => m.role === 'assistant') as Extract<Message, { role: 'assistant' }>
     expect(round2Assistant.thinkingBlocks).toEqual([{ type: 'thinking', thinking: '', signature: 'sig-1' }])
+  })
+})
+
+describe('buildWritePreview — edit_file before-content errors', () => {
+  const call = (path: string) => ({ id: 't1', name: 'edit_file', input: { path, content: 'new body' } })
+
+  it('treats a missing file as a legitimately empty before (no warning)', async () => {
+    const ctx = makeCtx({ fs: makeMockFs({}) })
+    const p = await buildWritePreview(call('notes/new.md') as never, ctx)
+    expect(p.kind).toBe('edit')
+    if (p.kind !== 'apply_edits') {
+      expect(p.diff).toEqual({ before: '', after: 'new body' })
+      expect(p.warning).toBeUndefined()
+    }
+  })
+
+  it('surfaces non-ENOENT read failures as a warning instead of a silent empty diff', async () => {
+    const fs = makeMockFs({ 'notes/big.md': { content: 'x', mtimeMs: 1, size: 1, binary: false } })
+    fs.readFile = async () => { throw new Error('readFile failed: not-utf8') }
+    const ctx = makeCtx({ fs })
+    const p = await buildWritePreview(call('notes/big.md') as never, ctx)
+    expect(p.kind).toBe('edit')
+    if (p.kind !== 'apply_edits') {
+      expect(p.warning).toContain('not-utf8')
+      expect(p.diff).toEqual({ before: '', after: 'new body' })
+    }
+  })
+
+  it('reads the open editor buffer for the active document', async () => {
+    const ctx = makeCtx({ fs: makeMockFs({}) })
+    ctx.activeDocPath = 'notes/open.md'
+    ctx.getEditorContent = () => 'editor body'
+    const p = await buildWritePreview(call('notes/open.md') as never, ctx)
+    if (p.kind !== 'apply_edits') {
+      expect(p.diff).toEqual({ before: 'editor body', after: 'new body' })
+      expect(p.warning).toBeUndefined()
+    }
   })
 })

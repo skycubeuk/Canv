@@ -73,6 +73,11 @@ export function ChatApprovalCard({ preview, state, onDecide }: ChatApprovalCardP
       {preview.kind === 'mcp' && preview.contentPreview && (
         <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap rounded-sm bg-panel/60 p-2 text-[0.85em]">{preview.contentPreview}</pre>
       )}
+      {preview.kind !== 'apply_edits' && preview.warning && (
+        <div className="mt-1 rounded-sm border border-warning bg-warning-soft px-2 py-1 text-[0.85em]">
+          ⚠ {preview.warning}
+        </div>
+      )}
       {preview.kind === 'edit' && preview.diff && (
         <DiffView before={preview.diff.before} after={preview.diff.after} />
       )}
