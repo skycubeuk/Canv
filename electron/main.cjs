@@ -16,6 +16,13 @@ const annotationsService = require('./services/annotations/index.cjs')
 const ttsService         = require('./services/tts/index.cjs').createTtsService()
 const uriDispatch     = require('./uri-dispatch.cjs')
 
+// Surface async failures that would otherwise vanish: many IPC handlers and
+// background tasks (extension activation, history snapshots, watchers) run
+// detached promises. Without this, a rejection degrades the app silently.
+process.on('unhandledRejection', (reason) => {
+  console.error('[main] unhandledRejection:', reason)
+})
+
 let extensionRuntime = null
 let trustStore = null
 let workspaceRegistry = null
