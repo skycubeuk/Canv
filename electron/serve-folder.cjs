@@ -28,6 +28,19 @@ function safeResolve(root, urlPath) {
   const trimmed = decoded.replace(/^[\\/]+/, '')
   const resolved = path.resolve(root, trimmed)
   if (resolved !== root && !resolved.startsWith(root + path.sep)) return null
+  return confineReal(root, resolved)
+}
+
+// Lexical confinement isn't enough: a symlink inside root can point anywhere.
+// Re-check against realpaths. Nonexistent targets pass through unchanged so
+// callers can stat and 404; realpath both sides so a symlinked root (e.g.
+// macOS /tmp -> /private/tmp) doesn't reject its own files.
+function confineReal(root, resolved) {
+  let real
+  try { real = fs.realpathSync(resolved) } catch { return resolved }
+  let realRoot
+  try { realRoot = fs.realpathSync(root) } catch { return resolved }
+  if (real !== realRoot && !real.startsWith(realRoot + path.sep)) return null
   return resolved
 }
 
@@ -659,8 +672,14 @@ function renderMarkdownFile(absPath, currentRel, depth = 0) {
 }
 
 function renderEmbedRecursive(rel, depth) {
-  const abs = path.join(state.root, rel)
-  if (!fs.existsSync(abs)) return `<span class="canv-broken">${escapeHtml(rel)}</span>`
+  // rel comes from the on-disk page index, but confine anyway: the joined
+  // path must stay inside root both lexically and after symlink resolution.
+  const root = path.resolve(state.root)
+  const joined = path.resolve(root, rel)
+  const abs = (joined === root || joined.startsWith(root + path.sep))
+    ? confineReal(root, joined)
+    : null
+  if (!abs || !fs.existsSync(abs)) return `<span class="canv-broken">${escapeHtml(rel)}</span>`
   if (depth >= 3) return `<span class="canv-broken">${escapeHtml(rel)}</span>`
   return renderMarkdownFile(abs, rel, depth)
 }

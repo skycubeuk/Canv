@@ -56,6 +56,82 @@ const fs = require('node:fs')
 const os = require('node:os')
 const { buildPageIndex, preprocessMarkdown } = require('./serve-folder.cjs')
 
+// Symlink creation needs elevated rights on Windows; skip those tests there.
+const canSymlink = (() => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'canv-symlink-probe-'))
+  try {
+    fs.writeFileSync(path.join(dir, 't'), '')
+    fs.symlinkSync(path.join(dir, 't'), path.join(dir, 'l'))
+    return true
+  } catch {
+    return false
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true })
+  }
+})()
+
+describe('safeResolve symlink confinement', () => {
+  it.runIf(canSymlink)('rejects a symlinked file that escapes the root', () => {
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'canv-outside-'))
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'canv-root-'))
+    try {
+      fs.writeFileSync(path.join(outside, 'secret.md'), '# secret')
+      fs.symlinkSync(path.join(outside, 'secret.md'), path.join(root, 'evil.md'))
+      expect(safeResolve(root, '/evil.md')).toBeNull()
+    } finally {
+      fs.rmSync(outside, { recursive: true, force: true })
+      fs.rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it.runIf(canSymlink)('rejects files reached through a symlinked directory', () => {
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'canv-outside-'))
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'canv-root-'))
+    try {
+      fs.writeFileSync(path.join(outside, 'secret.md'), '# secret')
+      fs.symlinkSync(outside, path.join(root, 'evil'))
+      expect(safeResolve(root, '/evil/secret.md')).toBeNull()
+    } finally {
+      fs.rmSync(outside, { recursive: true, force: true })
+      fs.rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it.runIf(canSymlink)('allows symlinks that stay inside the root', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'canv-root-'))
+    try {
+      fs.writeFileSync(path.join(root, 'real.md'), '# real')
+      fs.symlinkSync(path.join(root, 'real.md'), path.join(root, 'alias.md'))
+      expect(safeResolve(root, '/alias.md')).toBe(path.join(root, 'alias.md'))
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it.runIf(canSymlink)('still serves when the root itself is behind a symlink', () => {
+    // e.g. macOS /tmp -> /private/tmp: a symlinked root must not reject itself.
+    const real = fs.mkdtempSync(path.join(os.tmpdir(), 'canv-root-'))
+    const alias = real + '-alias'
+    try {
+      fs.writeFileSync(path.join(real, 'a.md'), '# a')
+      fs.symlinkSync(real, alias)
+      expect(safeResolve(alias, '/a.md')).toBe(path.join(alias, 'a.md'))
+    } finally {
+      fs.rmSync(alias, { force: true })
+      fs.rmSync(real, { recursive: true, force: true })
+    }
+  })
+
+  it('passes through nonexistent paths so callers can 404', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'canv-root-'))
+    try {
+      expect(safeResolve(root, '/missing.md')).toBe(path.join(root, 'missing.md'))
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true })
+    }
+  })
+})
+
 function makeTree(spec) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'canv-serve-'))
   for (const [rel, body] of Object.entries(spec)) {
@@ -431,6 +507,20 @@ describe('serve-folder server', () => {
       // Node's http normalises URLs but we still must not escape.
       expect([400, 404]).toContain(r.status)
     })
+  })
+
+  it.runIf(canSymlink)('returns 404 for symlinks escaping the served root', async () => {
+    const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'canv-outside-'))
+    fs.writeFileSync(path.join(outside, 'secret.md'), '# top secret')
+    try {
+      await withServer({ 'index.md': '# i' }, async (url, root) => {
+        fs.symlinkSync(path.join(outside, 'secret.md'), path.join(root, 'evil.md'))
+        const r = await get(url + '/evil.md')
+        expect(r.status).toBe(404)
+      })
+    } finally {
+      fs.rmSync(outside, { recursive: true, force: true })
+    }
   })
 
   it('returns 404 for non-whitelisted asset extensions', async () => {
