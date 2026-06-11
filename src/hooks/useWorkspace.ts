@@ -2,24 +2,37 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   getFs,
   isElectron,
-  isStaleWriteError,
   type DirNode,
   type FsEvent,
   type Workspace,
   type WriteResult,
 } from '../lib/fs'
-import type { OpenTab, PinnedEntry, EditorGroupId, EditorGroupState } from '../types/workspace'
+import type { PinnedEntry, EditorGroupId, EditorGroupState } from '../types/workspace'
 import { wsKey } from '../lib/wsKey'
-import { tabKey, SETTINGS_TAB_KEY, DIFF_TAB_KEY_PREFIX, EXTENSION_TAB_KEY_PREFIX, isMarkdownTab } from '../lib/tabKey'
-import { applyEdits as applyEditsImpl, type AnchorEdit, type ApplyEditsResult } from '../services/workspaceEdits'
+import { tabKey, SETTINGS_TAB_KEY, isMarkdownTab } from '../lib/tabKey'
+import type { AnchorEdit, ApplyEditsResult } from '../services/workspaceEdits'
+import {
+  readJson,
+  persistGroups,
+  persistPinnedRels,
+  restoreGroupsV1,
+  restoreGroupsLegacy,
+  restorePinned,
+  type PersistedGroups,
+  type PersistedPin,
+  type DroppedTab,
+} from './workspace/persistence'
+import { useWorkspaceSaves, type ConflictNotice } from './workspace/useWorkspaceSaves'
+import { useWorkspaceTabs } from './workspace/useWorkspaceTabs'
+import { useWorkspaceFileTree } from './workspace/useWorkspaceFileTree'
 
 export type { AnchorEdit, ApplyEditsResult }
+export type { ConflictNotice }
 
 const SCHEMA_VERSION = '2'
 const SCHEMA_KEY = 'canv:schemaVersion'
 const LAST_WS_KEY = 'canv:lastWorkspace'
 const SAVE_DEBOUNCE_MS = 5000
-const TREE_REFRESH_DEBOUNCE_MS = 200
 // How long to remember our own writes before evicting them from the
 // recentWrites map. Suppression itself doesn't depend on age — it matches by
 // mtimeMs — so this only has to be long enough to outlast the worst-case
@@ -27,59 +40,6 @@ const TREE_REFRESH_DEBOUNCE_MS = 200
 // arriving (awaitWriteFinish + IPC). Observed up to ~400ms on macOS; we keep
 // a generous margin to also cover slow remote/synced filesystems.
 const RECENT_WRITE_EVICT_MS = 30_000
-
-function isMd(rel: string): boolean {
-  const lower = rel.toLowerCase()
-  return lower.endsWith('.md') || lower.endsWith('.markdown')
-}
-
-function readJson<T>(key: string, fallback: T): T {
-  try {
-    const raw = localStorage.getItem(key)
-    if (!raw) return fallback
-    return JSON.parse(raw) as T
-  } catch {
-    return fallback
-  }
-}
-
-function writeJson(key: string, value: unknown) {
-  try {
-    localStorage.setItem(key, JSON.stringify(value))
-  } catch {
-    // quota errors surface via the existing global event channel — best-effort
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Per-group helpers (pure functions, no React deps)
-// ---------------------------------------------------------------------------
-
-function findGroup(groups: EditorGroupState[], id: EditorGroupId): EditorGroupState | null {
-  return groups.find((g) => g.id === id) ?? null
-}
-
-function findGroupContaining(groups: EditorGroupState[], key: string): EditorGroupState | null {
-  for (const g of groups) {
-    if (g.openTabs.some((t) => tabKey(t) === key)) return g
-  }
-  return null
-}
-
-function withGroupUpdate(
-  groups: EditorGroupState[],
-  id: EditorGroupId,
-  updater: (g: EditorGroupState) => EditorGroupState,
-): EditorGroupState[] {
-  return groups.map((g) => (g.id === id ? updater(g) : g))
-}
-
-// ---------------------------------------------------------------------------
-
-export interface ConflictNotice {
-  relPath: string
-  diskMtimeMs: number
-}
 
 export interface WorkspaceApi {
   ready: boolean
@@ -167,26 +127,6 @@ interface OnQuotaErrorOptions {
 }
 
 // ---------------------------------------------------------------------------
-// Persistence shape
-// ---------------------------------------------------------------------------
-
-interface PersistedGroups {
-  version: 1
-  groups: { id: EditorGroupId; tabKeys: string[]; activeTabKey: string | null }[]
-  activeGroupId: EditorGroupId
-}
-
-function tabKeysFor(group: EditorGroupState): string[] {
-  return group.openTabs.map((t) => {
-    if (t.kind === 'markdown') return `markdown:${t.relPath}`
-    if (t.kind === 'settings') return 'settings'
-    if (t.kind === 'extension') return `ext:${t.extensionId}:${t.mode}:${t.relPath}`
-    // diff
-    return `diff:${t.relPath}@${t.baseRef}`
-  })
-}
-
-// ---------------------------------------------------------------------------
 
 export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
   const available = isElectron()
@@ -205,25 +145,10 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
   const [writingSet, setWritingSet] = useState<Set<string>>(new Set())
   const [conflict, setConflict] = useState<ConflictNotice | null>(null)
 
-  const setWriting = useCallback((rel: string, writing: boolean) => {
-    setWritingSet((prev) => {
-      const has = prev.has(rel)
-      if (writing ? has : !has) return prev
-      const next = new Set(prev)
-      if (writing) next.add(rel)
-      else next.delete(rel)
-      return next
-    })
-  }, [])
   // No-op when running outside Electron — start in a "ready" state so the
   // boot effect doesn't have to flip it from inside the effect body.
   const [ready, setReady] = useState(() => !isElectron())
 
-  const saveTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
-  const pendingMarkdown = useRef<Map<string, string>>(new Map())
-  const recentWrites = useRef<Map<string, { mtimeMs: number; ts: number; content: string | null }>>(new Map())
-  const lastWriterGroupRef = useRef<Map<string, EditorGroupId>>(new Map())
-  const treeRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const rootRef = useRef<string | null>(null)
   const editorGroupsRef = useRef<EditorGroupState[]>([{ id: 'g1', openTabs: [], activeTabKey: null }])
   const activeGroupIdRef = useRef<EditorGroupId>('g1')
@@ -245,539 +170,86 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
   const dirtySetRef = useRef<Set<string>>(dirtySet)
   useEffect(() => { dirtySetRef.current = dirtySet }, [dirtySet])
 
-  const persistGroups = useCallback((rt: string, groups: EditorGroupState[], activeId: EditorGroupId) => {
-    const payload: PersistedGroups = {
-      version: 1,
-      groups: groups.map((g) => ({ id: g.id, tabKeys: tabKeysFor(g), activeTabKey: g.activeTabKey })),
-      activeGroupId: activeId,
-    }
-    writeJson(wsKey(rt, 'groups'), payload)
-    // Clear the legacy slots once we've written the v1 shape.
-    try {
-      localStorage.removeItem(wsKey(rt, 'tabs'))
-      localStorage.removeItem(wsKey(rt, 'activeTab'))
-    } catch { /* ignore */ }
-  }, [])
+  // ---------------------------------------------------------------------------
+  // Save engine (debounced writes, tool writes, anchor edits)
+  // ---------------------------------------------------------------------------
 
-  const persistPinnedRels = useCallback((rt: string, list: PinnedEntry[]) => {
-    writeJson(wsKey(rt, 'pinned'), list.map((p) => ({ rel: p.relPath })))
-  }, [])
-
-  const refreshTree = useCallback(async () => {
-    if (!rootRef.current) return
-    try {
-      const next = await getFs().listDir('')
-      setTree(next)
-      setTreeTruncated(Boolean(next.truncated))
-    } catch {
-      // ignore — workspace may have been removed or permissions changed
-    }
-  }, [])
-
-  const scheduleTreeRefresh = useCallback(() => {
-    if (treeRefreshTimer.current) clearTimeout(treeRefreshTimer.current)
-    treeRefreshTimer.current = setTimeout(() => {
-      treeRefreshTimer.current = null
-      refreshTree()
-    }, TREE_REFRESH_DEBOUNCE_MS)
-  }, [refreshTree])
-
-  const setDirty = useCallback((rel: string, dirty: boolean) => {
-    setDirtySet((prev) => {
-      const has = prev.has(rel)
-      if (dirty && has) return prev
-      if (!dirty && !has) return prev
-      const next = new Set(prev)
-      if (dirty) next.add(rel)
-      else next.delete(rel)
-      return next
-    })
-  }, [])
-
-  // Look up a markdown tab's EOL/BOM from the open-groups ref. Used by every
-  // write path so a CRLF/BOM file round-trips losslessly. Returns (lf, no-bom)
-  // as a safe default when no markdown tab is open for `rel` (e.g. tool-driven
-  // writes to a file that isn't currently open).
-  const getTabEolBom = useCallback((rel: string): { eol: 'lf' | 'crlf'; bom: boolean } => {
-    for (const g of editorGroupsRef.current) {
-      const t = g.openTabs.find((x) => isMarkdownTab(x) && x.relPath === rel)
-      if (t && t.kind === 'markdown') {
-        return { eol: t.eol, bom: t.bom }
-      }
-    }
-    return { eol: 'lf', bom: false }
-  }, [])
-
-  const writeFileCoalesced = useCallback(async (rel: string, markdown: string, sourceGroupId?: EditorGroupId) => {
-    setWriting(rel, true)
-    try {
-      const { eol, bom } = getTabEolBom(rel)
-      const { mtimeMs } = await getFs().writeFile(rel, markdown, undefined, { eol, bom })
-      recentWrites.current.set(rel, { mtimeMs, ts: Date.now(), content: markdown })
-      // Update mtimeMs on every group; refresh loadedMarkdown on every OTHER group so their
-      // CodeMirror instances re-sync via Canvas's lastLoadedRef effect. The source group's
-      // Canvas keeps its own state (we'd reset its cursor otherwise).
-      setEditorGroups((prev) =>
-        prev.map((g) => ({
-          ...g,
-          openTabs: g.openTabs.map((t) => {
-            if (!isMarkdownTab(t) || t.relPath !== rel) return t
-            if (g.id === sourceGroupId) return { ...t, mtimeMs }
-            return { ...t, mtimeMs, loadedMarkdown: markdown }
-          }),
-        })),
-      )
-      setDirty(rel, false)
-    } catch (err) {
-      if (isStaleWriteError(err)) {
-        if (onToast) onToast(`File "${rel}" changed on disk — reload or overwrite from the conflict prompt.`)
-        setConflict({ relPath: rel, diskMtimeMs: 0 })
-      } else if (onToast) {
-        onToast(`Failed to save ${rel}: ${err instanceof Error ? err.message : String(err)}`)
-      }
-    } finally {
-      setWriting(rel, false)
-    }
-  }, [setDirty, setWriting, onToast, getTabEolBom])
-
-  const writeFileFromTool = useCallback(async (
-    rel: string,
-    content: string,
-    expectedMtimeMs?: number,
-  ): Promise<WriteResult> => {
-    // Drop any in-flight debounced editor save for this path — the tool's
-    // content supersedes whatever was queued, and the queued save would race
-    // with this write and re-trigger the conflict prompt.
-    const pendingTimer = saveTimers.current.get(rel)
-    if (pendingTimer) {
-      clearTimeout(pendingTimer)
-      saveTimers.current.delete(rel)
-    }
-    pendingMarkdown.current.delete(rel)
-    lastWriterGroupRef.current.delete(rel)
-
-    const { eol, bom } = getTabEolBom(rel)
-    const result = await getFs().writeFile(rel, content, expectedMtimeMs, { eol, bom })
-    // Mark this mtime as "our own write" so the chokidar 'change' event that
-    // follows is suppressed in the watcher subscription below.
-    recentWrites.current.set(rel, { mtimeMs: result.mtimeMs, ts: Date.now(), content })
-    // Refresh any open tabs of this file so their CodeMirror buffers re-sync.
-    setEditorGroups((prev) =>
-      prev.map((g) => ({
-        ...g,
-        openTabs: g.openTabs.map((t) => {
-          if (!isMarkdownTab(t) || t.relPath !== rel) return t
-          return { ...t, mtimeMs: result.mtimeMs, loadedMarkdown: content }
-        }),
-      })),
-    )
-    setDirty(rel, false)
-    return result
-  }, [setDirty, getTabEolBom])
-
-  const applyEdits = useCallback(async (edits: AnchorEdit[]): Promise<ApplyEditsResult> => {
-    // Snapshot the dirty set at call time so isDirty closes over a stable view
-    // (no risk of mid-call state churn making a previously-clean file dirty).
-    const dirtyNow = new Set(dirtySetRef.current)
-    const result = await applyEditsImpl(edits, { isDirty: (p) => dirtyNow.has(p) })
-    if (!result.ok) return result
-    // Mark every affected file's new mtime as "our own write" so the chokidar
-    // 'change' echo is suppressed in the watcher subscription. Mirrors the
-    // single-file path in writeFileFromTool.
-    for (const { path: rel, mtimeMs } of result.applied) {
-      recentWrites.current.set(rel, { mtimeMs, ts: Date.now(), content: null })
-    }
-    // Refresh open tabs' mtimeMs so subsequent saves don't trip stale-mtime.
-    // We deliberately do NOT update loadedMarkdown here — chokidar's change
-    // event for our write is suppressed, and tabs holding this file will pick
-    // up the new content on the next reload/re-open. Keeping the renderer's
-    // tab-buffer model simple is more valuable than partial in-place refresh.
-    setEditorGroups((prev) => prev.map((g) => ({
-      ...g,
-      openTabs: g.openTabs.map((t) => {
-        if (!isMarkdownTab(t)) return t
-        const hit = result.applied.find((a) => a.path === t.relPath)
-        if (!hit) return t
-        return { ...t, mtimeMs: hit.mtimeMs }
-      }),
-    })))
-    // Drop dirty markers for every affected file; they're freshly written.
-    setDirtySet((prev) => {
-      let changed = false
-      const next = new Set(prev)
-      for (const a of result.applied) {
-        if (next.delete(a.path)) changed = true
-      }
-      return changed ? next : prev
-    })
-    return result
-  }, [])
-
-  const noteOwnDiskWrite = useCallback((rel: string, mtimeMs: number) => {
-    recentWrites.current.set(rel, { mtimeMs, ts: Date.now(), content: null })
-  }, [])
-
-  const saveTab = useCallback((rel: string, markdown: string, sourceGroupId?: EditorGroupId) => {
-    pendingMarkdown.current.set(rel, markdown)
-    if (sourceGroupId) lastWriterGroupRef.current.set(rel, sourceGroupId)
-    setDirty(rel, true)
-    const existing = saveTimers.current.get(rel)
-    if (existing) clearTimeout(existing)
-    const t = setTimeout(() => {
-      saveTimers.current.delete(rel)
-      const pending = pendingMarkdown.current.get(rel)
-      if (pending == null) return
-      pendingMarkdown.current.delete(rel)
-      const writer = lastWriterGroupRef.current.get(rel)
-      lastWriterGroupRef.current.delete(rel)
-      writeFileCoalesced(rel, pending, writer)
-    }, saveDebounceMs)
-    saveTimers.current.set(rel, t)
-  }, [setDirty, writeFileCoalesced, saveDebounceMs])
-
-  const flushAll = useCallback(async () => {
-    const tasks: Promise<void>[] = []
-    for (const [rel, timer] of saveTimers.current.entries()) {
-      clearTimeout(timer)
-      const markdown = pendingMarkdown.current.get(rel)
-      if (markdown != null) {
-        pendingMarkdown.current.delete(rel)
-        tasks.push(writeFileCoalesced(rel, markdown))
-      }
-    }
-    saveTimers.current.clear()
-    await Promise.allSettled(tasks)
-  }, [writeFileCoalesced])
+  const {
+    saveTimers,
+    pendingMarkdown,
+    recentWrites,
+    setDirty,
+    getTabEolBom,
+    writeFileCoalesced,
+    writeFileFromTool,
+    applyEdits,
+    noteOwnDiskWrite,
+    saveTab,
+    flushAll,
+  } = useWorkspaceSaves({
+    editorGroupsRef,
+    dirtySetRef,
+    setEditorGroups,
+    setDirtySet,
+    setWritingSet,
+    setConflict,
+    onToast,
+    saveDebounceMs,
+  })
 
   // ---------------------------------------------------------------------------
   // Tab mutation methods — per-group
   // ---------------------------------------------------------------------------
 
-  const openTab = useCallback(async (rel: string, groupId?: EditorGroupId) => {
-    if (!rootRef.current) return
-    // Any text file is openable in CodeMirror. Binary files (e.g. .pdf) should
-    // be routed through a fileHandler extension before reaching here; if one
-    // hits this path the CodeMirror buffer just shows the raw bytes, which is
-    // ugly but harmless. Removing the previous .md-only gate so that .tex /
-    // .json / etc files participate in language-extension highlighting.
-    const targetGroup = groupId ?? activeGroupIdRef.current
-    // Already open in target group?
-    const existingInTarget = (findGroup(editorGroupsRef.current, targetGroup)?.openTabs ?? [])
-      .find((t) => isMarkdownTab(t) && t.relPath === rel)
-    if (existingInTarget) {
-      setEditorGroups((prev) => withGroupUpdate(prev, targetGroup, (g) => ({ ...g, activeTabKey: rel })))
-      setActiveGroupIdState(targetGroup)
-      return
-    }
-    let r
-    try {
-      r = await getFs().readFile(rel)
-    } catch (err) {
-      if (onToast) onToast(`Couldn't open ${rel}: ${err instanceof Error ? err.message : String(err)}`)
-      return
-    }
-    if (!r.ok) {
-      const name = rel.split('/').pop() || rel
-      if (r.error === 'too-large') {
-        const mb = (r.size / (1024 * 1024)).toFixed(1)
-        if (onToast) onToast(`${name} is too large to open (${mb} MB).`)
-      } else {
-        if (onToast) onToast(`${name} is not UTF-8 encoded. Opening would lose data.`)
-      }
-      return
-    }
-    const tab: OpenTab = {
-      kind: 'markdown',
-      relPath: rel,
-      loadedMarkdown: r.content,
-      mtimeMs: r.mtimeMs,
-      eol: r.eol,
-      bom: r.bom,
-    }
-    setEditorGroups((prev) => {
-      const next = withGroupUpdate(prev, targetGroup, (g) => ({
-        ...g,
-        openTabs: [...g.openTabs, tab],
-        activeTabKey: rel,
-      }))
-      if (rootRef.current) persistGroups(rootRef.current, next, targetGroup)
-      return next
-    })
-    setActiveGroupIdState(targetGroup)
-  }, [persistGroups, onToast])
-
-  const closeTab = useCallback(async (rel: string, groupId?: EditorGroupId) => {
-    // Flush pending writes for the rel (shared across groups since dirty state is per-rel).
-    const timer = saveTimers.current.get(rel)
-    if (timer) {
-      clearTimeout(timer)
-      saveTimers.current.delete(rel)
-      const pending = pendingMarkdown.current.get(rel)
-      if (pending != null) {
-        pendingMarkdown.current.delete(rel)
-        await writeFileCoalesced(rel, pending)
-      }
-    }
-    // Resolve target group.
-    let target: EditorGroupId
-    if (groupId) {
-      target = groupId
-    } else {
-      const containing = findGroupContaining(editorGroupsRef.current, rel)
-      target = containing?.id ?? activeGroupIdRef.current
-    }
-    // Compute next active group synchronously (before setState batching) so we
-    // can pass the correct value to setActiveGroupIdState.
-    const computeNext = (prev: EditorGroupState[]): { finalGroups: EditorGroupState[]; newActiveGroup: EditorGroupId } => {
-      const next = withGroupUpdate(prev, target, (g) => {
-        const remaining = g.openTabs.filter((t) => !(t.kind === 'markdown' && t.relPath === rel))
-        const newActive = g.activeTabKey === rel
-          ? (remaining.length ? tabKey(remaining[remaining.length - 1]) : null)
-          : g.activeTabKey
-        return { ...g, openTabs: remaining, activeTabKey: newActive }
-      })
-      // If a group becomes empty AND it's not g1, drop it (collapses split).
-      const collapsed = next.filter((g) => g.id === 'g1' || g.openTabs.length > 0)
-      const finalGroups = collapsed.length ? collapsed : [{ id: 'g1' as const, openTabs: [], activeTabKey: null }]
-      const currentActiveGroupId = activeGroupIdRef.current
-      const newActiveGroup: EditorGroupId = finalGroups.some((g) => g.id === currentActiveGroupId)
-        ? currentActiveGroupId
-        : 'g1'
-      return { finalGroups, newActiveGroup }
-    }
-    const { finalGroups, newActiveGroup } = computeNext(editorGroupsRef.current)
-    setEditorGroups(() => {
-      if (rootRef.current) persistGroups(rootRef.current, finalGroups, newActiveGroup)
-      return finalGroups
-    })
-    setActiveGroupIdState(newActiveGroup)
-    setDirty(rel, false)
-  }, [persistGroups, setDirty, writeFileCoalesced])
-
-  const setActiveTabByKey = useCallback((key: string | null, groupId?: EditorGroupId) => {
-    const target = groupId ?? activeGroupIdRef.current
-    setEditorGroups((prev) => {
-      const next = withGroupUpdate(prev, target, (g) => ({ ...g, activeTabKey: key }))
-      if (rootRef.current) persistGroups(rootRef.current, next, target)
-      return next
-    })
-    setActiveGroupIdState(target)
-  }, [persistGroups])
-
-  const setActiveTab = setActiveTabByKey
-
-  const openSettingsTab = useCallback((groupId?: EditorGroupId) => {
-    const target = groupId ?? activeGroupIdRef.current
-    const existing = editorGroupsRef.current.find((g) => g.openTabs.some((t) => t.kind === 'settings'))
-    if (existing) {
-      setEditorGroups((prev) =>
-        withGroupUpdate(prev, existing.id, (g) => ({ ...g, activeTabKey: SETTINGS_TAB_KEY })),
-      )
-      setActiveGroupIdState(existing.id)
-      if (rootRef.current) persistGroups(rootRef.current, editorGroupsRef.current, existing.id)
-      return
-    }
-    setEditorGroups((prev) => {
-      const next = withGroupUpdate(prev, target, (g) => ({
-        ...g,
-        openTabs: [...g.openTabs, { kind: 'settings' }],
-        activeTabKey: SETTINGS_TAB_KEY,
-      }))
-      if (rootRef.current) persistGroups(rootRef.current, next, target)
-      return next
-    })
-    setActiveGroupIdState(target)
-  }, [persistGroups])
-
-  const openDiffTab = useCallback((relPath: string, baseRef = 'HEAD', baseLabel?: string, groupId?: EditorGroupId) => {
-    const target = groupId ?? activeGroupIdRef.current
-    const key = `diff:${relPath}@${baseRef}`
-    const tab: OpenTab = { kind: 'diff', relPath, baseRef, baseLabel }
-    setEditorGroups((prev) => {
-      // Singleton check inside the updater so batched calls see the latest state.
-      const existingGroup = findGroupContaining(prev, key)
-      if (existingGroup) {
-        const next = withGroupUpdate(prev, existingGroup.id, (g) => ({ ...g, activeTabKey: key }))
-        if (rootRef.current) persistGroups(rootRef.current, next, existingGroup.id)
-        // Side-effect: update active group — safe in updater only for synchronous React batches.
-        setActiveGroupIdState(existingGroup.id)
-        return next
-      }
-      const next = withGroupUpdate(prev, target, (g) => ({
-        ...g,
-        openTabs: [...g.openTabs, tab],
-        activeTabKey: key,
-      }))
-      if (rootRef.current) persistGroups(rootRef.current, next, target)
-      return next
-    })
-    setActiveGroupIdState(target)
-  }, [persistGroups])
-
-  const openExtensionTab = useCallback((relPath: string, extensionId: string, mode: 'viewer' | 'editor', groupId?: EditorGroupId) => {
-    const target = groupId ?? activeGroupIdRef.current
-    const key = `${EXTENSION_TAB_KEY_PREFIX}${extensionId}:${relPath}`
-    const tab: OpenTab = { kind: 'extension', relPath, extensionId, mode }
-    setEditorGroups((prev) => {
-      // If the tab is already open in any group, focus it there.
-      const existingGroup = findGroupContaining(prev, key)
-      if (existingGroup) {
-        const next = withGroupUpdate(prev, existingGroup.id, (g) => ({ ...g, activeTabKey: key }))
-        if (rootRef.current) persistGroups(rootRef.current, next, existingGroup.id)
-        setActiveGroupIdState(existingGroup.id)
-        return next
-      }
-      const next = withGroupUpdate(prev, target, (g) => ({
-        ...g,
-        openTabs: [...g.openTabs, tab],
-        activeTabKey: key,
-      }))
-      if (rootRef.current) persistGroups(rootRef.current, next, target)
-      return next
-    })
-    setActiveGroupIdState(target)
-  }, [persistGroups])
-
-  const closeTabByKey = useCallback(async (key: string, groupId?: EditorGroupId) => {
-    if (key === SETTINGS_TAB_KEY) {
-      let target: EditorGroupId
-      if (groupId) {
-        target = groupId
-      } else {
-        const containing = editorGroupsRef.current.find((g) => g.openTabs.some((t) => t.kind === 'settings'))
-        target = containing?.id ?? activeGroupIdRef.current
-      }
-      // Compute next state synchronously before batching.
-      const computeSettingsClose = (prev: EditorGroupState[]): { finalGroups: EditorGroupState[]; newActiveGroup: EditorGroupId } => {
-        const next = withGroupUpdate(prev, target, (g) => {
-          const remaining = g.openTabs.filter((t) => t.kind !== 'settings')
-          const newActive = g.activeTabKey === SETTINGS_TAB_KEY
-            ? (remaining.length ? tabKey(remaining[remaining.length - 1]) : null)
-            : g.activeTabKey
-          return { ...g, openTabs: remaining, activeTabKey: newActive }
-        })
-        const collapsed = next.filter((g) => g.id === 'g1' || g.openTabs.length > 0)
-        const finalGroups = collapsed.length ? collapsed : [{ id: 'g1' as const, openTabs: [], activeTabKey: null }]
-        const currentActiveGroupId = activeGroupIdRef.current
-        const newActiveGroup: EditorGroupId = finalGroups.some((g) => g.id === currentActiveGroupId)
-          ? currentActiveGroupId
-          : 'g1'
-        return { finalGroups, newActiveGroup }
-      }
-      const { finalGroups, newActiveGroup } = computeSettingsClose(editorGroupsRef.current)
-      setEditorGroups(() => {
-        if (rootRef.current) persistGroups(rootRef.current, finalGroups, newActiveGroup)
-        return finalGroups
-      })
-      setActiveGroupIdState(newActiveGroup)
-      return
-    }
-    if (key.startsWith(DIFF_TAB_KEY_PREFIX) || key.startsWith(EXTENSION_TAB_KEY_PREFIX)) {
-      let target: EditorGroupId
-      if (groupId) {
-        target = groupId
-      } else {
-        const containing = findGroupContaining(editorGroupsRef.current, key)
-        target = containing?.id ?? activeGroupIdRef.current
-      }
-      const computeKeyedClose = (prev: EditorGroupState[]): { finalGroups: EditorGroupState[]; newActiveGroup: EditorGroupId } => {
-        const next = withGroupUpdate(prev, target, (g) => {
-          const remaining = g.openTabs.filter((t) => tabKey(t) !== key)
-          const newActive = g.activeTabKey === key
-            ? (remaining.length ? tabKey(remaining[remaining.length - 1]) : null)
-            : g.activeTabKey
-          return { ...g, openTabs: remaining, activeTabKey: newActive }
-        })
-        const collapsed = next.filter((g) => g.id === 'g1' || g.openTabs.length > 0)
-        const finalGroups = collapsed.length ? collapsed : [{ id: 'g1' as const, openTabs: [], activeTabKey: null }]
-        const currentActiveGroupId = activeGroupIdRef.current
-        const newActiveGroup: EditorGroupId = finalGroups.some((g) => g.id === currentActiveGroupId)
-          ? currentActiveGroupId
-          : 'g1'
-        return { finalGroups, newActiveGroup }
-      }
-      const { finalGroups, newActiveGroup } = computeKeyedClose(editorGroupsRef.current)
-      setEditorGroups(() => {
-        if (rootRef.current) persistGroups(rootRef.current, finalGroups, newActiveGroup)
-        return finalGroups
-      })
-      setActiveGroupIdState(newActiveGroup)
-      return
-    }
-    await closeTab(key, groupId)
-  }, [closeTab, persistGroups])
+  const {
+    openTab,
+    closeTab,
+    setActiveTab,
+    setActiveTabByKey,
+    openSettingsTab,
+    openDiffTab,
+    openExtensionTab,
+    closeTabByKey,
+    splitRight,
+    moveTab,
+    setActiveGroupId,
+  } = useWorkspaceTabs({
+    rootRef,
+    editorGroupsRef,
+    activeGroupIdRef,
+    setEditorGroups,
+    setActiveGroupIdState,
+    onToast,
+    saveTimers,
+    pendingMarkdown,
+    writeFileCoalesced,
+    setDirty,
+  })
 
   // ---------------------------------------------------------------------------
-  // Split / move / focus
+  // Tree refresh, pins, file operations
   // ---------------------------------------------------------------------------
 
-  const splitRight = useCallback((fromGroupId?: EditorGroupId) => {
-    const source = fromGroupId ?? activeGroupIdRef.current
-    setEditorGroups((prev) => {
-      if (prev.length >= 2) {
-        // Already split — just focus the other group.
-        return prev
-      }
-      const sourceGroup = findGroup(prev, source)
-      if (!sourceGroup) return prev
-      const activeKey = sourceGroup.activeTabKey
-      if (!activeKey) return prev
-      // Clone the active tab into a new g2.
-      const cloned = sourceGroup.openTabs.find((t) => tabKey(t) === activeKey)
-      if (!cloned) return prev
-      const next: EditorGroupState[] = [
-        ...prev,
-        { id: 'g2', openTabs: [cloned], activeTabKey: activeKey },
-      ]
-      if (rootRef.current) persistGroups(rootRef.current, next, 'g2')
-      return next
-    })
-    setActiveGroupIdState('g2')
-  }, [persistGroups])
-
-  const moveTab = useCallback((key: string, fromGroupId: EditorGroupId, toGroupId: EditorGroupId) => {
-    if (fromGroupId === toGroupId) return
-    setEditorGroups((prev) => {
-      const fromG = findGroup(prev, fromGroupId)
-      if (!fromG) return prev
-      const tab = fromG.openTabs.find((t) => tabKey(t) === key)
-      if (!tab) return prev
-      let next = prev
-      // Remove from source.
-      next = withGroupUpdate(next, fromGroupId, (g) => {
-        const remaining = g.openTabs.filter((t) => tabKey(t) !== key)
-        const newActive = g.activeTabKey === key
-          ? (remaining.length ? tabKey(remaining[remaining.length - 1]) : null)
-          : g.activeTabKey
-        return { ...g, openTabs: remaining, activeTabKey: newActive }
-      })
-      // Add to destination if it exists, otherwise create it.
-      const destExists = next.some((g) => g.id === toGroupId)
-      if (destExists) {
-        next = withGroupUpdate(next, toGroupId, (g) => {
-          // If destination already has a tab with this key, focus it.
-          if (g.openTabs.some((t) => tabKey(t) === key)) {
-            return { ...g, activeTabKey: key }
-          }
-          return { ...g, openTabs: [...g.openTabs, tab], activeTabKey: key }
-        })
-      } else {
-        next = [...next, { id: toGroupId, openTabs: [tab], activeTabKey: key }]
-      }
-      // Drop empty non-g1 groups.
-      next = next.filter((g) => g.id === 'g1' || g.openTabs.length > 0)
-      const newActiveGroup: EditorGroupId = next.some((g) => g.id === toGroupId) ? toGroupId : 'g1'
-      if (rootRef.current) persistGroups(rootRef.current, next, newActiveGroup)
-      return next
-    })
-    setActiveGroupIdState(toGroupId)
-  }, [persistGroups])
-
-  const setActiveGroupId = useCallback((groupId: EditorGroupId) => {
-    if (!editorGroupsRef.current.some((g) => g.id === groupId)) return
-    setActiveGroupIdState(groupId)
-    if (rootRef.current) persistGroups(rootRef.current, editorGroupsRef.current, groupId)
-  }, [persistGroups])
+  const {
+    refreshTree,
+    scheduleTreeRefresh,
+    pin,
+    unpin,
+    createFile,
+    createFolder,
+    renameOp,
+    remove,
+  } = useWorkspaceFileTree({
+    rootRef,
+    editorGroupsRef,
+    activeGroupIdRef,
+    pinnedRef,
+    setTree,
+    setTreeTruncated,
+    setEditorGroups,
+    setPinned,
+    onToast,
+  })
 
   // ---------------------------------------------------------------------------
   // Reload from disk
@@ -805,105 +277,6 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
   }, [setDirty])
 
   // ---------------------------------------------------------------------------
-  // Pin operations
-  // ---------------------------------------------------------------------------
-
-  const pin = useCallback(async (rel: string) => {
-    if (!isMd(rel)) {
-      if (onToast) onToast('Only .md / .markdown files can be pinned to context')
-      return
-    }
-    if (pinnedRef.current.some((p) => p.relPath === rel)) return
-    let mtimeMs = 0
-    try {
-      const stat = await getFs().readFile(rel)
-      if (stat.ok) mtimeMs = stat.mtimeMs
-    } catch {
-      // file may have just been deleted
-    }
-    const entry: PinnedEntry = { relPath: rel, mtimeMs }
-    setPinned((prev) => {
-      const next = [...prev, entry]
-      if (rootRef.current) persistPinnedRels(rootRef.current, next)
-      return next
-    })
-  }, [persistPinnedRels, onToast])
-
-  const unpin = useCallback(async (rel: string) => {
-    if (!pinnedRef.current.some((p) => p.relPath === rel)) return
-    setPinned((prev) => {
-      const next = prev.filter((p) => p.relPath !== rel)
-      if (rootRef.current) persistPinnedRels(rootRef.current, next)
-      return next
-    })
-  }, [persistPinnedRels])
-
-  // ---------------------------------------------------------------------------
-  // File operations
-  // ---------------------------------------------------------------------------
-
-  const createFile = useCallback(async (rel: string, content = '') => {
-    await getFs().createFile(rel, content)
-    await refreshTree()
-  }, [refreshTree])
-
-  const createFolder = useCallback(async (rel: string) => {
-    await getFs().createFolder(rel)
-    await refreshTree()
-  }, [refreshTree])
-
-  const renameOp = useCallback(async (oldRel: string, newRel: string) => {
-    await getFs().rename(oldRel, newRel)
-    setEditorGroups((prev) =>
-      prev.map((g) => {
-        const updatedTabs = g.openTabs.map((t) => {
-          if (isMarkdownTab(t) && t.relPath === oldRel) return { ...t, relPath: newRel }
-          if (t.kind === 'diff' && t.relPath === oldRel) return { ...t, relPath: newRel }
-          return t
-        })
-        // Re-derive activeTabKey using the updated tab at the same slot index.
-        const activeIdx = g.openTabs.findIndex((t) => tabKey(t) === g.activeTabKey)
-        const newActiveTabKey = activeIdx >= 0 ? tabKey(updatedTabs[activeIdx]) : g.activeTabKey
-        return { ...g, openTabs: updatedTabs, activeTabKey: newActiveTabKey }
-      }),
-    )
-    setPinned((prev) => prev.map((p) => (p.relPath === oldRel ? { ...p, relPath: newRel } : p)))
-    await refreshTree()
-    if (rootRef.current) {
-      persistGroups(rootRef.current, editorGroupsRef.current, activeGroupIdRef.current)
-      persistPinnedRels(rootRef.current, pinnedRef.current)
-    }
-  }, [persistGroups, persistPinnedRels, refreshTree])
-
-  const remove = useCallback(async (rel: string) => {
-    await getFs().delete(rel)
-    setEditorGroups((prev) => {
-      const cleaned = prev.map((g) => {
-        const remaining = g.openTabs.filter(
-          (t) => !(isMarkdownTab(t) && t.relPath === rel) && !(t.kind === 'diff' && t.relPath === rel),
-        )
-        const newActive = g.activeTabKey && !remaining.some((t) => tabKey(t) === g.activeTabKey)
-          ? (remaining.length ? tabKey(remaining[remaining.length - 1]) : null)
-          : g.activeTabKey
-        return { ...g, openTabs: remaining, activeTabKey: newActive }
-      })
-      const collapsed = cleaned.filter((g) => g.id === 'g1' || g.openTabs.length > 0)
-      const finalGroups = collapsed.length ? collapsed : [{ id: 'g1' as const, openTabs: [], activeTabKey: null }]
-      const newActiveGroup: EditorGroupId = finalGroups.some((g) => g.id === activeGroupIdRef.current)
-        ? activeGroupIdRef.current
-        : 'g1'
-      if (rootRef.current) persistGroups(rootRef.current, finalGroups, newActiveGroup)
-      return finalGroups
-    })
-    setPinned((prev) => {
-      const next = prev.filter((p) => p.relPath !== rel)
-      if (rootRef.current) persistPinnedRels(rootRef.current, next)
-      return next
-    })
-    await refreshTree()
-  }, [persistGroups, persistPinnedRels, refreshTree])
-
-  // ---------------------------------------------------------------------------
   // Workspace lifecycle
   // ---------------------------------------------------------------------------
 
@@ -923,172 +296,26 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
       setTreeTruncated(Boolean(treeRoot.truncated))
     }
 
+    const readFile = (rel: string) => getFs().readFile(rel)
+
     // --- Tab restoration: v1 groups or legacy flat shape ---
     const savedGroups = readJson<PersistedGroups | null>(wsKey(rt, 'groups'), null)
     let restoredGroups: EditorGroupState[]
     let restoredActiveGroupId: EditorGroupId
-    const droppedTabs: { rel: string; reason: 'not-utf8' | 'too-large' }[] = []
+    let droppedTabs: DroppedTab[]
 
     if (savedGroups && savedGroups.version === 1) {
-      restoredGroups = []
-      for (const g of savedGroups.groups) {
-        const tabs: OpenTab[] = []
-        let settingsRestored = false
-        for (const stored of g.tabKeys) {
-          if (stored === 'settings') {
-            if (settingsRestored) continue
-            tabs.push({ kind: 'settings' })
-            settingsRestored = true
-            continue
-          }
-          if (stored.startsWith('diff:')) {
-            const inner = stored.slice('diff:'.length)
-            const atIdx = inner.lastIndexOf('@')
-            if (atIdx >= 1) {
-              const relPath = inner.slice(0, atIdx)
-              const baseRef = inner.slice(atIdx + 1)
-              if (relPath && baseRef) {
-                tabs.push({ kind: 'diff', relPath, baseRef })
-              }
-            }
-            continue
-          }
-          if (stored.startsWith('ext:')) {
-            // Format: 'ext:<extensionId>:<mode>:<relPath>'
-            const rest = stored.slice('ext:'.length)
-            const firstColon = rest.indexOf(':')
-            if (firstColon >= 1) {
-              const extensionId = rest.slice(0, firstColon)
-              const rest2 = rest.slice(firstColon + 1)
-              const secondColon = rest2.indexOf(':')
-              if (secondColon >= 1) {
-                const mode = rest2.slice(0, secondColon) as 'viewer' | 'editor'
-                const relPath = rest2.slice(secondColon + 1)
-                if (relPath && (mode === 'viewer' || mode === 'editor')) {
-                  tabs.push({ kind: 'extension', relPath, extensionId, mode })
-                }
-              }
-            }
-            continue
-          }
-          const rel = stored.startsWith('markdown:') ? stored.slice('markdown:'.length) : stored
-          try {
-            const r = await getFs().readFile(rel)
-            if (!r.ok) {
-              droppedTabs.push({ rel, reason: r.error })
-              continue
-            }
-            tabs.push({
-              kind: 'markdown',
-              relPath: rel,
-              loadedMarkdown: r.content,
-              mtimeMs: r.mtimeMs,
-              eol: r.eol,
-              bom: r.bom,
-            })
-          } catch {
-            // file deleted externally — skip
-          }
-        }
-        const fallbackActive = tabs.length
-          ? (g.activeTabKey && tabs.some((t) => tabKey(t) === g.activeTabKey)
-              ? g.activeTabKey
-              : tabKey(tabs[tabs.length - 1]))
-          : null
-        restoredGroups.push({ id: g.id, openTabs: tabs, activeTabKey: fallbackActive })
-      }
-      // Clamp to known group ids and ensure g1 always exists.
-      if (!restoredGroups.some((g) => g.id === 'g1')) {
-        restoredGroups.unshift({ id: 'g1', openTabs: [], activeTabKey: null })
-      }
-      restoredActiveGroupId = restoredGroups.some((g) => g.id === savedGroups.activeGroupId)
-        ? savedGroups.activeGroupId
-        : 'g1'
+      ;({ restoredGroups, restoredActiveGroupId, droppedTabs } = await restoreGroupsV1(savedGroups, readFile))
     } else {
       // Backward-compat: read the legacy 'tabs' / 'activeTab' shape.
       const savedTabs = readJson<string[]>(wsKey(rt, 'tabs'), [])
       const savedActive = readJson<string | null>(wsKey(rt, 'activeTab'), null)
-      const tabs: OpenTab[] = []
-      let settingsRestored = false
-      for (const stored of savedTabs) {
-        if (stored === 'settings') {
-          if (settingsRestored) continue
-          tabs.push({ kind: 'settings' })
-          settingsRestored = true
-          continue
-        }
-        if (stored.startsWith('diff:')) {
-          const inner = stored.slice('diff:'.length)
-          const atIdx = inner.lastIndexOf('@')
-          if (atIdx >= 1) {
-            const relPath = inner.slice(0, atIdx)
-            const baseRef = inner.slice(atIdx + 1)
-            if (relPath && baseRef) {
-              tabs.push({ kind: 'diff', relPath, baseRef })
-            }
-          }
-          continue
-        }
-        if (stored.startsWith('ext:')) {
-          const rest = stored.slice('ext:'.length)
-          const firstColon = rest.indexOf(':')
-          if (firstColon >= 1) {
-            const extensionId = rest.slice(0, firstColon)
-            const rest2 = rest.slice(firstColon + 1)
-            const secondColon = rest2.indexOf(':')
-            if (secondColon >= 1) {
-              const mode = rest2.slice(0, secondColon) as 'viewer' | 'editor'
-              const relPath = rest2.slice(secondColon + 1)
-              if (relPath && (mode === 'viewer' || mode === 'editor')) {
-                tabs.push({ kind: 'extension', relPath, extensionId, mode })
-              }
-            }
-          }
-          continue
-        }
-        const rel = stored.startsWith('markdown:') ? stored.slice('markdown:'.length) : stored
-        try {
-          const r = await getFs().readFile(rel)
-          if (!r.ok) {
-            droppedTabs.push({ rel, reason: r.error })
-            continue
-          }
-          tabs.push({
-            kind: 'markdown',
-            relPath: rel,
-            loadedMarkdown: r.content,
-            mtimeMs: r.mtimeMs,
-            eol: r.eol,
-            bom: r.bom,
-          })
-        } catch {
-          // file deleted externally — skip
-        }
-      }
-      const fallbackActive = tabs.length
-        ? (savedActive && tabs.some((t) => tabKey(t) === savedActive)
-            ? savedActive
-            : tabKey(tabs[tabs.length - 1]))
-        : null
-      restoredGroups = [{ id: 'g1', openTabs: tabs, activeTabKey: fallbackActive }]
-      restoredActiveGroupId = 'g1'
+      ;({ restoredGroups, restoredActiveGroupId, droppedTabs } = await restoreGroupsLegacy(savedTabs, savedActive, readFile))
     }
 
     // --- Pinned restoration (supports legacy formats) ---
-    // Legacy format: string[] | {rel, mode?}[] — we now only keep {relPath, mtimeMs}.
-    type PersistedPin = string | { rel: string; mode?: string }
     const savedPinnedRaw = readJson<PersistedPin[]>(wsKey(rt, 'pinned'), [])
-    const restoredPinned: PinnedEntry[] = []
-    for (const p of savedPinnedRaw) {
-      const rel = typeof p === 'string' ? p : p.rel
-      try {
-        const file = await getFs().readFile(rel)
-        if (!file.ok) continue
-        restoredPinned.push({ relPath: rel, mtimeMs: file.mtimeMs })
-      } catch {
-        // skip missing
-      }
-    }
+    const restoredPinned = await restorePinned(savedPinnedRaw, readFile)
 
     setEditorGroups(restoredGroups)
     setActiveGroupIdState(restoredActiveGroupId)
@@ -1101,7 +328,7 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
       const lines = droppedTabs.map((d) => `${d.rel} (${d.reason})`).join('; ')
       onToast(`${droppedTabs.length} file(s) couldn't be reopened: ${lines}`)
     }
-  }, [persistGroups, persistPinnedRels, onToast])
+  }, [onToast])
 
   const pickWorkspace = useCallback(async () => {
     if (!available) return false
@@ -1253,7 +480,7 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
       }
     })
     return () => { unsub() }
-  }, [available, scheduleTreeRefresh, persistGroups, onToast])
+  }, [available, scheduleTreeRefresh, onToast, recentWrites])
 
   // Flush on unload.
   useEffect(() => {
@@ -1271,7 +498,7 @@ export function useWorkspace(opts: OnQuotaErrorOptions = {}): WorkspaceApi {
     }
     window.addEventListener('beforeunload', handler)
     return () => window.removeEventListener('beforeunload', handler)
-  }, [getTabEolBom])
+  }, [getTabEolBom, pendingMarkdown])
 
   // ---------------------------------------------------------------------------
   // Derived selectors
