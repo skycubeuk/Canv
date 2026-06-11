@@ -1,6 +1,7 @@
 import type {
   LLMAdapter, CompleteParams, CompleteResult, Message, StopReason, ToolCall, ToolSchema,
 } from './types'
+import { dispatchStream } from './streamDispatch'
 
 function stripTrailingSlash(s: string): string {
   return s.endsWith('/') ? s.slice(0, -1) : s
@@ -165,24 +166,13 @@ async function readNDJSON(
   signal: AbortSignal | undefined,
   chunkDelayMs: number,
 ): Promise<CompleteResult> {
-  const reader = res.body?.getReader()
-  if (!reader) throw new Error('No response body')
-  const decoder = new TextDecoder()
-
-  const queue: string[] = []
-  let wireDone = false
-  let wireError = null as Error | null
-
-  let buffer = ''
-  let full = ''
+  // ----- accumulator state (filled by parseLine, read by buildResult) -----
   let truncated = false
   let stopReason: StopReason = 'end_turn'
   let usageOut: { input: number; output: number } | null = null
   let finalToolCalls: ToolCall[] = []
 
-  const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
-
-  const processLine = (line: string): void => {
+  const parseLine = (line: string, emit: (text: string) => void): void => {
     const trimmed = line.trim()
     if (!trimmed) return
     let parsed: unknown
@@ -195,7 +185,7 @@ async function readNDJSON(
       eval_count?: number
     }
     const chunk = p.message?.content
-    if (typeof chunk === 'string' && chunk.length) queue.push(chunk)
+    if (typeof chunk === 'string' && chunk.length) emit(chunk)
     // Extract tool_calls on ANY line, not just done:true. Ollama 0.23+ emits
     // them mid-stream; earlier versions only on the final line. The spec
     // assumed final-only — that assumption no longer holds.
@@ -221,75 +211,25 @@ async function readNDJSON(
     }
   }
 
-  const wirePromise = (async () => {
-    try {
-      while (true) {
-        const { value, done } = await reader.read()
-        if (done) {
-          if (buffer.length) processLine(buffer)
-          buffer = ''
-          wireDone = true
-          return
+  return dispatchStream({
+    res,
+    onToken,
+    signal,
+    chunkDelayMs,
+    parseLine,
+    buildResult: ({ text, cancelled }) => cancelled
+      ? {
+          text,
+          truncated: false,
+          stopReason: 'cancelled',
+          ...(usageOut ? { tokenUsage: usageOut } : {}),
         }
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() ?? ''
-        for (const line of lines) processLine(line)
-      }
-    } catch (err) {
-      wireError = err as Error
-      wireDone = true
-    }
-  })()
-
-  let lastDispatchAt = 0
-
-  try {
-    while (!wireDone || queue.length > 0) {
-      if (queue.length === 0) {
-        if (signal?.aborted) break
-        await Promise.race([wirePromise, sleep(5)])
-        continue
-      }
-      const text = queue.shift()!
-      if (chunkDelayMs > 0) {
-        const elapsed = Date.now() - lastDispatchAt
-        if (elapsed < chunkDelayMs) await sleep(chunkDelayMs - elapsed)
-        if (signal?.aborted) throw new DOMException('aborted', 'AbortError')
-      }
-      onToken(text)
-      full += text
-      lastDispatchAt = Date.now()
-    }
-  } catch (err) {
-    if ((err as Error).name === 'AbortError' || signal?.aborted) {
-      try { await reader.cancel() } catch { /* already closed */ }
-      return {
-        text: full,
-        truncated: false,
-        stopReason: 'cancelled',
-        ...(usageOut ? { tokenUsage: usageOut } : {}),
-      }
-    }
-    throw err
-  }
-
-  if (signal?.aborted || wireError?.name === 'AbortError') {
-    try { await reader.cancel() } catch { /* already closed */ }
-    return {
-      text: full,
-      truncated: false,
-      stopReason: 'cancelled',
-      ...(usageOut ? { tokenUsage: usageOut } : {}),
-    }
-  }
-  if (wireError) throw wireError
-
-  return {
-    text: full,
-    truncated,
-    stopReason,
-    ...(finalToolCalls.length ? { toolCalls: finalToolCalls } : {}),
-    ...(usageOut ? { tokenUsage: usageOut } : {}),
-  }
+      : {
+          text,
+          truncated,
+          stopReason,
+          ...(finalToolCalls.length ? { toolCalls: finalToolCalls } : {}),
+          ...(usageOut ? { tokenUsage: usageOut } : {}),
+        },
+  })
 }

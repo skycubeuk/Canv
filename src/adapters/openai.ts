@@ -1,4 +1,5 @@
 import type { LLMAdapter, CompleteParams, CompleteResult, Message } from './types'
+import { dispatchStream } from './streamDispatch'
 
 const ENDPOINT = 'https://api.openai.com/v1/chat/completions'
 
@@ -138,168 +139,97 @@ async function readSSE(
   signal: AbortSignal | undefined,
   chunkDelayMs: number,
 ): Promise<CompleteResult> {
-  const reader = res.body?.getReader()
-  if (!reader) throw new Error('No response body')
-  const decoder = new TextDecoder()
-
-  // Queue holds only text chunks that need paced dispatch.
-  // onToolCallStart is fired immediately from the wire reader (no pacing needed).
-  const queue: string[] = []
-  let wireDone = false
-  let wireError = null as Error | null
-
-  // ----- accumulator state (shared between wire reader and dispatch loop) -----
-  let buffer = ''
-  let full = ''
+  // ----- accumulator state (filled by parseLine, read by buildResult) -----
   let truncated = false
   let usageOut: { input: number; output: number } | null = null
   let stopReason: 'end_turn' | 'tool_use' | 'max_tokens' | 'stop_sequence' = 'end_turn'
   const callsByIndex = new Map<number, PendingToolCall>()
 
-  const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
+  const parseLine = (raw: string, emit: (text: string) => void): void => {
+    const line = raw.trim()
+    if (!line || !line.startsWith('data:')) return
+    const payload = line.slice(5).trim()
+    if (payload === '[DONE]') return
+    let parsed: unknown
+    try { parsed = JSON.parse(payload) } catch { return }
+    const p = parsed as { choices?: Array<{ delta?: Record<string, unknown>; finish_reason?: string }>; usage?: unknown }
+    const choice = p.choices?.[0]
+    const delta = choice?.delta
+    if (delta && typeof delta.content === 'string' && delta.content.length) {
+      // Delivered through the paced dispatch loop, not directly.
+      emit(delta.content)
+    }
+    const tcDeltas = delta?.tool_calls as Array<{ index: number; id?: string; function?: { name?: string; arguments?: string } }> | undefined
+    if (tcDeltas) {
+      for (const d of tcDeltas) {
+        let cur = callsByIndex.get(d.index)
+        if (!cur) {
+          cur = { id: d.id ?? '', name: d.function?.name ?? '', argsBuf: '', announced: false }
+          callsByIndex.set(d.index, cur)
+        }
+        if (d.id && !cur.id) cur.id = d.id
+        if (d.function?.name && !cur.name) cur.name = d.function.name
+        if (typeof d.function?.arguments === 'string') cur.argsBuf += d.function.arguments
+        // Fire onToolCallStart immediately — not paced
+        if (!cur.announced && cur.id && cur.name) {
+          cur.announced = true
+          onToolCallStart?.({ id: cur.id, name: cur.name })
+        }
+      }
+    }
+    if (choice?.finish_reason === 'length') { truncated = true; stopReason = 'max_tokens' }
+    else if (choice?.finish_reason === 'tool_calls') stopReason = 'tool_use'
+    else if (choice?.finish_reason === 'stop') stopReason = 'end_turn'
+    const u = parseOpenAIUsage(p.usage)
+    if (u) usageOut = u
+  }
 
-  // ----- wire reader coroutine: full speed, no pacing -----
-  const wirePromise = (async () => {
-    try {
-      while (true) {
-        const { value, done } = await reader.read()
-        if (done) { wireDone = true; return }
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() ?? ''
-        for (const raw of lines) {
-          const line = raw.trim()
-          if (!line || !line.startsWith('data:')) continue
-          const payload = line.slice(5).trim()
-          if (payload === '[DONE]') continue
+  return dispatchStream({
+    res,
+    onToken,
+    signal,
+    chunkDelayMs,
+    parseLine,
+    buildResult: ({ text, cancelled }) => {
+      if (cancelled) {
+        // Cancel-path policy: drop tool calls whose arguments did not parse,
+        // because round-tripping them to the next provider call risks schema
+        // errors and dispatching them is meaningless.
+        const toolCallsOnAbort: Array<{ id: string; name: string; input: unknown }> = []
+        for (const c of callsByIndex.values()) {
+          if (!c.id || !c.name) continue
+          if (!c.argsBuf) {
+            toolCallsOnAbort.push({ id: c.id, name: c.name, input: {} })
+            continue
+          }
           let parsed: unknown
-          try { parsed = JSON.parse(payload) } catch { continue }
-          const p = parsed as { choices?: Array<{ delta?: Record<string, unknown>; finish_reason?: string }>; usage?: unknown }
-          const choice = p.choices?.[0]
-          const delta = choice?.delta
-          if (delta && typeof delta.content === 'string' && delta.content.length) {
-            // Push to queue; full += text happens at dispatch time to keep out.text === tokens.join('')
-            queue.push(delta.content)
-          }
-          const tcDeltas = delta?.tool_calls as Array<{ index: number; id?: string; function?: { name?: string; arguments?: string } }> | undefined
-          if (tcDeltas) {
-            for (const d of tcDeltas) {
-              let cur = callsByIndex.get(d.index)
-              if (!cur) {
-                cur = { id: d.id ?? '', name: d.function?.name ?? '', argsBuf: '', announced: false }
-                callsByIndex.set(d.index, cur)
-              }
-              if (d.id && !cur.id) cur.id = d.id
-              if (d.function?.name && !cur.name) cur.name = d.function.name
-              if (typeof d.function?.arguments === 'string') cur.argsBuf += d.function.arguments
-              // Fire onToolCallStart immediately — not paced
-              if (!cur.announced && cur.id && cur.name) {
-                cur.announced = true
-                onToolCallStart?.({ id: cur.id, name: cur.name })
-              }
-            }
-          }
-          if (choice?.finish_reason === 'length') { truncated = true; stopReason = 'max_tokens' }
-          else if (choice?.finish_reason === 'tool_calls') stopReason = 'tool_use'
-          else if (choice?.finish_reason === 'stop') stopReason = 'end_turn'
-          const u = parseOpenAIUsage(p.usage)
-          if (u) usageOut = u
+          try { parsed = JSON.parse(c.argsBuf) } catch { continue }
+          toolCallsOnAbort.push({ id: c.id, name: c.name, input: parsed })
+        }
+        return {
+          text,
+          truncated: false,
+          stopReason: 'cancelled',
+          ...(toolCallsOnAbort.length ? { toolCalls: toolCallsOnAbort } : {}),
+          ...(usageOut ? { tokenUsage: usageOut } : {}),
         }
       }
-    } catch (err) {
-      wireError = err as Error
-      wireDone = true
-    }
-  })()
 
-  // ----- dispatch loop: paced -----
-  let lastDispatchAt = 0
+      const completedToolCalls = Array.from(callsByIndex.values())
+        .filter((c) => c.id && c.name)
+        .map((c) => {
+          let input: unknown = {}
+          if (c.argsBuf) { try { input = JSON.parse(c.argsBuf) } catch { input = {} } }
+          return { id: c.id, name: c.name, input }
+        })
 
-  try {
-    while (!wireDone || queue.length > 0) {
-      if (queue.length === 0) {
-        if (signal?.aborted) break
-        // Yield until wire reader pushes more events or completes
-        await Promise.race([wirePromise, sleep(5)])
-        continue
-      }
-      const text = queue.shift()!
-      if (chunkDelayMs > 0) {
-        const elapsed = Date.now() - lastDispatchAt
-        if (elapsed < chunkDelayMs) await sleep(chunkDelayMs - elapsed)
-        // Check abort after sleeping — slow-mode cancellation fires here
-        if (signal?.aborted) throw new DOMException('aborted', 'AbortError')
-      }
-      onToken(text)
-      full += text
-      lastDispatchAt = Date.now()
-    }
-  } catch (err) {
-    if ((err as Error).name === 'AbortError' || signal?.aborted) {
-      try { await reader.cancel() } catch { /* already closed */ }
-      // Cancel-path policy: drop tool calls whose arguments did not parse,
-      // because round-tripping them to the next provider call risks schema
-      // errors and dispatching them is meaningless.
-      const toolCallsOnAbort: Array<{ id: string; name: string; input: unknown }> = []
-      for (const c of callsByIndex.values()) {
-        if (!c.id || !c.name) continue
-        if (!c.argsBuf) {
-          toolCallsOnAbort.push({ id: c.id, name: c.name, input: {} })
-          continue
-        }
-        let parsed: unknown
-        try { parsed = JSON.parse(c.argsBuf) } catch { continue }
-        toolCallsOnAbort.push({ id: c.id, name: c.name, input: parsed })
-      }
       return {
-        text: full,
-        truncated: false,
-        stopReason: 'cancelled',
-        ...(toolCallsOnAbort.length ? { toolCalls: toolCallsOnAbort } : {}),
+        text,
+        truncated,
+        stopReason,
+        ...(completedToolCalls.length ? { toolCalls: completedToolCalls } : {}),
         ...(usageOut ? { tokenUsage: usageOut } : {}),
       }
-    }
-    throw err
-  }
-
-  // Drain complete — check if abort or wire error drove us here
-  if (signal?.aborted || wireError?.name === 'AbortError') {
-    try { await reader.cancel() } catch { /* already closed */ }
-    const toolCallsOnAbort: Array<{ id: string; name: string; input: unknown }> = []
-    for (const c of callsByIndex.values()) {
-      if (!c.id || !c.name) continue
-      if (!c.argsBuf) {
-        toolCallsOnAbort.push({ id: c.id, name: c.name, input: {} })
-        continue
-      }
-      let parsed: unknown
-      try { parsed = JSON.parse(c.argsBuf) } catch { continue }
-      toolCallsOnAbort.push({ id: c.id, name: c.name, input: parsed })
-    }
-    return {
-      text: full,
-      truncated: false,
-      stopReason: 'cancelled',
-      ...(toolCallsOnAbort.length ? { toolCalls: toolCallsOnAbort } : {}),
-      ...(usageOut ? { tokenUsage: usageOut } : {}),
-    }
-  }
-
-  if (wireError) throw wireError
-
-  const completedToolCalls = Array.from(callsByIndex.values())
-    .filter((c) => c.id && c.name)
-    .map((c) => {
-      let input: unknown = {}
-      if (c.argsBuf) { try { input = JSON.parse(c.argsBuf) } catch { input = {} } }
-      return { id: c.id, name: c.name, input }
-    })
-
-  return {
-    text: full,
-    truncated,
-    stopReason,
-    ...(completedToolCalls.length ? { toolCalls: completedToolCalls } : {}),
-    ...(usageOut ? { tokenUsage: usageOut } : {}),
-  }
+    },
+  })
 }

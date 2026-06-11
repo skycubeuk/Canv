@@ -1,4 +1,5 @@
 import type { LLMAdapter, CompleteParams, CompleteResult, Message, TokenUsage } from './types'
+import { dispatchStream } from './streamDispatch'
 
 const ENDPOINT = 'https://api.anthropic.com/v1/messages'
 const VERSION = '2023-06-01'
@@ -223,19 +224,7 @@ async function readSSE(
   signal: AbortSignal | undefined,
   chunkDelayMs: number,
 ): Promise<CompleteResult> {
-  const reader = res.body?.getReader()
-  if (!reader) throw new Error('No response body')
-  const decoder = new TextDecoder()
-
-  // Queue holds only text chunks that need paced dispatch.
-  // onToolCallStart is fired immediately from the wire reader (no pacing needed).
-  const queue: string[] = []
-  let wireDone = false
-  let wireError = null as Error | null
-
-  // ----- accumulator state (filled by wire reader, read by both paths) -----
-  let buffer = ''
-  let full = ''
+  // ----- accumulator state (filled by parseLine, read by buildResult) -----
   let truncated = false
   let inputTokens: number | null = null
   let outputTokens: number | null = null
@@ -262,162 +251,106 @@ async function readSSE(
   const thinkingByIndex = new Map<number, Record<string, unknown>>()
   const completedThinking: unknown[] = []
 
-  // ----- wire reader coroutine: full speed, no pacing -----
-  const wirePromise = (async () => {
-    try {
-      while (true) {
-        const { value, done } = await reader.read()
-        if (done) { wireDone = true; return }
-        buffer += decoder.decode(value, { stream: true })
-        const lines = buffer.split('\n')
-        buffer = lines.pop() ?? ''
-        for (const raw of lines) {
-          const line = raw.trim()
-          if (!line) { currentEvent = 'message'; continue }
-          if (line.startsWith('event:')) { currentEvent = line.slice(6).trim(); continue }
-          if (!line.startsWith('data:')) continue
-          const payload = line.slice(5).trim()
-          if (payload === '[DONE]') continue
-          let parsed: unknown
-          try { parsed = JSON.parse(payload) } catch { continue }
-          const p = parsed as Record<string, unknown>
+  const parseLine = (raw: string, emit: (text: string) => void): void => {
+    const line = raw.trim()
+    if (!line) { currentEvent = 'message'; return }
+    if (line.startsWith('event:')) { currentEvent = line.slice(6).trim(); return }
+    if (!line.startsWith('data:')) return
+    const payload = line.slice(5).trim()
+    if (payload === '[DONE]') return
+    let parsed: unknown
+    try { parsed = JSON.parse(payload) } catch { return }
+    const p = parsed as Record<string, unknown>
 
-          if (currentEvent === 'message_start') {
-            const usage = (p.message as {
-              usage?: { input_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number }
-            } | undefined)?.usage
-            if (usage && typeof usage.input_tokens === 'number') inputTokens = usage.input_tokens
-            if (typeof usage?.cache_read_input_tokens === 'number') cacheRead = usage.cache_read_input_tokens
-            if (typeof usage?.cache_creation_input_tokens === 'number') cacheWrite = usage.cache_creation_input_tokens
-          } else if (currentEvent === 'content_block_start') {
-            const block = p.content_block as { type?: string; id?: string; name?: string } | undefined
-            const idx = p.index as number
-            if (block?.type === 'tool_use' && typeof block.id === 'string' && typeof block.name === 'string') {
-              blocksByIndex.set(idx, { id: block.id, name: block.name, jsonBuf: '' })
-              // Fire immediately — tool-call starts are not paced
-              onToolCallStart?.({ id: block.id, name: block.name })
-            } else if (block?.type === 'thinking') {
-              thinkingByIndex.set(idx, { type: 'thinking', thinking: '', signature: '' })
-            } else if (block?.type === 'redacted_thinking') {
-              // Arrives complete in content_block_start — keep it verbatim.
-              thinkingByIndex.set(idx, { ...(block as Record<string, unknown>) })
-            }
-          } else if (currentEvent === 'content_block_delta') {
-            const idx = p.index as number
-            const delta = p.delta as { type?: string; text?: string; partial_json?: string; thinking?: string; signature?: string } | undefined
-            if (delta?.type === 'text_delta' && typeof delta.text === 'string') {
-              // full is updated at dispatch time so out.text matches what onToken received
-              queue.push(delta.text)
-            } else if (delta?.type === 'input_json_delta' && typeof delta.partial_json === 'string') {
-              const blk = blocksByIndex.get(idx)
-              if (blk) blk.jsonBuf += delta.partial_json
-            } else if (delta?.type === 'thinking_delta' && typeof delta.thinking === 'string') {
-              const blk = thinkingByIndex.get(idx)
-              if (blk) blk.thinking = String(blk.thinking ?? '') + delta.thinking
-            } else if (delta?.type === 'signature_delta' && typeof delta.signature === 'string') {
-              const blk = thinkingByIndex.get(idx)
-              if (blk) blk.signature = delta.signature
-            }
-          } else if (currentEvent === 'content_block_stop') {
-            const idx = p.index as number
-            const blk = blocksByIndex.get(idx)
-            if (blk) {
-              let input: unknown = {}
-              if (blk.jsonBuf) { try { input = JSON.parse(blk.jsonBuf) } catch { input = {} } }
-              completedToolCalls.push({ id: blk.id, name: blk.name, input })
-              blocksByIndex.delete(idx)
-            }
-            const think = thinkingByIndex.get(idx)
-            if (think) {
-              completedThinking.push(think)
-              thinkingByIndex.delete(idx)
-            }
-          } else if (currentEvent === 'message_delta') {
-            const d = p.delta as { stop_reason?: string; stop_details?: unknown } | undefined
-            const stop = d?.stop_reason
-            if (stop === 'max_tokens') { truncated = true; stopReason = 'max_tokens' }
-            else if (stop === 'tool_use') stopReason = 'tool_use'
-            else if (stop === 'stop_sequence') stopReason = 'stop_sequence'
-            else if (stop === 'end_turn') stopReason = 'end_turn'
-            else if (stop === 'refusal') {
-              stopReason = 'refusal'
-              refusal = parseStopDetails(d?.stop_details ?? (p as { stop_details?: unknown }).stop_details)
-            }
-            const usage = (p.usage as { output_tokens?: number } | undefined)
-            if (usage && typeof usage.output_tokens === 'number') outputTokens = usage.output_tokens
-          }
+    if (currentEvent === 'message_start') {
+      const usage = (p.message as {
+        usage?: { input_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number }
+      } | undefined)?.usage
+      if (usage && typeof usage.input_tokens === 'number') inputTokens = usage.input_tokens
+      if (typeof usage?.cache_read_input_tokens === 'number') cacheRead = usage.cache_read_input_tokens
+      if (typeof usage?.cache_creation_input_tokens === 'number') cacheWrite = usage.cache_creation_input_tokens
+    } else if (currentEvent === 'content_block_start') {
+      const block = p.content_block as { type?: string; id?: string; name?: string } | undefined
+      const idx = p.index as number
+      if (block?.type === 'tool_use' && typeof block.id === 'string' && typeof block.name === 'string') {
+        blocksByIndex.set(idx, { id: block.id, name: block.name, jsonBuf: '' })
+        // Fire immediately — tool-call starts are not paced
+        onToolCallStart?.({ id: block.id, name: block.name })
+      } else if (block?.type === 'thinking') {
+        thinkingByIndex.set(idx, { type: 'thinking', thinking: '', signature: '' })
+      } else if (block?.type === 'redacted_thinking') {
+        // Arrives complete in content_block_start — keep it verbatim.
+        thinkingByIndex.set(idx, { ...(block as Record<string, unknown>) })
+      }
+    } else if (currentEvent === 'content_block_delta') {
+      const idx = p.index as number
+      const delta = p.delta as { type?: string; text?: string; partial_json?: string; thinking?: string; signature?: string } | undefined
+      if (delta?.type === 'text_delta' && typeof delta.text === 'string') {
+        // Delivered through the paced dispatch loop, not directly.
+        emit(delta.text)
+      } else if (delta?.type === 'input_json_delta' && typeof delta.partial_json === 'string') {
+        const blk = blocksByIndex.get(idx)
+        if (blk) blk.jsonBuf += delta.partial_json
+      } else if (delta?.type === 'thinking_delta' && typeof delta.thinking === 'string') {
+        const blk = thinkingByIndex.get(idx)
+        if (blk) blk.thinking = String(blk.thinking ?? '') + delta.thinking
+      } else if (delta?.type === 'signature_delta' && typeof delta.signature === 'string') {
+        const blk = thinkingByIndex.get(idx)
+        if (blk) blk.signature = delta.signature
+      }
+    } else if (currentEvent === 'content_block_stop') {
+      const idx = p.index as number
+      const blk = blocksByIndex.get(idx)
+      if (blk) {
+        let input: unknown = {}
+        if (blk.jsonBuf) { try { input = JSON.parse(blk.jsonBuf) } catch { input = {} } }
+        completedToolCalls.push({ id: blk.id, name: blk.name, input })
+        blocksByIndex.delete(idx)
+      }
+      const think = thinkingByIndex.get(idx)
+      if (think) {
+        completedThinking.push(think)
+        thinkingByIndex.delete(idx)
+      }
+    } else if (currentEvent === 'message_delta') {
+      const d = p.delta as { stop_reason?: string; stop_details?: unknown } | undefined
+      const stop = d?.stop_reason
+      if (stop === 'max_tokens') { truncated = true; stopReason = 'max_tokens' }
+      else if (stop === 'tool_use') stopReason = 'tool_use'
+      else if (stop === 'stop_sequence') stopReason = 'stop_sequence'
+      else if (stop === 'end_turn') stopReason = 'end_turn'
+      else if (stop === 'refusal') {
+        stopReason = 'refusal'
+        refusal = parseStopDetails(d?.stop_details ?? (p as { stop_details?: unknown }).stop_details)
+      }
+      const usage = (p.usage as { output_tokens?: number } | undefined)
+      if (usage && typeof usage.output_tokens === 'number') outputTokens = usage.output_tokens
+    }
+  }
+
+  return dispatchStream({
+    res,
+    onToken,
+    signal,
+    chunkDelayMs,
+    parseLine,
+    buildResult: ({ text, cancelled }) => cancelled
+      ? {
+          text,
+          truncated: false,
+          stopReason: 'cancelled',
+          ...(completedToolCalls.length ? { toolCalls: completedToolCalls } : {}),
+          ...(completedThinking.length ? { thinkingBlocks: completedThinking } : {}),
+          ...usageOut(),
         }
-      }
-    } catch (err) {
-      wireError = err as Error
-      wireDone = true
-    }
-  })()
-
-  // ----- dispatch loop: paced -----
-  let lastDispatchAt = 0
-  const sleep = (ms: number) => new Promise<void>((res) => setTimeout(res, ms))
-
-  try {
-    while (!wireDone || queue.length > 0) {
-      if (queue.length === 0) {
-        // If already aborted, stop waiting for more wire data — but the queued
-        // items above have already been drained so we're done.
-        if (signal?.aborted) break
-        // Yield until the wire reader either pushes more events or completes.
-        await Promise.race([wirePromise, sleep(5)])
-        continue
-      }
-      const text = queue.shift()!
-      if (chunkDelayMs > 0) {
-        const elapsed = Date.now() - lastDispatchAt
-        if (elapsed < chunkDelayMs) await sleep(chunkDelayMs - elapsed)
-        // Check abort after sleeping — this is where slow-mode cancellation fires
-        if (signal?.aborted) throw new DOMException('aborted', 'AbortError')
-      }
-      onToken(text)
-      full += text
-      lastDispatchAt = Date.now()
-    }
-  } catch (err) {
-    if ((err as Error).name === 'AbortError' || signal?.aborted) {
-      try { await reader.cancel() } catch { /* already closed */ }
-      return {
-        text: full,
-        truncated: false,
-        stopReason: 'cancelled',
-        ...(completedToolCalls.length ? { toolCalls: completedToolCalls } : {}),
-        ...(completedThinking.length ? { thinkingBlocks: completedThinking } : {}),
-        ...usageOut(),
-      }
-    }
-    throw err
-  }
-
-  // Drain complete — check if abort or wire error drove us here
-  if (signal?.aborted || wireError?.name === 'AbortError') {
-    try { await reader.cancel() } catch { /* already closed */ }
-    return {
-      text: full,
-      truncated: false,
-      stopReason: 'cancelled',
-      ...(completedToolCalls.length ? { toolCalls: completedToolCalls } : {}),
-      ...(completedThinking.length ? { thinkingBlocks: completedThinking } : {}),
-      ...(inputTokens != null && outputTokens != null
-        ? { tokenUsage: { input: inputTokens, output: outputTokens } }
-        : {}),
-    }
-  }
-
-  if (wireError) throw wireError
-
-  return {
-    text: full,
-    truncated,
-    stopReason,
-    ...(completedToolCalls.length ? { toolCalls: completedToolCalls } : {}),
-    ...(completedThinking.length ? { thinkingBlocks: completedThinking } : {}),
-    ...(refusal ? { refusal } : {}),
-    ...usageOut(),
-  }
+      : {
+          text,
+          truncated,
+          stopReason,
+          ...(completedToolCalls.length ? { toolCalls: completedToolCalls } : {}),
+          ...(completedThinking.length ? { thinkingBlocks: completedThinking } : {}),
+          ...(refusal ? { refusal } : {}),
+          ...usageOut(),
+        },
+  })
 }
