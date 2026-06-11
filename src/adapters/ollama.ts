@@ -70,8 +70,9 @@ export const ollamaAdapter: LLMAdapter = {
   name: 'Ollama',
   models: [],
 
-  async listModels(baseUrl: string, signal?: AbortSignal): Promise<string[]> {
-    const url = `${stripTrailingSlash(baseUrl)}/api/tags`
+  async listModels(auth: { baseUrl?: string }, signal?: AbortSignal): Promise<string[]> {
+    if (!auth.baseUrl) throw new Error('Ollama: missing baseUrl')
+    const url = `${stripTrailingSlash(auth.baseUrl)}/api/tags`
     const res = await fetch(url, { signal })
     if (!res.ok) {
       const body = await res.text().catch(() => '')

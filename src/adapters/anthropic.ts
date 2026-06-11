@@ -97,7 +97,29 @@ function anthropicMessages(messages: Message[]): Array<{ role: 'user' | 'assista
 export const anthropicAdapter: LLMAdapter = {
   id: 'anthropic',
   name: 'Anthropic',
+  // Curated default list — `listModels` can fetch the live catalogue, but new
+  // entries here must also get a row in src/config/pricing.ts.
   models: ['claude-fable-5', 'claude-opus-4-8', 'claude-opus-4-7', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001'],
+
+  async listModels(auth: { apiKey?: string }, signal?: AbortSignal): Promise<string[]> {
+    if (!auth.apiKey) throw new Error('Missing Anthropic API key')
+    const res = await fetch('https://api.anthropic.com/v1/models?limit=1000', {
+      headers: {
+        'x-api-key': auth.apiKey,
+        'anthropic-version': VERSION,
+        'anthropic-dangerous-direct-browser-access': 'true',
+      },
+      signal,
+    })
+    if (!res.ok) {
+      const body = await res.text().catch(() => '')
+      throw new Error(`Anthropic ${res.status}: ${body || res.statusText}`)
+    }
+    const data = await res.json() as { data?: Array<{ id?: string }> }
+    return (data.data ?? [])
+      .map((m) => m.id)
+      .filter((id): id is string => typeof id === 'string' && id.length > 0)
+  },
 
   async complete(params: CompleteParams): Promise<CompleteResult> {
     const { messages, system, model, maxTokens = 2048, signal, onToken, apiKey } = params

@@ -18,7 +18,7 @@ export const ollama: Contribution = {
 
     const refresh = async (url: string) => {
       try {
-        const names = await ollamaAdapter.listModels!(url)
+        const names = await ollamaAdapter.listModels!({ baseUrl: url })
         if (cancelled) return
         services.settings.update({ ollamaModels: names })
       } catch {

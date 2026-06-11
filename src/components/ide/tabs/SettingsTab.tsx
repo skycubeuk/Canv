@@ -51,7 +51,7 @@ export function SettingsTab(props: Props) {
     }
     setOllamaStatus({ kind: 'loading' })
     try {
-      const names = await ollamaAdapter.listModels!(url)
+      const names = await ollamaAdapter.listModels!({ baseUrl: url })
       onUpdate({ ollamaModels: names })
       setOllamaStatus({ kind: 'ok', count: names.length })
     } catch (err) {

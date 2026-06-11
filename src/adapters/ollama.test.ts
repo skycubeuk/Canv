@@ -18,7 +18,7 @@ describe('ollamaAdapter.listModels', () => {
       }), { status: 200, headers: { 'Content-Type': 'application/json' } })
     }) as unknown as typeof fetch
 
-    const names = await ollamaAdapter.listModels!('http://localhost:11434')
+    const names = await ollamaAdapter.listModels!({ baseUrl: 'http://localhost:11434' })
 
     expect(names).toEqual(['llama3.1:8b', 'qwen2.5:7b'])
     expect(calls).toHaveLength(1)
@@ -30,7 +30,7 @@ describe('ollamaAdapter.listModels', () => {
       new Response('nope', { status: 500, statusText: 'Server Error' }),
     ) as unknown as typeof fetch
 
-    await expect(ollamaAdapter.listModels!('http://localhost:11434'))
+    await expect(ollamaAdapter.listModels!({ baseUrl: 'http://localhost:11434' }))
       .rejects.toThrow(/Ollama 500/)
   })
 })

@@ -644,3 +644,28 @@ describe('anthropic — prompt caching', () => {
     expect(result.tokenUsage).toEqual({ input: 7, output: 3, cacheRead: 500, cacheWrite: 50 })
   })
 })
+
+describe('anthropicAdapter.listModels', () => {
+  let originalFetch: typeof globalThis.fetch
+  beforeEach(() => { originalFetch = globalThis.fetch })
+  afterEach(() => { globalThis.fetch = originalFetch })
+
+  it('fetches the live model catalogue with the API key', async () => {
+    globalThis.fetch = vi.fn(async (url, init) => {
+      expect(String(url)).toContain('https://api.anthropic.com/v1/models')
+      expect((init as RequestInit).headers).toMatchObject({ 'x-api-key': 'k' })
+      return new Response(JSON.stringify({
+        data: [{ id: 'claude-fable-5' }, { id: 'claude-opus-4-8' }, { id: '' }, { other: true }],
+      }), { status: 200 })
+    }) as unknown as typeof fetch
+
+    const models = await anthropicAdapter.listModels!({ apiKey: 'k' })
+    expect(models).toEqual(['claude-fable-5', 'claude-opus-4-8'])
+  })
+
+  it('throws without an API key and surfaces HTTP errors', async () => {
+    await expect(anthropicAdapter.listModels!({})).rejects.toThrow(/API key/)
+    globalThis.fetch = vi.fn(async () => new Response('nope', { status: 401 })) as unknown as typeof fetch
+    await expect(anthropicAdapter.listModels!({ apiKey: 'bad' })).rejects.toThrow(/401/)
+  })
+})

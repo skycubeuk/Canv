@@ -84,8 +84,9 @@ export interface LLMAdapter {
   name: string
   id: string
   models: string[]
-  /** Optional dynamic model discovery (Ollama uses this). When present, the
-   *  Settings UI can refresh the model list from a live endpoint. */
-  listModels?: (baseUrl: string, signal?: AbortSignal) => Promise<string[]>
+  /** Optional dynamic model discovery. When present, callers can refresh the
+   *  model list from a live endpoint. Ollama authenticates by baseUrl;
+   *  cloud providers by apiKey — pass whichever the adapter needs. */
+  listModels?: (auth: { baseUrl?: string; apiKey?: string }, signal?: AbortSignal) => Promise<string[]>
   complete(params: CompleteParams): Promise<CompleteResult>
 }
