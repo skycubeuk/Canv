@@ -51,3 +51,27 @@ describe('buildNotes', () => {
     expect(buildNotes([], {})).toContain('_No changes recorded between tags._')
   })
 })
+
+describe('downloadsHeader', () => {
+  let downloadsHeader
+  beforeAll(async () => {
+    ({ downloadsHeader } = await import('./release-notes.mjs'))
+  })
+
+  it('lists all seven shipped artifacts for the version', () => {
+    const h = downloadsHeader('0.10.0')
+    expect(h).toContain('# Canv 0.10.0')
+    for (const f of [
+      'Canv-0.10.0-arm64.dmg', 'Canv-0.10.0.dmg',
+      'Canv-Setup-0.10.0.exe', 'Canv-0.10.0.exe',
+      'Canv-0.10.0.AppImage', 'canv_0.10.0_amd64.deb', 'canv-0.10.0.x86_64.rpm',
+    ]) expect(h).toContain(`\`${f}\``)
+    expect(h).toContain('Gatekeeper')
+  })
+
+  it('buildNotes leads with the header when a tag is given', () => {
+    const notes = buildNotes(['feat: x'], { tag: 'v0.10.0' })
+    expect(notes.startsWith('# Canv 0.10.0')).toBe(true)
+    expect(notes.indexOf('## Downloads')).toBeLessThan(notes.indexOf('## Features'))
+  })
+})

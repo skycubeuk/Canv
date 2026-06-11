@@ -20,6 +20,32 @@ const SECTIONS = [
 ]
 
 /**
+ * The Downloads header every release carries. Filenames follow
+ * electron-builder's fixed patterns for this project's targets, so the table
+ * is derivable from the version alone. Keep in sync with package.json
+ * `build` targets and the prune step in release.yml.
+ */
+export function downloadsHeader(version) {
+  return [
+    `# Canv ${version}`,
+    '',
+    '## Downloads',
+    '',
+    '| File | Platform |',
+    '|---|---|',
+    `| \`Canv-${version}-arm64.dmg\` | macOS (Apple Silicon) |`,
+    `| \`Canv-${version}.dmg\` | macOS (Intel) |`,
+    `| \`Canv-Setup-${version}.exe\` | Windows (NSIS installer) |`,
+    `| \`Canv-${version}.exe\` | Windows (portable) |`,
+    `| \`Canv-${version}.AppImage\` | Linux (x86_64) |`,
+    `| \`canv_${version}_amd64.deb\` | Linux Debian / Ubuntu (amd64) |`,
+    `| \`canv-${version}.x86_64.rpm\` | Linux Fedora / RHEL / openSUSE (x86_64) |`,
+    '',
+    'macOS builds are unsigned. On first launch right-click the app and choose **Open** to bypass Gatekeeper.',
+  ].join('\n')
+}
+
+/**
  * Group conventional-commit subjects into a markdown document.
  * Non-conventional subjects land under "Other"; merge commits are skipped.
  */
@@ -43,6 +69,7 @@ export function buildNotes(subjects, { prevTag, tag, repoUrl } = {}) {
   }
 
   const parts = []
+  if (tag) parts.push(downloadsHeader(tag.replace(/^v/, '')))
   for (const title of titles) {
     const items = groups.get(title)
     if (items.length) parts.push(`## ${title}\n\n${items.join('\n')}`)
