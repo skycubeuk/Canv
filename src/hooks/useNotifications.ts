@@ -17,10 +17,15 @@ export function useNotifications(): UseNotificationsApi {
   const [toast, setToast] = useState<string | null>(null)
   const [retryUndo, setRetryUndo] = useState<RetryUndoState | null>(null)
   const retryUndoTimer = useRef<number | null>(null)
+  const toastTimer = useRef<number | null>(null)
 
   const showToast = useCallback((msg: string) => {
+    if (toastTimer.current != null) window.clearTimeout(toastTimer.current)
     setToast(msg)
-    setTimeout(() => setToast(null), 3000)
+    toastTimer.current = window.setTimeout(() => {
+      toastTimer.current = null
+      setToast(null)
+    }, 3000)
   }, [])
 
   const dismissRetryUndo = useCallback(() => {
@@ -42,6 +47,7 @@ export function useNotifications(): UseNotificationsApi {
   useEffect(() => {
     return () => {
       if (retryUndoTimer.current != null) window.clearTimeout(retryUndoTimer.current)
+      if (toastTimer.current != null) window.clearTimeout(toastTimer.current)
     }
   }, [])
 
