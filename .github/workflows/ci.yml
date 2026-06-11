@@ -50,6 +50,12 @@ jobs:
       - name: Build (renderer)
         run: npm run build
 
+      - name: Package (electron-builder smoke test)
+        # Catch electron-builder breakage before release day. Linux AppImage
+        # is the cheapest full packaging path; never published from CI.
+        if: matrix.os == 'ubuntu-latest'
+        run: npx electron-builder --linux AppImage --x64 --publish never
+
       - name: Keystroke benchmark (warning-only)
         run: npm run test:bench
         continue-on-error: true
