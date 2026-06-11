@@ -949,6 +949,9 @@ describe('chatRunner — history brackets', () => {
   })
 
   it('logs but does not block tool execution when createSnapshot throws', async () => {
+    // The runner console.warns the snapshot failure — capture it so the
+    // expected error doesn't leak to the test run's stderr.
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const fs = makeMockFs({})
     const history = makeHistory()
     history.createSnapshot.mockRejectedValueOnce(new Error('boom'))
@@ -978,6 +981,8 @@ describe('chatRunner — history brackets', () => {
     expect(errors[0]?.message).toBe('boom')
     // The tool should still have run — file should exist in the mock FS
     expect(await fs.readFile('a.md')).toMatchObject({ content: 'A' })
+    expect(warnSpy).toHaveBeenCalledWith('[chatRunner] before_ai_edit snapshot failed', expect.any(Error))
+    warnSpy.mockRestore()
   })
 })
 
