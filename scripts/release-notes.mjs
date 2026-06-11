@@ -1,4 +1,6 @@
-#!/usr/bin/env node
+// Run via: `node scripts/release-notes.mjs <tag>` (no shebang — this file is
+// dynamically imported by release-notes.test.cjs, and vitest's transform on
+// Windows fails on `#!` with "SyntaxError: Invalid or unexpected token").
 // Generates markdown release notes from the conventional commits between the
 // previous tag and the given tag. release.yml uses it to fill the draft
 // release body that electron-builder creates. Run locally to preview:

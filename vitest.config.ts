@@ -62,6 +62,10 @@ export default defineConfig({
           // worker pool change to 'forks' didn't help. CJS tests load
           // cleanly across all three OSes. The scripts being tested can
           // stay ESM — the .cjs test uses dynamic import() to load them.
+          // ROOT CAUSE (found 2026-06-11): the `#!/usr/bin/env node` shebang.
+          // vitest's Windows transform path chokes on the `#!` token. Any
+          // .mjs imported by a test here must NOT carry a shebang — use a
+          // "Run via: node scripts/<name>.mjs" comment instead.
           include: ['scripts/**/*.test.cjs'],
           // Explicitly no benches in this project.
           benchmark: {

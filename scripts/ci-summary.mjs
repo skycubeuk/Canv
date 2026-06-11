@@ -1,4 +1,5 @@
-#!/usr/bin/env node
+// Run via: `node scripts/ci-summary.mjs` (no shebang — keeps the file safe to
+// import from a .cjs vitest suite on Windows, same as release-notes.mjs).
 // Prints a markdown job summary for CI: coverage table (from vitest's
 // json-summary reporter) and renderer bundle size (from dist/). ci.yml pipes
 // this into $GITHUB_STEP_SUMMARY on the Ubuntu leg.
