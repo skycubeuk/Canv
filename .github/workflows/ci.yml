@@ -45,7 +45,9 @@ jobs:
         run: npm run typecheck
 
       - name: Test
-        run: npm test
+        # Ubuntu also measures coverage and fails on threshold regression
+        # (see vitest.config.ts); the other OSes run the plain suite.
+        run: ${{ matrix.os == 'ubuntu-latest' && 'npm run test:coverage' || 'npm test' }}
 
       - name: Build (renderer)
         run: npm run build

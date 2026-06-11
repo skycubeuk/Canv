@@ -6,6 +6,19 @@ export default defineConfig({
   test: {
     globals: true,
     css: false,
+    coverage: {
+      provider: 'v8',
+      reporter: ['text-summary', 'html'],
+      // Erosion floor, set just under the measured baseline (2026-06:
+      // 80.9% lines / 77.7% statements / 75.2% functions / 65.3% branches).
+      // Raise as coverage grows; never lower to make a PR pass.
+      thresholds: {
+        lines: 78,
+        statements: 75,
+        functions: 72,
+        branches: 62,
+      },
+    },
     projects: [
       {
         extends: true,
