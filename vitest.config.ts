@@ -6,9 +6,13 @@ export default defineConfig({
   test: {
     globals: true,
     css: false,
+    // On GitHub Actions, also emit workflow annotations so failing assertions
+    // surface inline on the commit/PR instead of only in the log.
+    reporters: process.env.GITHUB_ACTIONS ? ['default', 'github-actions'] : ['default'],
     coverage: {
       provider: 'v8',
-      reporter: ['text-summary', 'html'],
+      // json-summary feeds scripts/ci-summary.mjs (the CI job summary).
+      reporter: ['text-summary', 'html', 'json-summary'],
       // Erosion floor, set just under the measured baseline (2026-06:
       // 80.9% lines / 77.7% statements / 75.2% functions / 65.3% branches).
       // Raise as coverage grows; never lower to make a PR pass.

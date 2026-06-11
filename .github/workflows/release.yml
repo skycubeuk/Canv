@@ -117,3 +117,26 @@ jobs:
         run: npx electron-builder --win nsis portable --x64 --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  notes:
+    name: Fill draft release notes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # electron-builder (any of the three jobs) creates the draft release;
+    # wait for all so the edit can't race the creation.
+    needs: [linux, mac, windows]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Full history + tags — the generator diffs against the previous tag.
+          fetch-depth: 0
+
+      - name: Generate notes from conventional commits
+        run: node scripts/release-notes.mjs "$GITHUB_REF_NAME" > /tmp/notes.md
+
+      - name: Write notes into the draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "$GITHUB_REF_NAME" --notes-file /tmp/notes.md

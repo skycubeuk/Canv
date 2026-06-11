@@ -58,6 +58,10 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         run: npx electron-builder --linux AppImage --x64 --publish never
 
+      - name: Job summary (coverage + bundle size)
+        if: matrix.os == 'ubuntu-latest' && always()
+        run: node scripts/ci-summary.mjs >> "$GITHUB_STEP_SUMMARY"
+
       - name: Keystroke benchmark (warning-only)
         run: npm run test:bench
         continue-on-error: true
