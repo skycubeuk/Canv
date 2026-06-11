@@ -23,6 +23,7 @@ async function loadSdkSse() {
   return sdkSsePromise
 }
 
+/** @param {{ getConfig?: () => any[] }} [deps] */
 function createMcpService({ getConfig } = {}) {
   // getConfig() → McpServerConfig[]  (live: re-read on each connection diff)
 

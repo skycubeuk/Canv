@@ -32,7 +32,7 @@ describe('statusBar handlers', () => {
       .rejects.toThrow(/unknown.*statusBar/i)
   })
   it('forwards partial updates to host', async () => {
-    const { handlers, host, events, event } = setup()
+    const { handlers, events, event } = setup()
     await handlers['canvExt:ui.setStatusBarItem'](event, 'total', { text: '142 words', tooltip: 'updated' })
     expect(events).toHaveLength(1)
     expect(events[0].item).toMatchObject({ extensionId: 'ext', id: 'total', text: '142 words', tooltip: 'updated' })

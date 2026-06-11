@@ -100,7 +100,7 @@ function createHistoryService({ root }) {
       return await git.writeTree({ fs: nodefs, dir: absRoot, tree: [] })
     }
     if (items.length === 0) return null
-    return await git.writeTree({ fs: nodefs, dir: absRoot, tree: items })
+    return await git.writeTree({ fs: nodefs, dir: absRoot, tree: /** @type {import('isomorphic-git').TreeObject} */ (items) })
   }
 
   async function commitFullTree({ parent, message }) {

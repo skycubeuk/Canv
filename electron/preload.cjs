@@ -2,7 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron')
 
 function isDockPopout() {
   try {
-    return new URLSearchParams(location.search).get('mode') === 'dock'
+    return new URLSearchParams(/** @type {any} */ (globalThis).location.search).get('mode') === 'dock'
   } catch {
     return false
   }

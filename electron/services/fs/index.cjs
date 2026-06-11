@@ -1,9 +1,9 @@
 'use strict'
 
 const path = require('node:path')
-const os = require('node:os')
 const fs = require('node:fs')
 const fsp = require('node:fs/promises')
+// @ts-expect-error chokidar v5 ships ESM-only; Electron's Node supports require(esm)
 const chokidar = require('chokidar')
 const git = require('isomorphic-git')
 const nodefs = require('node:fs')
@@ -464,7 +464,7 @@ function registerIpcHandlers(ipcMain, deps) {
       return { branch: null, changed: [], staged: [], untracked: [], noRepo: true }
     }
 
-    let branch = null
+    let branch
     try {
       branch = await git.currentBranch({ fs: nodefs, dir: root, fullname: false }) ?? null
     } catch {

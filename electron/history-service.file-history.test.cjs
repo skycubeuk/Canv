@@ -57,7 +57,7 @@ describe('history-service getFileHistory', () => {
     await fsp.writeFile(path.join(root, 'x.md'), 'v1\n', 'utf8')
     const svc = createHistoryService({ root })
     await svc.initRevisionArchaeology()
-    const s1 = await svc.createSnapshot({ reason: 'manual', summary: 's1' })
+    await svc.createSnapshot({ reason: 'manual', summary: 's1' })
 
     await fsp.unlink(path.join(root, 'x.md'))
     await svc.createSnapshot({ reason: 'manual', summary: 's2-deleted' })
@@ -78,7 +78,7 @@ describe('history-service getFileHistory', () => {
     await fsp.writeFile(path.join(root, 'x.md'), 'v1\n', 'utf8')
     const svc = createHistoryService({ root })
     await svc.initRevisionArchaeology()
-    const s1 = await svc.createSnapshot({ reason: 'manual', summary: 's1' })
+    await svc.createSnapshot({ reason: 'manual', summary: 's1' })
 
     await fsp.writeFile(path.join(root, 'x.md'), 'v2\n', 'utf8')
     const s2 = await svc.createSnapshot({ reason: 'manual', summary: 's2' })

@@ -80,7 +80,7 @@ async function canvFSWriteFile(root, rel, content, expectedMtimeMs, opts, deps) 
   if (typeof expectedMtimeMs === 'number') {
     const stat = await fsp.stat(abs).catch(() => null)
     if (stat && Math.abs(stat.mtimeMs - expectedMtimeMs) > 1) {
-      const err = new Error('stale write')
+      const err = /** @type {Error & { code?: string }} */ (new Error('stale write'))
       err.code = 'STALE'
       throw err
     }

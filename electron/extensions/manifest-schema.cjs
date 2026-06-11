@@ -82,7 +82,7 @@ const Contribution = z.discriminatedUnion('type', [
 ])
 
 const Capability = z.string().refine((c) => ALL_CAPABILITIES.includes(c), {
-  message: (ctx) => `unknown capability: ${ctx.input}`,
+  error: (iss) => `unknown capability: ${iss.input}`,
 })
 
 const NetworkOrigin = z.string().refine((h) => HOSTNAME_RE.test(h) && !h.includes('/'), {

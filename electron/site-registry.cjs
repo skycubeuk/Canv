@@ -19,7 +19,7 @@ function readAll(workspaceRoot) {
   const raw = fs.readFileSync(p, 'utf8')
   let parsed
   try { parsed = yaml.parse(raw) }
-  catch (err) { throw new Error(`Failed to parse ${REGISTRY_REL}: ${err.message}`) }
+  catch (err) { throw new Error(`Failed to parse ${REGISTRY_REL}: ${err.message}`, { cause: err }) }
   if (!parsed || typeof parsed !== 'object') return { sites: [] }
   if (!Array.isArray(parsed.sites)) parsed.sites = []
   return parsed

@@ -60,7 +60,7 @@ const electron = {
 
 // Load the service AFTER the electron stub is in place. Also pull the
 // ExtensionRuntime so we can prototype-spy on it inside individual tests.
-const runtimeMod = require('../../extensions/runtime.cjs')
+require('../../extensions/runtime.cjs')
 const { Registry } = require('../../extensions/registry.cjs')
 const activity = require('../../extensions/activity.cjs')
 const svc = require('./index.cjs')

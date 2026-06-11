@@ -30,7 +30,7 @@
     "skill:install": "node scripts/install-skill.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc -b --noEmit",
+    "typecheck": "tsc -b --noEmit && tsc -p tsconfig.electron.json",
     "test:coverage": "vitest run --coverage",
     "test:bench": "vitest bench --run"
   },

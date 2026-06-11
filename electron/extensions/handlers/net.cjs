@@ -5,7 +5,7 @@ const { requireCaller } = require('./active-doc.cjs')
 
 const DANGEROUS_HEADERS = new Set(['cookie'])
 
-function createNetHandlers({ runtime, fetchImpl = globalThis.fetch, onRequest = () => {} }) {
+function createNetHandlers({ runtime, fetchImpl = globalThis.fetch, onRequest = (/** @type {string} */ _callerId) => {} }) {
   return {
     'canvExt:net.fetch': async (event, url, init = {}) => {
       const { id: callerId, manifest } = requireCaller(runtime, event)

@@ -439,7 +439,7 @@ describe('STYLESHEET', () => {
 
 const http = require('node:http')
 const serve = require('./serve-folder.cjs')
-const { start, stop, status, ServeError } = serve
+const { start, status } = serve
 
 async function get(url) {
   return new Promise((resolve, reject) => {

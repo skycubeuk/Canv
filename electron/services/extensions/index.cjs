@@ -92,9 +92,7 @@ function registerIpcHandlers(ipcMain, deps) {
     getWorkspace,
     getMainWindow,
     getWorkspaceRegistry,
-    getExtensionRuntime,
     setExtensionRuntime,
-    getTrustStore,
     setTrustStore,
     safeResolve,
     invalidateExtensionClaimedExts,
@@ -486,6 +484,7 @@ function registerIpcHandlers(ipcMain, deps) {
       await extensionRuntime.spawn({
         extensionDir, manifest: v.manifest, hostWindow: mainWindow,
         bounds: bounds || { x: 1000, y: 80, width: 360, height: 600 },
+        entryRel: null,
       })
       return { ok: true, id: v.manifest.id }
     })

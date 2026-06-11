@@ -13,7 +13,7 @@ function parseError(status, raw) {
     if (typeof j.detail === 'string') msg = j.detail
     else if (j.detail && typeof j.detail.message === 'string') msg = j.detail.message
   } catch { /* not JSON */ }
-  const err = new Error(`ElevenLabs ${status}: ${msg || 'request failed'}`)
+  const err = /** @type {Error & { status?: number }} */ (new Error(`ElevenLabs ${status}: ${msg || 'request failed'}`))
   err.status = status
   return err
 }
@@ -45,7 +45,7 @@ async function synthesize({ apiKey, voiceId, modelId, text, outputFormat = DEFAU
 async function listVoices(apiKey, fetchImpl = globalThis.fetch) {
   const res = await fetchImpl(`${ELEVEN_BASE}/v2/voices`, { headers: { 'xi-api-key': apiKey } })
   if (!res.ok) throw parseError(res.status, await res.text().catch(() => ''))
-  const data = await res.json()
+  const data = /** @type {{ voices?: Array<{ voice_id: string, name: string }> }} */ (await res.json())
   return (data.voices || []).map((v) => ({ voiceId: v.voice_id, name: v.name }))
 }
 

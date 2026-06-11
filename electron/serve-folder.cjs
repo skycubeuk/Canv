@@ -260,6 +260,7 @@ function tokeniseCode(src) {
 }
 
 function restoreCode(stripped, placeholders) {
+  // eslint-disable-next-line no-control-regex -- NUL sentinels delimit the code placeholders
   return stripped.replace(/\x00(?:FENCE|INLINE)(\d+)\x00/g, (_, n) => placeholders[Number(n)])
 }
 
@@ -339,7 +340,7 @@ function preprocessMarkdown({ src, pageIndex, currentRel, depth, renderEmbed }) 
   })
 
   // 3. Standard markdown links to .md files.
-  text = text.replace(/(\!)?\[([^\]]*)\]\(([^)\s]+?)\)/g, (whole, bang, label, target) => {
+  text = text.replace(/(!)?\[([^\]]*)\]\(([^)\s]+?)\)/g, (whole, bang, label, target) => {
     if (bang) return whole
     const r = resolveRelMdLink(target, currentRel)
     if (!r) return whole
@@ -478,6 +479,7 @@ function extractTitle(src, fallback) {
   return m[1].trim() || fallback
 }
 
+/** @param {{ title: string, bodyHtml: string, navHtml?: string, serveRoot?: string }} page */
 function renderHtml({ title, bodyHtml, navHtml, serveRoot }) {
   const navBlock = navHtml ? `${navHtml}\n` : ''
   const rootScript = navHtml
@@ -561,6 +563,7 @@ ${rootScript}${navScript}<script>
 }
 
 const http = require('node:http')
+// @ts-expect-error chokidar v5 ships ESM-only; Electron's Node supports require(esm)
 const chokidar = require('chokidar')
 
 // marked v5+ is ESM-only; load lazily via dynamic import on first use so this
@@ -632,7 +635,7 @@ async function ensureServer() {
     server.listen(0, '127.0.0.1', () => { server.removeListener('error', reject); resolve() })
   })
   httpServer = server
-  const port = server.address().port
+  const port = /** @type {import('node:net').AddressInfo} */ (server.address()).port
   httpUrl = `http://127.0.0.1:${port}`
 }
 
@@ -856,7 +859,7 @@ async function start(absRoot) {
   const pageIndex = buildPageIndex(absRoot)
   await ensureServer()
   const url = httpUrl
-  state = { root: absRoot, watcher: null, sseClients: new Set(), pageIndex, url, marked }
+  state = { root: absRoot, watcher: null, sseClients: new Set(), pageIndex, url, marked, broadcast: null, rootExistsPoller: null }
   const broadcast = makeBroadcaster()
   state.broadcast = broadcast
   const watcher = chokidar.watch(absRoot, {
@@ -887,15 +890,16 @@ async function start(absRoot) {
   // Independent fallback: chokidar's unlinkDir for the watched root is unreliable
   // on macOS (the cascade depends on a readdir race against rm -rf). Poll for the
   // root's existence so auto-stop fires regardless of the watcher's behaviour.
-  state.rootExistsPoller = setInterval(() => {
+  const rootExistsPoller = setInterval(() => {
     if (!state) return
     try { fs.accessSync(state.root) }
     catch (e) {
       if (e && (e.code === 'ENOENT' || e.code === 'ENOTDIR')) stop().catch(() => {})
     }
   }, 250)
-  state.rootExistsPoller.unref?.()
-  await new Promise((resolve) => watcher.once('ready', resolve))
+  rootExistsPoller.unref?.()
+  state.rootExistsPoller = rootExistsPoller
+  await new Promise((resolve) => watcher.once('ready', () => resolve(undefined)))
   emitStatus()
   return { url }
 }

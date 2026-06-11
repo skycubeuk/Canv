@@ -38,7 +38,7 @@ export async function packExtension({ folder, output }) {
   const manifestPath = path.join(folder, 'manifest.json')
   let raw
   try { raw = JSON.parse(await readFile(manifestPath, 'utf-8')) }
-  catch (e) { throw new Error(`manifest read/parse failed: ${e.message}`) }
+  catch (e) { throw new Error(`manifest read/parse failed: ${e.message}`, { cause: e }) }
 
   const validate = await loadValidator()
   const v = validate(raw)
