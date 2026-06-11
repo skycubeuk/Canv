@@ -37,5 +37,16 @@ export function cost(
   const resolved = isUsable(override) ? override : isUsable(def) ? def : null
   if (!resolved) return null
 
-  return (usage.input * resolved.input + usage.output * resolved.output) / 1_000_000
+  // Prompt-cache tokens bill at multiples of the input rate: reads ~0.1×,
+  // writes 1.25× (Anthropic 5-minute ephemeral cache). usage.input is the
+  // uncached remainder only.
+  const cacheRead = Number.isFinite(usage.cacheRead) ? (usage.cacheRead as number) : 0
+  const cacheWrite = Number.isFinite(usage.cacheWrite) ? (usage.cacheWrite as number) : 0
+
+  return (
+    usage.input * resolved.input +
+    cacheRead * resolved.input * 0.1 +
+    cacheWrite * resolved.input * 1.25 +
+    usage.output * resolved.output
+  ) / 1_000_000
 }

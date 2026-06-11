@@ -1,13 +1,61 @@
-import type { LLMAdapter, CompleteParams, CompleteResult, Message } from './types'
+import type { LLMAdapter, CompleteParams, CompleteResult, Message, TokenUsage } from './types'
 
 const ENDPOINT = 'https://api.anthropic.com/v1/messages'
 const VERSION = '2023-06-01'
 
-function parseAnthropicUsage(raw: unknown): { input: number; output: number } | null {
+function parseAnthropicUsage(raw: unknown): TokenUsage | null {
   if (!raw || typeof raw !== 'object') return null
-  const u = raw as { input_tokens?: unknown; output_tokens?: unknown }
+  const u = raw as {
+    input_tokens?: unknown
+    output_tokens?: unknown
+    cache_read_input_tokens?: unknown
+    cache_creation_input_tokens?: unknown
+  }
   if (typeof u.input_tokens !== 'number' || typeof u.output_tokens !== 'number') return null
-  return { input: u.input_tokens, output: u.output_tokens }
+  return {
+    input: u.input_tokens,
+    output: u.output_tokens,
+    ...(typeof u.cache_read_input_tokens === 'number' && u.cache_read_input_tokens > 0
+      ? { cacheRead: u.cache_read_input_tokens } : {}),
+    ...(typeof u.cache_creation_input_tokens === 'number' && u.cache_creation_input_tokens > 0
+      ? { cacheWrite: u.cache_creation_input_tokens } : {}),
+  }
+}
+
+const CACHE_CONTROL = { type: 'ephemeral' } as const
+
+/**
+ * Place prompt-cache breakpoints so each request reuses the previous one's
+ * prefix (render order: tools → system → messages):
+ *  - last tool definition  → caches the tool schemas
+ *  - system block          → caches tools + system (preamble + inventory)
+ *  - last message block    → caches the conversation prefix incrementally
+ * Tool-loop rounds and follow-up turns then read the prefix at ~0.1× the
+ * input price instead of re-paying full price for the whole context.
+ */
+function addCacheBreakpoints(body: Record<string, unknown>): void {
+  const tools = body.tools as Array<Record<string, unknown>> | undefined
+  if (tools && tools.length) {
+    tools[tools.length - 1] = { ...tools[tools.length - 1], cache_control: CACHE_CONTROL }
+  }
+  if (typeof body.system === 'string' && body.system) {
+    body.system = [{ type: 'text', text: body.system, cache_control: CACHE_CONTROL }]
+  }
+  const messages = body.messages as Array<{ role: string; content: unknown }> | undefined
+  const last = messages?.[messages.length - 1]
+  if (!last) return
+  if (typeof last.content === 'string') {
+    if (last.content) last.content = [{ type: 'text', text: last.content, cache_control: CACHE_CONTROL }]
+  } else if (Array.isArray(last.content) && last.content.length) {
+    const blocks = [...(last.content as Array<Record<string, unknown>>)]
+    const tail = blocks[blocks.length - 1]
+    // Thinking blocks must round-trip byte-identical; never decorate one.
+    // (In practice the last message we send is a user/tool message anyway.)
+    if (tail.type !== 'thinking' && tail.type !== 'redacted_thinking') {
+      blocks[blocks.length - 1] = { ...tail, cache_control: CACHE_CONTROL }
+      last.content = blocks
+    }
+  }
 }
 
 function parseStopDetails(raw: unknown): { category: string | null; explanation: string | null } {
@@ -73,6 +121,7 @@ export const anthropicAdapter: LLMAdapter = {
           input_schema: t.inputSchema,
         }))
       }
+      addCacheBreakpoints(body)
 
       const res = await fetch(ENDPOINT, {
         method: 'POST',
@@ -168,6 +217,19 @@ async function readSSE(
   let truncated = false
   let inputTokens: number | null = null
   let outputTokens: number | null = null
+  let cacheRead = 0
+  let cacheWrite = 0
+  const usageOut = (): { tokenUsage: TokenUsage } | Record<string, never> =>
+    inputTokens != null && outputTokens != null
+      ? {
+          tokenUsage: {
+            input: inputTokens,
+            output: outputTokens,
+            ...(cacheRead > 0 ? { cacheRead } : {}),
+            ...(cacheWrite > 0 ? { cacheWrite } : {}),
+          },
+        }
+      : {}
   let currentEvent = 'message'
   let stopReason: 'end_turn' | 'tool_use' | 'max_tokens' | 'stop_sequence' | 'refusal' = 'end_turn'
   let refusal: { category: string | null; explanation: string | null } | null = null
@@ -199,8 +261,12 @@ async function readSSE(
           const p = parsed as Record<string, unknown>
 
           if (currentEvent === 'message_start') {
-            const usage = (p.message as { usage?: { input_tokens?: number } } | undefined)?.usage
+            const usage = (p.message as {
+              usage?: { input_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number }
+            } | undefined)?.usage
             if (usage && typeof usage.input_tokens === 'number') inputTokens = usage.input_tokens
+            if (typeof usage?.cache_read_input_tokens === 'number') cacheRead = usage.cache_read_input_tokens
+            if (typeof usage?.cache_creation_input_tokens === 'number') cacheWrite = usage.cache_creation_input_tokens
           } else if (currentEvent === 'content_block_start') {
             const block = p.content_block as { type?: string; id?: string; name?: string } | undefined
             const idx = p.index as number
@@ -300,9 +366,7 @@ async function readSSE(
         stopReason: 'cancelled',
         ...(completedToolCalls.length ? { toolCalls: completedToolCalls } : {}),
         ...(completedThinking.length ? { thinkingBlocks: completedThinking } : {}),
-        ...(inputTokens != null && outputTokens != null
-          ? { tokenUsage: { input: inputTokens, output: outputTokens } }
-          : {}),
+        ...usageOut(),
       }
     }
     throw err
@@ -332,8 +396,6 @@ async function readSSE(
     ...(completedToolCalls.length ? { toolCalls: completedToolCalls } : {}),
     ...(completedThinking.length ? { thinkingBlocks: completedThinking } : {}),
     ...(refusal ? { refusal } : {}),
-    ...(inputTokens != null && outputTokens != null
-      ? { tokenUsage: { input: inputTokens, output: outputTokens } }
-      : {}),
+    ...usageOut(),
   }
 }

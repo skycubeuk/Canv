@@ -52,3 +52,19 @@ describe('cost', () => {
     expect(cost({ input: 1000, output: 1000 }, 'openai', 'm-known', {}, KNOWN)).toBeNull()
   })
 })
+
+describe('cost — prompt-cache pricing', () => {
+  const KNOWN2 = { 'anthropic/m-known': { input: 3, output: 15 } }
+
+  it('bills cache reads at 0.1× and writes at 1.25× the input rate', () => {
+    // 1M uncached input = $3; 1M cache read = $0.30; 1M cache write = $3.75
+    expect(cost({ input: 0, output: 0, cacheRead: 1_000_000 }, 'anthropic', 'm-known', {}, KNOWN2)).toBeCloseTo(0.3, 6)
+    expect(cost({ input: 0, output: 0, cacheWrite: 1_000_000 }, 'anthropic', 'm-known', {}, KNOWN2)).toBeCloseTo(3.75, 6)
+    expect(cost({ input: 1_000_000, output: 0, cacheRead: 1_000_000, cacheWrite: 1_000_000 }, 'anthropic', 'm-known', {}, KNOWN2))
+      .toBeCloseTo(3 + 0.3 + 3.75, 6)
+  })
+
+  it('treats absent cache fields as zero', () => {
+    expect(cost({ input: 1_000_000, output: 0 }, 'anthropic', 'm-known', {}, KNOWN2)).toBeCloseTo(3, 6)
+  })
+})

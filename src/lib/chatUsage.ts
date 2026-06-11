@@ -28,11 +28,14 @@ export function chatTotals(
     (acc, m) => ({
       input: acc.input + (m.tokenUsage?.input ?? 0),
       output: acc.output + (m.tokenUsage?.output ?? 0),
+      cacheRead: acc.cacheRead + (m.tokenUsage?.cacheRead ?? 0),
+      cacheWrite: acc.cacheWrite + (m.tokenUsage?.cacheWrite ?? 0),
     }),
-    { input: 0, output: 0 },
+    { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
   )
 
-  const tokens = sessionUsage.input + sessionUsage.output
+  // input is the uncached remainder only — cached tokens are still prompt tokens.
+  const tokens = sessionUsage.input + sessionUsage.cacheRead + sessionUsage.cacheWrite + sessionUsage.output
   const costUsd = cost(sessionUsage, provider, model, overrides, defaults) ?? 0
 
   return { tokens, costUsd }

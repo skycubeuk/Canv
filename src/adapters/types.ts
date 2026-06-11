@@ -53,8 +53,14 @@ export interface CompleteParams {
 }
 
 export interface TokenUsage {
+  /** Uncached input tokens billed at the full rate. With prompt caching on,
+   *  this is the remainder only — total prompt = input + cacheRead + cacheWrite. */
   input: number
   output: number
+  /** Tokens served from the provider's prompt cache (~0.1× input price). */
+  cacheRead?: number
+  /** Tokens written to the provider's prompt cache (~1.25× input price). */
+  cacheWrite?: number
 }
 
 export type StopReason = 'end_turn' | 'tool_use' | 'max_tokens' | 'stop_sequence' | 'cancelled' | 'refusal'

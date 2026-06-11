@@ -106,6 +106,8 @@ describe('anthropic — tools', () => {
       name: 'read_file',
       description: 'read',
       input_schema: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] },
+      // The adapter marks the last tool as a prompt-cache breakpoint.
+      cache_control: { type: 'ephemeral' },
     }])
   })
 
@@ -506,5 +508,139 @@ describe('anthropicAdapter — slow-mode pacing', () => {
       chunkDelayMs: 100,
     })
     expect(result.stopReason).toBe('cancelled')
+  })
+})
+
+describe('anthropic — prompt caching', () => {
+  let originalFetch: typeof globalThis.fetch
+  beforeEach(() => { originalFetch = globalThis.fetch })
+  afterEach(() => { globalThis.fetch = originalFetch })
+
+  function captureBody(responseJson: Record<string, unknown>) {
+    const calls: Array<Record<string, unknown>> = []
+    globalThis.fetch = vi.fn(async (_url, init) => {
+      calls.push(JSON.parse((init as RequestInit).body as string))
+      return new Response(JSON.stringify(responseJson), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      })
+    }) as unknown as typeof fetch
+    return calls
+  }
+
+  const okResponse = {
+    content: [{ type: 'text', text: 'ok' }],
+    stop_reason: 'end_turn',
+    usage: { input_tokens: 1, output_tokens: 1 },
+  }
+
+  it('adds cache breakpoints to system, last tool, and last message block', async () => {
+    const calls = captureBody(okResponse)
+    await anthropicAdapter.complete({
+      apiKey: 'k',
+      model: 'claude-sonnet-4-6',
+      system: 'preamble',
+      tools: [
+        { name: 'a', description: 'A', inputSchema: { type: 'object' } },
+        { name: 'b', description: 'B', inputSchema: { type: 'object' } },
+      ],
+      messages: [
+        { role: 'user', content: 'first' },
+        { role: 'assistant', content: 'reply' },
+        { role: 'user', content: 'second' },
+      ],
+    })
+
+    const body = calls[0]
+    const tools = body.tools as Array<Record<string, unknown>>
+    expect(tools[0].cache_control).toBeUndefined()
+    expect(tools[1].cache_control).toEqual({ type: 'ephemeral' })
+
+    expect(body.system).toEqual([
+      { type: 'text', text: 'preamble', cache_control: { type: 'ephemeral' } },
+    ])
+
+    const messages = body.messages as Array<{ content: unknown }>
+    expect(messages[0].content).toBe('first')
+    expect(messages[1].content).toBe('reply')
+    expect(messages[2].content).toEqual([
+      { type: 'text', text: 'second', cache_control: { type: 'ephemeral' } },
+    ])
+  })
+
+  it('places the message breakpoint on the last tool_result block in tool loops', async () => {
+    const calls = captureBody(okResponse)
+    await anthropicAdapter.complete({
+      apiKey: 'k',
+      model: 'claude-sonnet-4-6',
+      messages: [
+        { role: 'user', content: 'do it' },
+        { role: 'assistant', content: '', toolCalls: [{ id: 't1', name: 'read_file', input: {} }] },
+        { role: 'tool', toolResults: [
+          { id: 't1', content: 'body 1' },
+          { id: 't2', content: 'body 2' },
+        ] },
+      ],
+    })
+
+    const messages = calls[0].messages as Array<{ content: Array<Record<string, unknown>> }>
+    const last = messages[messages.length - 1].content
+    expect(last[0].cache_control).toBeUndefined()
+    expect(last[1].cache_control).toEqual({ type: 'ephemeral' })
+    expect(last[1].tool_use_id).toBe('t2')
+  })
+
+  it('never decorates a trailing thinking block', async () => {
+    const calls = captureBody(okResponse)
+    await anthropicAdapter.complete({
+      apiKey: 'k',
+      model: 'claude-fable-5',
+      messages: [
+        { role: 'user', content: 'q' },
+        { role: 'assistant', content: '', thinkingBlocks: [{ type: 'thinking', thinking: 'x', signature: 's' }] },
+      ],
+    })
+    const messages = calls[0].messages as Array<{ content: Array<Record<string, unknown>> }>
+    const last = messages[messages.length - 1].content
+    expect(last[last.length - 1]).toEqual({ type: 'thinking', thinking: 'x', signature: 's' })
+  })
+
+  it('parses cache usage fields from a non-streaming response', async () => {
+    captureBody({
+      ...okResponse,
+      usage: { input_tokens: 10, output_tokens: 4, cache_read_input_tokens: 900, cache_creation_input_tokens: 120 },
+    })
+    const result = await anthropicAdapter.complete({
+      apiKey: 'k',
+      model: 'claude-sonnet-4-6',
+      messages: [{ role: 'user', content: 'hi' }],
+    })
+    expect(result.tokenUsage).toEqual({ input: 10, output: 4, cacheRead: 900, cacheWrite: 120 })
+  })
+
+  it('parses cache usage fields from a streaming response', async () => {
+    const sse = [
+      `event: message_start`,
+      `data: ${JSON.stringify({ message: { usage: { input_tokens: 7, cache_read_input_tokens: 500, cache_creation_input_tokens: 50 } } })}`,
+      ``,
+      `event: content_block_delta`,
+      `data: ${JSON.stringify({ delta: { type: 'text_delta', text: 'hi' } })}`,
+      ``,
+      `event: message_delta`,
+      `data: ${JSON.stringify({ delta: { stop_reason: 'end_turn' }, usage: { output_tokens: 3 } })}`,
+      ``,
+    ].join('\n')
+
+    globalThis.fetch = vi.fn(async () => new Response(sse, {
+      status: 200,
+      headers: { 'Content-Type': 'text/event-stream' },
+    })) as unknown as typeof fetch
+
+    const result = await anthropicAdapter.complete({
+      apiKey: 'k',
+      model: 'claude-sonnet-4-6',
+      messages: [{ role: 'user', content: 'hi' }],
+      onToken: () => {},
+    })
+    expect(result.tokenUsage).toEqual({ input: 7, output: 3, cacheRead: 500, cacheWrite: 50 })
   })
 })

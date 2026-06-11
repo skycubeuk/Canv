@@ -13,7 +13,7 @@ import {
   copyFromDom,
   selectAllInDom,
 } from '../lib/contextMenuActions'
-import type { ToolCall, ToolResult } from '../adapters/types'
+import type { ToolCall, ToolResult, TokenUsage } from '../adapters/types'
 import type { WritePreview, ApprovalDecision } from '../agents/chatRunner'
 import { ChatToolChip } from './ChatToolChip'
 import { ChatApprovalCard, type ApprovalState } from './ChatApprovalCard'
@@ -78,7 +78,7 @@ export interface ChatMessage {
    *  verbatim to the provider on later requests; never rendered. */
   thinkingBlocks?: unknown[]
   /** Token counts reported by the model for this assistant turn. */
-  tokenUsage?: { input: number; output: number }
+  tokenUsage?: TokenUsage
 }
 
 export interface PendingApproval {
